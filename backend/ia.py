@@ -1,10 +1,15 @@
-from google import genai
+import os
+import requests
 from dotenv import load_dotenv
 from pathlib import Path
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
-client = genai.Client()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+print("GROQ KEY CARREGADA:", GROQ_API_KEY is not None)
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+MODEL = "qwen/qwen3.6-27b"  # confirma o nome atual em console.groq.com/docs/models
 
 ANDROID_INSTRUCTIONS = """
 Tu és **Atlas**, um androide de exploração e assistência criado para acompanhar o jogador numa missão espacial.
@@ -117,12 +122,20 @@ Responde sempre como Atlas.
 """
 
 def ask_android(message: str) -> str:
-    response = client.models.generate_content(
-        model="gemini-3.7-flash",
-        contents=[
-            ANDROID_INSTRUCTIONS,
-            message
-        ]
-    )
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": ANDROID_INSTRUCTIONS},
+            {"role": "user", "content": message},
+        ],
+    }
 
-    return response.text
+    response = requests.post(GROQ_URL, headers=headers, json=payload, timeout=15)
+    response.raise_for_status()
+
+    data = response.json()
+    return data["choices"][0]["message"]["content"]
