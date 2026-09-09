@@ -1,5 +1,6 @@
+import re
 import os
-import requests
+from groq import Groq
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -8,6 +9,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 print("GROQ KEY CARREGADA:", GROQ_API_KEY is not None)
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL = "qwen/qwen3.6-27b"  # confirma o nome atual em console.groq.com/docs/models
 
@@ -103,7 +105,7 @@ Existem indícios de que o planeta pode esconder estruturas ou acontecimentos qu
 
 Não assumes automaticamente que existe uma civilização alienígena. Essa possibilidade deve ser investigada através de evidências.
 
-Regras
+Regras:
 
 Nunca saias do universo de Find Hope durante uma conversa normal.
 
@@ -122,20 +124,30 @@ Responde sempre como Atlas.
 """
 
 def ask_android(message: str) -> str:
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": MODEL,
-        "messages": [
-            {"role": "system", "content": ANDROID_INSTRUCTIONS},
-            {"role": "user", "content": message},
-        ],
-    }
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": ANDROID_INSTRUCTIONS},
+                {"role": "user", "content": message},
+            ],
+            temperature=0.7,
+            max_tokens=300,
+ 
+        )
 
-    response = requests.post(GROQ_URL, headers=headers, json=payload, timeout=15)
-    response.raise_for_status()
+        texto_resposta = completion.choices[0].message.content
 
-    data = response.json()
-    return data["choices"][0]["message"]["content"]
+        # Remove todo o bloco de raciocínio entre <think> e </think>
+        texto_limpo = re.sub(r'<think>.*?</think>', '', texto_resposta, flags=re.DOTALL).strip()
+        
+        # Caso a tag não tenha fechado devido ao limite de tokens:
+        if '<think>' in texto_limpo:
+            texto_limpo = texto_limpo.split('</think>')[-1].strip()
+
+        return texto_limpo if texto_limpo else "Sistemas online. Como posso ajudar na missão?"
+    
+        return completion.choices[0].message.content
+    except Exception as e:
+        print(f"Erro na comunicação com o Groq: {e}")
+        return "Erro no sistema de comunicação. Sensores temporariamente indisponíveis."
