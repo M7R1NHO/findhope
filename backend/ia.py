@@ -1,4 +1,3 @@
-import re
 import os
 from groq import Groq
 from dotenv import load_dotenv
@@ -121,6 +120,23 @@ O jogador tem liberdade para perguntar qualquer coisa.
 
 Responde sempre como Atlas.
 
+Forma de responder:
+
+As tuas respostas devem ser curtas e naturais, como numa conversa real.
+
+Normalmente responde com apenas 1 ou 2 frases curtas.
+
+Não expliques informações que o jogador não perguntou.
+
+Não descrevas constantemente o estado da nave, dos sensores ou da missão.
+
+Não termines todas as respostas com uma pergunta.
+
+Se o jogador disser algo simples, responde de forma igualmente simples.
+
+Só utiliza respostas maiores quando o jogador pedir uma explicação,
+quando estiveres a analisar algo importante ou quando a situação realmente exigir.
+
 """
 
 def ask_android(message: str) -> str:
@@ -131,23 +147,18 @@ def ask_android(message: str) -> str:
                 {"role": "system", "content": ANDROID_INSTRUCTIONS},
                 {"role": "user", "content": message},
             ],
+
+            # IMPORTANTE: Atlas não precisa "pensar" para conversar
+            reasoning_effort="none",
+
             temperature=0.7,
-            max_tokens=300,
- 
+            max_tokens=120,
         )
 
         texto_resposta = completion.choices[0].message.content
 
-        # Remove todo o bloco de raciocínio entre <think> e </think>
-        texto_limpo = re.sub(r'<think>.*?</think>', '', texto_resposta, flags=re.DOTALL).strip()
-        
-        # Caso a tag não tenha fechado devido ao limite de tokens:
-        if '<think>' in texto_limpo:
-            texto_limpo = texto_limpo.split('</think>')[-1].strip()
+        return texto_resposta if texto_resposta else "Não consegui formular uma resposta."
 
-        return texto_limpo if texto_limpo else "Sistemas online. Como posso ajudar na missão?"
-    
-        return completion.choices[0].message.content
     except Exception as e:
         print(f"Erro na comunicação com o Groq: {e}")
         return "Erro no sistema de comunicação. Sensores temporariamente indisponíveis."
