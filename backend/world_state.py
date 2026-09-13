@@ -12,8 +12,9 @@ WORLD_STATE = {
             "y": 0.0
         },
 
-        # Alcance atual dos sensores em metros
-        "radar_range": 50.0
+        "radar_range": 50.0,
+
+        "current_detections": [] 
     },
 
     "ship": {

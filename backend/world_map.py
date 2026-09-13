@@ -1,3 +1,8 @@
+# MAPA PROVISÓRIO DE TESTE
+# As posições e objetos atuais servem apenas para validar
+# sensores, distância, conhecimento e integração com Atlas.
+# Serão substituídos pelo mapa definitivo do jogo.
+
 WORLD_MAP = [
 
     # NAVE
