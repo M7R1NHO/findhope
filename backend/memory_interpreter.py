@@ -1,5 +1,5 @@
 import json
-
+import re
 from backend.atlas_memory import add_memory
 
 
@@ -77,7 +77,7 @@ JSON apenas:
             ],
             reasoning_effort="none",
             temperature=0,
-            max_tokens=300
+            max_tokens=500
         )
 
         content = completion.choices[0].message.content
@@ -85,12 +85,21 @@ JSON apenas:
         if not content:
             return default_memory_result()
 
-        return normalize_interpreter_result(
-            json.loads(content)
-        )
+        data = json.loads(content)
+
+        return normalize_interpreter_result(data)
 
     except Exception as e:
-        print(f"Erro no Memory Interpreter: {e}")
+        print(
+            f"Erro no Memory Interpreter: {e}"
+        )
+
+        if content:
+            print(
+                "\nRESPOSTA CRUA DO MEMORY INTERPRETER:\n",
+                content
+            )
+
         return default_memory_result()
 
 
@@ -123,24 +132,25 @@ def normalize_interpreter_result(data):
     need_memory = query.get("need_memory", False)
 
     if need_memory is not True:
-        query = {
+        normalized_query = {
             "need_memory": False,
             "entity": "any",
             "category": "any",
             "query": ""
         }
-
     else:
-        query = {
+        normalized_query = {
             "need_memory": True,
             "entity": query.get("entity", "any"),
             "category": query.get("category", "any"),
-            "query": str(query.get("query", "")).strip()
+            "query": str(
+                query.get("query", "")
+            ).strip()
         }
 
     return {
         "memories": memories,
-        "query": query
+        "query": normalized_query
     }
 
 
@@ -185,3 +195,46 @@ def process_interpreted_memory(memory_data):
                 "Memória rejeitada pelo Memory Engine:",
                 memory
             )
+
+def parse_json_response(content: str):
+    if not content:
+        raise ValueError("Resposta vazia.")
+
+    text = content.strip()
+
+    # Remove blocos ```json ... ```
+    if text.startswith("```"):
+        text = re.sub(
+            r"^```(?:json)?\s*",
+            "",
+            text,
+            flags=re.IGNORECASE
+        )
+
+        text = re.sub(
+            r"\s*```$",
+            "",
+            text
+        )
+
+    # Mantém apenas o objeto JSON principal
+    start = text.find("{")
+    end = text.rfind("}")
+
+    if start == -1 or end == -1:
+        raise ValueError(
+            f"Nenhum objeto JSON encontrado: {text}"
+        )
+
+    text = text[start:end + 1]
+
+    # Remove trailing commas:
+    # {"a": 1,}
+    # [1, 2,]
+    text = re.sub(
+        r",\s*([}\]])",
+        r"\1",
+        text
+    )
+
+    return parse_json_response(content) 

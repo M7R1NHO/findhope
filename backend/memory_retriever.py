@@ -159,6 +159,23 @@ def retrieve_relevant_memories(
     query_data,
     limit=6
 ):
+    memories = ATLAS_MEMORY["memories"]
+
+    if not memories:
+        return []
+
+    # 1. Correspondência direta com keys conhecidas
+    direct_matches = find_direct_key_matches(
+        message
+    )
+
+    # Mesmo que o Interpreter erre o need_memory,
+    # uma key explícita conhecida continua relevante.
+    if direct_matches:
+        return direct_matches[:limit]
+
+    # 2. Se não houve correspondência direta,
+    # usa a interpretação semântica.
     if not query_data:
         return []
 
@@ -168,15 +185,9 @@ def retrieve_relevant_memories(
     ):
         return []
 
-    memories = ATLAS_MEMORY["memories"]
-
-    if not memories:
-        return []
-
     scored = []
 
     for memory in memories:
-
         score = calculate_memory_score(
             memory=memory,
             original_message=message,
@@ -198,3 +209,26 @@ def retrieve_relevant_memories(
         in scored[:limit]
         if score > 0
     ]
+
+
+def find_direct_key_matches(message):
+    message_tokens = tokenize(message)
+
+    matches = []
+
+    for memory in ATLAS_MEMORY["memories"]:
+        key = str(
+            memory.get("key", "")
+        ).lower().strip()
+
+        if not key:
+            continue
+
+        key_tokens = tokenize(key)
+
+        if key_tokens and key_tokens.issubset(
+            message_tokens
+        ):
+            matches.append(memory)
+
+    return matches
