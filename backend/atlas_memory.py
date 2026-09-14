@@ -1,47 +1,158 @@
-ATLAS_MEMORY = {
-    "events": [],
-    "player_info": {},
-    "atlas_info": {},
-    "important_moments": []
+from datetime import datetime
+
+
+ALLOWED_ENTITIES = {
+    "player",
+    "atlas",
+    "shared",
+    "world"
 }
 
 
-def add_event(event_id, description, source="game"):
-    """
-    Guarda um acontecimento que Atlas presenciou ou aprendeu.
-    """
-
-    for event in ATLAS_MEMORY["events"]:
-        if event["id"] == event_id:
-            return
-
-    ATLAS_MEMORY["events"].append({
-        "id": event_id,
-        "description": description,
-        "source": source
-    })
+ALLOWED_CATEGORIES = {
+    "identity",
+    "preference",
+    "belief",
+    "relationship",
+    "event",
+    "knowledge",
+    "definition",
+    "goal",
+    "emotion",
+    "experience"
+}
 
 
-def set_player_info(key, value):
-    """
-    Guarda ou atualiza informação sobre o jogador.
-    """
-    ATLAS_MEMORY["player_info"][key] = value
+ALLOWED_MEMORY_TYPES = {
+    "semantic",
+    "episodic"
+}
 
 
-def add_important_moment(moment_id, description):
-    """
-    Guarda acontecimentos narrativamente importantes.
-    """
+ATLAS_MEMORY = {
+    "memories": [],
+    "next_id": 1
+}
 
-    for moment in ATLAS_MEMORY["important_moments"]:
-        if moment["id"] == moment_id:
-            return
 
-    ATLAS_MEMORY["important_moments"].append({
-        "id": moment_id,
-        "description": description
-    })
+def normalize_text(value):
+    if isinstance(value, str):
+        return value.strip()
+
+    return value
+
+
+def validate_memory(
+    entity,
+    category,
+    key,
+    value,
+    memory_type,
+    confidence,
+    importance
+):
+    if entity not in ALLOWED_ENTITIES:
+        return False
+
+    if category not in ALLOWED_CATEGORIES:
+        return False
+
+    if memory_type not in ALLOWED_MEMORY_TYPES:
+        return False
+
+    if not key:
+        return False
+
+    if value is None:
+        return False
+
+    if not 0.0 <= confidence <= 1.0:
+        return False
+
+    if not 0.0 <= importance <= 1.0:
+        return False
+
+    return True
+
+
+def add_memory(
+    entity,
+    category,
+    key,
+    value,
+    memory_type="semantic",
+    source="player",
+    confidence=1.0,
+    importance=0.5
+):
+    entity = normalize_text(entity)
+    category = normalize_text(category)
+    key = normalize_text(key)
+    value = normalize_text(value)
+    memory_type = normalize_text(memory_type)
+    source = normalize_text(source)
+
+    try:
+        confidence = float(confidence)
+        importance = float(importance)
+    except (TypeError, ValueError):
+        return False
+
+    confidence = max(0.0, min(confidence, 1.0))
+    importance = max(0.0, min(importance, 1.0))
+
+    if not validate_memory(
+        entity=entity,
+        category=category,
+        key=key,
+        value=value,
+        memory_type=memory_type,
+        confidence=confidence,
+        importance=importance
+    ):
+        return False
+
+    # Memórias semânticas representam conhecimento atual.
+    # Portanto podem ser atualizadas.
+    if memory_type == "semantic":
+
+        for memory in ATLAS_MEMORY["memories"]:
+
+            if (
+                memory["memory_type"] == "semantic"
+                and memory["entity"] == entity
+                and memory["category"] == category
+                and memory["key"] == key
+            ):
+                memory["value"] = value
+                memory["source"] = source
+                memory["confidence"] = confidence
+                memory["importance"] = importance
+                memory["updated_at"] = datetime.now().isoformat()
+
+                return True
+
+    # Memórias episódicas representam acontecimentos.
+    # Não substituímos acontecimentos anteriores.
+    memory = {
+        "id": ATLAS_MEMORY["next_id"],
+        "memory_type": memory_type,
+        "entity": entity,
+        "category": category,
+        "key": key,
+        "value": value,
+        "source": source,
+        "confidence": confidence,
+        "importance": importance,
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat()
+    }
+
+    ATLAS_MEMORY["memories"].append(memory)
+
+    ATLAS_MEMORY["next_id"] += 1
+
+    return True
 
 
 def get_atlas_memory():
@@ -49,57 +160,26 @@ def get_atlas_memory():
 
 
 def reset_atlas_memory():
-    ATLAS_MEMORY["events"].clear()
-    ATLAS_MEMORY["player_info"].clear()
-    ATLAS_MEMORY["atlas_info"].clear()
-    ATLAS_MEMORY["important_moments"].clear()
+    ATLAS_MEMORY["memories"].clear()
+    ATLAS_MEMORY["next_id"] = 1
 
-def set_atlas_info(key, value):
-    """
-    Guarda informação personalizada sobre o próprio Atlas.
-    """
-    ATLAS_MEMORY["atlas_info"][key] = value
 
-def build_memory_context():
+def build_memory_context(memories=None):
+    if memories is None:
+        memories = ATLAS_MEMORY["memories"]
+
+    if not memories:
+        return "Nenhuma memória relevante."
+
     lines = []
 
-    # Eventos
-    if ATLAS_MEMORY["events"]:
-        lines.append("EVENTOS RECORDADOS:")
-
-        for event in ATLAS_MEMORY["events"]:
-            lines.append(
-                f"- {event['description']} "
-                f"(fonte: {event['source']})"
-            )
-    else:
-        lines.append("EVENTOS RECORDADOS:")
-        lines.append("- Nenhum evento relevante registado.")
-
-    # Jogador
-    lines.append("\nINFORMAÇÕES SOBRE O JOGADOR:")
-
-    if ATLAS_MEMORY["player_info"]:
-        for key, value in ATLAS_MEMORY["player_info"].items():
-            lines.append(f"- {key}: {value}")
-    else:
-        lines.append("- Nenhuma informação pessoal registada.")
-
-    lines.append("\nINFORMAÇÕES PERSONALIZADAS SOBRE ATLAS:")
-
-    if ATLAS_MEMORY["atlas_info"]:
-        for key, value in ATLAS_MEMORY["atlas_info"].items():
-            lines.append(f"- {key}: {value}")
-    else:
-        lines.append("- Nenhuma informação personalizada registada.")
-
-    # Momentos importantes
-    lines.append("\nMOMENTOS IMPORTANTES:")
-
-    if ATLAS_MEMORY["important_moments"]:
-        for moment in ATLAS_MEMORY["important_moments"]:
-            lines.append(f"- {moment['description']}")
-    else:
-        lines.append("- Nenhum momento importante registado.")
+    for memory in memories:
+        lines.append(
+            f"- [{memory['memory_type']}] "
+            f"{memory['entity']} / "
+            f"{memory['category']} / "
+            f"{memory['key']} = "
+            f"{memory['value']}"
+        )
 
     return "\n".join(lines)

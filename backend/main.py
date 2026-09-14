@@ -8,12 +8,11 @@ from backend.atlas_knowledge import (
     get_atlas_knowledge,
     reset_atlas_knowledge
 )
+
 from backend.atlas_memory import (
     get_atlas_memory,
     reset_atlas_memory,
-    add_event,
-    set_player_info,
-    add_important_moment
+    add_memory
 )
 
 app = FastAPI(title="Find Hope")
@@ -22,20 +21,14 @@ app = FastAPI(title="Find Hope")
 class ChatMessage(BaseModel):
     message: str
 
-class MemoryEvent(BaseModel):
-    id: str
-    description: str
-    source: str = "game"
-
-
-class PlayerInfo(BaseModel):
+class MemoryData(BaseModel):
+    entity: str
+    category: str
     key: str
     value: str
-
-
-class ImportantMoment(BaseModel):
-    id: str
-    description: str
+    source: str = "player"
+    confidence: float = 1.0
+    importance: float = 0.5
 
 @app.get("/")
 def root():
@@ -105,40 +98,26 @@ def atlas_memory():
     return get_atlas_memory()
 
 
-@app.post("/atlas/memory/event")
-def create_memory_event(data: MemoryEvent):
-    add_event(
-        event_id=data.id,
-        description=data.description,
-        source=data.source
-    )
-
-    return {
-        "status": "Event stored"
-    }
-
-
-@app.post("/atlas/memory/player-info")
-def create_player_info(data: PlayerInfo):
-    set_player_info(
+@app.post("/atlas/memory")
+def create_memory(data: MemoryData):
+    success = add_memory(
+        entity=data.entity,
+        category=data.category,
         key=data.key,
-        value=data.value
+        value=data.value,
+        source=data.source,
+        confidence=data.confidence,
+        importance=data.importance
     )
 
-    return {
-        "status": "Player information stored"
-    }
-
-
-@app.post("/atlas/memory/important")
-def create_important_memory(data: ImportantMoment):
-    add_important_moment(
-        moment_id=data.id,
-        description=data.description
-    )
+    if not success:
+        return {
+            "status": "error",
+            "message": "Invalid memory data"
+        }
 
     return {
-        "status": "Important moment stored"
+        "status": "Memory stored"
     }
 
 
