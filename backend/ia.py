@@ -3,8 +3,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from groq import Groq
-
-from backend.belief_evaluator import evaluate_memory
 from backend.atlas_knowledge import build_knowledge_context
 from backend.world_state import WORLD_STATE
 from backend.atlas_lore import build_lore_context
@@ -24,7 +22,7 @@ print("GROQ KEY CARREGADA:", GROQ_API_KEY is not None)
 
 client = Groq(api_key=GROQ_API_KEY)
 
-MODEL = "qwen/qwen3.6-27b"
+MODEL = "qwen/qwen3.8-27b"
 
 
 ANDROID_INSTRUCTIONS = """
@@ -129,6 +127,54 @@ Não transformes respostas simples em relatórios.
 Não termines sempre com uma pergunta.
 Só responde de forma mais longa quando o jogador pedir uma explicação
 ou quando a situação exigir.
+
+MEMÓRIA E VERDADE:
+Uma memória representa aquilo que foi registado, não necessariamente
+um facto objetivo confirmado.
+
+Se uma memória relevante estiver presente no contexto, isso significa
+que tens registo dessa informação.
+
+Nunca afirmes:
+- "não tenho registo";
+- "não me informaste";
+- "nunca disseste";
+- "não sei se me disseste";
+
+quando existir no contexto uma memória relacionada com essa informação.
+
+Distingue obrigatoriamente estas duas perguntas:
+
+1. "O jogador já me disse/afirmou isto?"
+   Consulta a memória.
+   Se a memória existir, a resposta é sim.
+
+2. "Isto aconteceu realmente?"
+   Consulta o estado epistemológico da memória.
+   Uma memória não confirmada não prova que o acontecimento ocorreu.
+
+Se uma memória estiver marcada como:
+- accepted: podes tratá-la normalmente;
+- supported: existem evidências que a apoiam;
+- unverified: o jogador declarou a informação, mas não está confirmada;
+- doubtful: o jogador declarou a informação, mas tens razões para duvidar;
+- contradicted: existem evidências que contradizem a declaração.
+
+EXEMPLO DE RACIOCÍNIO:
+Se existe uma memória:
+player / event / patricidio = matar o pai
+epistemic_status = doubtful
+
+e o jogador pergunta:
+"Eu matei o meu pai?"
+
+não digas que não tens registo.
+
+Responde segundo esta distinção:
+"Tu disseste-me que o fizeste, mas não tenho confirmação de que tenha realmente acontecido."
+
+Não repitas este exemplo mecanicamente. Adapta a resposta ao contexto.
+
 """
 
 
@@ -150,26 +196,29 @@ def build_detection_context():
     return "\n".join(lines)
 
 
-def build_belief_context(evaluated_memories):
-    if not evaluated_memories:
+def build_belief_context(memories):
+    if not memories:
         return "Nenhuma nova declaração avaliada."
 
     lines = []
 
-    for item in evaluated_memories:
-        memory = item["memory"]
-        evaluation = item["evaluation"]
+    for memory in memories:
+        if not isinstance(memory, dict):
+            continue
 
         lines.append(
             f"- {memory.get('entity')} / "
             f"{memory.get('category')} / "
             f"{memory.get('key')} = "
             f"{memory.get('value')}\n"
-            f"  estado: {evaluation.get('epistemic_status')}\n"
-            f"  plausibilidade: {evaluation.get('plausibility')}\n"
-            f"  peso narrativo: {evaluation.get('narrative_weight')}\n"
-            f"  reação sugerida: {evaluation.get('reaction_hint')}"
+            f"  estado: {memory.get('epistemic_status')}\n"
+            f"  plausibilidade: {memory.get('plausibility')}\n"
+            f"  peso narrativo: {memory.get('narrative_weight')}\n"
+            f"  reação sugerida: {memory.get('reaction_hint')}"
         )
+
+    if not lines:
+        return "Nenhuma nova declaração avaliada."
 
     return "\n".join(lines)
 
@@ -214,38 +263,18 @@ def ask_android(message: str) -> str:
             message=message,
         )
 
-        # =========================================================
-        # 2. GUARDAR NOVAS MEMÓRIAS
+                # =========================================================
+        # 2. AVALIAR E GUARDAR NOVAS MEMÓRIAS
         # =========================================================
 
-        process_interpreted_memory(interpreted_memory)
-
-        new_memories = interpreted_memory.get("memories", [])
+        new_memories = process_interpreted_memory(
+            memory_data=interpreted_memory,
+            world_state=WORLD_STATE,
+            knowledge=None
+        )
 
         if not isinstance(new_memories, list):
             new_memories = []
-
-        # =========================================================
-        # 3. AVALIAR NOVAS DECLARAÇÕES
-        # =========================================================
-
-        evaluated_memories = []
-
-        for memory in new_memories:
-            if not isinstance(memory, dict):
-                continue
-
-            evaluation = evaluate_memory(
-                memory=memory,
-                world_state=WORLD_STATE,
-            )
-
-            evaluated_memories.append(
-                {
-                    "memory": memory,
-                    "evaluation": evaluation,
-                }
-            )
 
         # =========================================================
         # 4. DESCOBRIR O QUE PRECISA SER RECUPERADO
@@ -282,7 +311,7 @@ def ask_android(message: str) -> str:
         print("\nQUERY DE MEMÓRIA:", query_data)
         print("\nMEMÓRIAS RECUPERADAS:", relevant_memories)
         print("\nMEMÓRIAS ENVIADAS AO ATLAS:", context_memories)
-        print("\nAVALIAÇÃO EPISTÉMICA:", evaluated_memories)
+        print("\nAVALIAÇÃO EPISTÉMICA:", new_memories)
 
         # =========================================================
         # 7. CONSTRUIR CONTEXTOS
@@ -292,7 +321,7 @@ def ask_android(message: str) -> str:
         knowledge_context = build_knowledge_context()
         detection_context = build_detection_context()
         memory_context = build_memory_context(context_memories)
-        belief_context = build_belief_context(evaluated_memories)
+        belief_context = build_belief_context(new_memories)
 
         # =========================================================
         # 8. RESPOSTA DO ATLAS

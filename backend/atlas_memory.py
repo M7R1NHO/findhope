@@ -29,6 +29,15 @@ ALLOWED_MEMORY_TYPES = {
 }
 
 
+ALLOWED_EPISTEMIC_STATUS = {
+    "accepted",
+    "supported",
+    "unverified",
+    "doubtful",
+    "contradicted"
+}
+
+
 ATLAS_MEMORY = {
     "memories": [],
     "next_id": 1
@@ -40,6 +49,18 @@ def normalize_text(value):
         return value.strip()
 
     return value
+
+
+def normalize_optional_float(value):
+    if value is None:
+        return None
+
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    return max(0.0, min(value, 1.0))
 
 
 def validate_memory(
@@ -76,14 +97,18 @@ def validate_memory(
 
 
 def add_memory(
+    memory_type,
     entity,
     category,
     key,
     value,
-    memory_type="semantic",
     source="player",
     confidence=1.0,
-    importance=0.5
+    importance=0.5,
+    epistemic_status=None,
+    plausibility=None,
+    narrative_weight=None,
+    reaction_hint=None
 ):
     entity = normalize_text(entity)
     category = normalize_text(category)
@@ -91,6 +116,9 @@ def add_memory(
     value = normalize_text(value)
     memory_type = normalize_text(memory_type)
     source = normalize_text(source)
+
+    epistemic_status = normalize_text(epistemic_status)
+    reaction_hint = normalize_text(reaction_hint)
 
     try:
         confidence = float(confidence)
@@ -100,6 +128,15 @@ def add_memory(
 
     confidence = max(0.0, min(confidence, 1.0))
     importance = max(0.0, min(importance, 1.0))
+
+    plausibility = normalize_optional_float(plausibility)
+    narrative_weight = normalize_optional_float(narrative_weight)
+
+    if (
+        epistemic_status is not None
+        and epistemic_status not in ALLOWED_EPISTEMIC_STATUS
+    ):
+        epistemic_status = "unverified"
 
     if not validate_memory(
         entity=entity,
@@ -112,8 +149,15 @@ def add_memory(
     ):
         return False
 
-    # Memórias semânticas representam conhecimento atual.
-    # Portanto podem ser atualizadas.
+    now = datetime.now().isoformat()
+
+    # ---------------------------------------------------------
+    # MEMÓRIA SEMÂNTICA
+    # ---------------------------------------------------------
+    # Representa conhecimento/estado atual.
+    # Se já existir a mesma chave lógica, atualizamos.
+    # ---------------------------------------------------------
+
     if memory_type == "semantic":
 
         for memory in ATLAS_MEMORY["memories"]:
@@ -128,12 +172,23 @@ def add_memory(
                 memory["source"] = source
                 memory["confidence"] = confidence
                 memory["importance"] = importance
-                memory["updated_at"] = datetime.now().isoformat()
+
+                memory["epistemic_status"] = epistemic_status
+                memory["plausibility"] = plausibility
+                memory["narrative_weight"] = narrative_weight
+                memory["reaction_hint"] = reaction_hint
+
+                memory["updated_at"] = now
 
                 return True
 
-    # Memórias episódicas representam acontecimentos.
-    # Não substituímos acontecimentos anteriores.
+    # ---------------------------------------------------------
+    # MEMÓRIA NOVA
+    # ---------------------------------------------------------
+    # Episódicas não substituem acontecimentos anteriores.
+    # Semânticas chegam aqui apenas quando ainda não existem.
+    # ---------------------------------------------------------
+
     memory = {
         "id": ATLAS_MEMORY["next_id"],
         "memory_type": memory_type,
@@ -144,8 +199,14 @@ def add_memory(
         "source": source,
         "confidence": confidence,
         "importance": importance,
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat()
+
+        "epistemic_status": epistemic_status,
+        "plausibility": plausibility,
+        "narrative_weight": narrative_weight,
+        "reaction_hint": reaction_hint,
+
+        "created_at": now,
+        "updated_at": now
     }
 
     ATLAS_MEMORY["memories"].append(memory)
@@ -174,12 +235,44 @@ def build_memory_context(memories=None):
     lines = []
 
     for memory in memories:
-        lines.append(
+
+        line = (
             f"- [{memory['memory_type']}] "
             f"{memory['entity']} / "
             f"{memory['category']} / "
             f"{memory['key']} = "
             f"{memory['value']}"
         )
+
+        epistemic_status = memory.get("epistemic_status")
+        plausibility = memory.get("plausibility")
+        narrative_weight = memory.get("narrative_weight")
+        reaction_hint = memory.get("reaction_hint")
+
+        if epistemic_status is not None:
+            line += (
+                f"\n  epistemic_status: "
+                f"{epistemic_status}"
+            )
+
+        if plausibility is not None:
+            line += (
+                f"\n  plausibility: "
+                f"{plausibility}"
+            )
+
+        if narrative_weight is not None:
+            line += (
+                f"\n  narrative_weight: "
+                f"{narrative_weight}"
+            )
+
+        if reaction_hint is not None:
+            line += (
+                f"\n  reaction_hint: "
+                f"{reaction_hint}"
+            )
+
+        lines.append(line)
 
     return "\n".join(lines)
