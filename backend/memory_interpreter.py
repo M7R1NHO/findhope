@@ -1,8 +1,136 @@
 import json
-import re
 
 from backend.atlas_memory import add_memory
 from backend.belief_evaluator import evaluate_memory
+
+
+MEMORY_RESPONSE_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "atlas_memory_interpreter",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "memories": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "memory_type": {
+                                "type": "string",
+                                "enum": [
+                                    "semantic",
+                                    "episodic"
+                                ]
+                            },
+                            "entity": {
+                                "type": "string",
+                                "enum": [
+                                    "player",
+                                    "atlas",
+                                    "shared",
+                                    "world"
+                                ]
+                            },
+                            "category": {
+                                "type": "string",
+                                "enum": [
+                                    "identity",
+                                    "preference",
+                                    "belief",
+                                    "relationship",
+                                    "event",
+                                    "knowledge",
+                                    "definition",
+                                    "goal",
+                                    "emotion",
+                                    "experience"
+                                ]
+                            },
+                            "key": {
+                                "type": "string"
+                            },
+                            "value": {
+                                "type": "string"
+                            },
+                            "confidence": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                            },
+                            "importance": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                            }
+                        },
+                        "required": [
+                            "memory_type",
+                            "entity",
+                            "category",
+                            "key",
+                            "value",
+                            "confidence",
+                            "importance"
+                        ],
+                        "additionalProperties": False
+                    }
+                },
+
+                "query": {
+                    "type": "object",
+                    "properties": {
+                        "need_memory": {
+                            "type": "boolean"
+                        },
+                        "entity": {
+                            "type": "string",
+                            "enum": [
+                                "player",
+                                "atlas",
+                                "shared",
+                                "world",
+                                "any"
+                            ]
+                        },
+                        "category": {
+                            "type": "string",
+                            "enum": [
+                                "identity",
+                                "preference",
+                                "belief",
+                                "relationship",
+                                "event",
+                                "knowledge",
+                                "definition",
+                                "goal",
+                                "emotion",
+                                "experience",
+                                "any"
+                            ]
+                        },
+                        "query": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "need_memory",
+                        "entity",
+                        "category",
+                        "query"
+                    ],
+                    "additionalProperties": False
+                }
+            },
+            "required": [
+                "memories",
+                "query"
+            ],
+            "additionalProperties": False
+        }
+    }
+}
 
 
 def default_memory_result():
@@ -17,104 +145,28 @@ def default_memory_result():
     }
 
 
-def parse_json_response(content: str):
-    if not content:
-        raise ValueError("Resposta vazia.")
-
-    text = content.strip()
-
-    # Remove blocos ```json ... ```
-    if text.startswith("```"):
-        text = re.sub(
-            r"^```(?:json)?\s*",
-            "",
-            text,
-            flags=re.IGNORECASE
-        )
-
-        text = re.sub(
-            r"\s*```$",
-            "",
-            text
-        )
-
-    # Mantém apenas o objeto JSON principal
-    start = text.find("{")
-    end = text.rfind("}")
-
-    if start == -1 or end == -1:
-        raise ValueError(
-            f"Nenhum objeto JSON encontrado: {text}"
-        )
-
-    text = text[start:end + 1]
-
-    # Remove trailing commas:
-    # {"a": 1,}
-    # [1, 2,]
-    text = re.sub(
-        r",\s*([}\]])",
-        r"\1",
-        text
-    )
-
-    # IMPORTANTE:
-    # Aqui fazemos json.loads().
-    # NÃO chamamos parse_json_response() novamente.
-    return json.loads(text)
-
 def normalize_interpreter_result(data):
     if not isinstance(data, dict):
         return default_memory_result()
 
-    memories = data.get("memories", [])
+    memories = data.get(
+        "memories",
+        []
+    )
+
+    query = data.get(
+        "query",
+        {}
+    )
 
     if not isinstance(memories, list):
         memories = []
 
-    # Normalizar todas as memórias recebidas
-    normalized_memories = []
-
-    for memory in memories:
-        if not isinstance(memory, dict):
-            continue
-
-        memory = dict(memory)
-
-        # Compatibilidade caso o modelo devolva "type"
-        # em vez de "memory_type".
-        if "memory_type" not in memory:
-            if "type" in memory:
-                memory["memory_type"] = memory.pop("type")
-
-        normalized_memories.append(memory)
-
-    memories = normalized_memories
-
-    # Normalizar query
-    query = data.get("query", {})
-
     if not isinstance(query, dict):
         query = {}
 
-    need_memory = query.get("need_memory", False)
-
-    if need_memory is True:
-        normalized_query = {
-            "need_memory": True,
-            "entity": str(
-                query.get("entity", "any")
-            ).strip(),
-            "category": str(
-                query.get("category", "any")
-            ).strip(),
-            "query": str(
-                query.get("query", "")
-            ).strip()
-        }
-
-    else:
-        normalized_query = {
+    if query.get("need_memory") is not True:
+        query = {
             "need_memory": False,
             "entity": "any",
             "category": "any",
@@ -123,153 +175,84 @@ def normalize_interpreter_result(data):
 
     return {
         "memories": memories,
-        "query": normalized_query
+        "query": query
     }
+
 
 def interpret_memory(
     client,
     model,
     message: str
 ):
-    prompt = f"""
-Analisa a mensagem e devolve memória estruturada e intenção de recuperação.
+    system_prompt = """
+You are Atlas's memory interpreter.
 
-Mensagem:
-{message}
+Return:
+1. new memories created by the CURRENT message;
+2. a query for OLD memories useful for understanding it.
 
-MEMÓRIA:
-memory_type: semantic | episodic
-entity: player | atlas | shared | world
-category: identity | preference | belief | relationship | event |
-knowledge | definition | goal | emotion | experience
+IMPORTANT:
+Creating a new memory and retrieving old memories are independent.
+A message may do BOTH.
 
-Campos:
-key = conceito curto
-value = informação curta
-confidence = 0..1
-importance = 0..1
+Example:
+"desculpa atlas"
 
-Regras:
-- Guarda apenas informação explícita, relevante e potencialmente útil no futuro.
-- Não inventes, não deduzas acontecimentos e não acrescentes intenções que não foram expressas.
+This is a CURRENT social action, so create an episodic
+player/relationship memory for the apology.
 
-- Memórias não são apenas factos declarados.
-  A própria mensagem pode representar um acontecimento da interação atual.
+It may ALSO need previous relationship memories to understand
+what the player is apologizing for.
 
-- Ações sociais relevantes dirigidas ao jogador ou a Atlas podem criar memória episódica.
-  Exemplos de acontecimentos relevantes:
-  insultos, elogios, pedidos de desculpa, ameaças, promessas,
-  demonstrações importantes de confiança, rejeição, apoio,
-  hostilidade ou afeto.
+Rules:
+- Store useful persistent facts and significant events.
+- Never invent information.
+- Do not store trivial conversation.
+- semantic = persistent information.
+- episodic = event.
+- Significant actions toward Atlas such as insults, apologies,
+  threats, promises, affection, hostility and support are
+  episodic/player/relationship.
+- External events claimed by the player are normally
+  episodic/player/event.
+- Questions normally do not create memories.
+- A question is not memorable merely because its subject is serious.
+- "X significa Y" is semantic/shared/definition.
+- Player real name: semantic/player/identity, key "name".
+- Player preferred name: semantic/player/identity,
+  key "preferred_name".
 
-- Para uma ação social dirigida a Atlas:
-  memory_type="episodic"
-  entity="player"
-  category="relationship"
+Retrieval:
+- Set need_memory=true when OLD information helps understand
+  or answer the current message.
+- Past, identity, preferences, previous events and relationship
+  questions normally require retrieval.
+- A current apology, reconciliation or other relationship action
+  may retrieve previous relationship context.
+- If retrieval is unnecessary:
+  entity="any", category="any", query="".
+- Write query, key and value in the SAME LANGUAGE as the player.
 
-- A key deve representar o acontecimento de forma curta e reutilizável.
-  O value deve descrever brevemente o que aconteceu.
-
-- Não guardes interações sociais triviais como cumprimentos,
-  confirmações simples, "ok", "sim", "não" ou conversa sem importância.
-  Guarda apenas acontecimentos que possam ser relevantes para
-  relacionamento, narrativa ou respostas futuras.
-
-- Perguntas normalmente não criam NOVA memória,
-  mas podem precisar de recuperar memória antiga.
-
-- Uma pergunta sobre o passado, identidade, preferências,
-  definições, acontecimentos, relacionamento ou algo dito
-  anteriormente deve normalmente usar need_memory=true.
-
-- Se a mensagem perguntar sobre uma interação anterior com Atlas,
-  procura memória de relationship ou event conforme o contexto.
-
-- player = informação ou ação do jogador.
-- atlas = informação ou ação sobre Atlas.
-- shared = códigos/definições combinadas entre ambos.
-- world = informação sobre mundo/missão.
-
-- Nome real:
-  player / identity / name.
-
-- Nome preferido:
-  player / identity / preferred_name.
-
-- "X significa Y" como convenção:
-  shared / definition, key=X, value=Y.
-
-- semantic = estado, preferência, identidade ou conhecimento persistente.
-- episodic = algo que aconteceu.
-
-- need_memory=true apenas quando informação anterior
-  puder ajudar a responder.
-
-- Se need_memory=false:
-  entity="any"
-  category="any"
-  query=""
-
-- Mantém key e value na mesma língua da mensagem original.
-- Não traduzas a memória para outra língua.
-
-- Perguntas como:
-  "eu disse X?",
-  "eu fiz X?",
-  "eu já te tratei assim?",
-  "qual é o meu X?",
-  "lembras-te de X?"
-  normalmente precisam de memória.
-
-- Não guardes uma pergunta apenas porque o assunto é grave,
-  polémico, estranho ou emocional.
-
-- Uma pergunta só deve criar memória episódica quando o próprio
-  ato de perguntar tiver relevância narrativa ou relacional clara.
-
-- Perguntar a opinião de Atlas sobre um assunto normalmente não
-  constitui, por si só, um acontecimento relacional memorável.
-
-- Distingue acontecimentos diretamente observados na conversa
-  de acontecimentos que o jogador apenas afirma terem ocorrido
-  fora da conversa.
-
-JSON apenas:
-{{
-    "memories": [],
-    "query": {{
-        "need_memory": false,
-        "entity": "any",
-        "category": "any",
-        "query": ""
-    }}
-}}
+confidence and importance must be between 0 and 1.
 """
 
-    content = None
-
     try:
-        completion = (
-            client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Extrai memória e intenção "
-                            "de recuperação. "
-                            "Responde apenas JSON válido."
-                        )
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                reasoning_effort="none",
-                temperature=0,
-                max_tokens=500
-            )
+        completion = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": message
+                }
+            ],
+            response_format=MEMORY_RESPONSE_SCHEMA,
+            reasoning_effort="none",
+            temperature=0,
+            max_tokens=400
         )
 
         content = (
@@ -279,38 +262,26 @@ JSON apenas:
             .content
         )
 
-        finish_reason = (
-            completion
-            .choices[0]
-            .finish_reason
-        )
-
-        if finish_reason == "length":
-            print(
-                "Memory Interpreter atingiu "
-                "o limite de tokens."
-            )
-
         if not content:
             return default_memory_result()
 
-        data = parse_json_response(content)
+        data = json.loads(content)
 
-        return normalize_interpreter_result(
+        result = normalize_interpreter_result(
             data
         )
+
+        print(
+            "\nINTERPRETER RESULT:",
+            result
+        )
+
+        return result
 
     except Exception as e:
         print(
             f"Erro no Memory Interpreter: {e}"
         )
-
-        if content:
-            print(
-                "\nRESPOSTA CRUA DO "
-                "MEMORY INTERPRETER:\n",
-                content
-            )
 
         return default_memory_result()
 
@@ -320,21 +291,6 @@ def process_interpreted_memory(
     world_state=None,
     knowledge=None
 ):
-    """
-    Processa as memórias extraídas pelo Interpreter.
-
-    Ordem:
-
-    Interpreter
-        ↓
-    Belief Evaluator
-        ↓
-    Memory Engine
-
-    Assim, a avaliação epistemológica é guardada
-    juntamente com a própria memória.
-    """
-
     if not memory_data:
         return []
 
@@ -352,41 +308,21 @@ def process_interpreted_memory(
         if not isinstance(memory, dict):
             continue
 
-        # ---------------------------------------------
-        # 1. Avaliação epistemológica
-        # ---------------------------------------------
-
         evaluation = evaluate_memory(
             memory,
             world_state=world_state,
             knowledge=knowledge
         )
 
-        # ---------------------------------------------
-        # 2. Guardar memória + avaliação
-        # ---------------------------------------------
-
         success = add_memory(
-            memory_type=memory.get(
-                "memory_type",
-                "semantic"
-            ),
-            entity=memory.get("entity"),
-            category=memory.get("category"),
-            key=memory.get("key"),
-            value=memory.get("value"),
-            source=memory.get(
-                "source",
-                "player"
-            ),
-            confidence=memory.get(
-                "confidence",
-                1.0
-            ),
-            importance=memory.get(
-                "importance",
-                0.5
-            ),
+            memory_type=memory["memory_type"],
+            entity=memory["entity"],
+            category=memory["category"],
+            key=memory["key"],
+            value=memory["value"],
+            source="player",
+            confidence=memory["confidence"],
+            importance=memory["importance"],
             epistemic_status=evaluation.get(
                 "epistemic_status"
             ),
@@ -403,20 +339,13 @@ def process_interpreted_memory(
 
         if not success:
             print(
-                "Memória rejeitada pelo "
-                "Memory Engine:",
+                "Memória rejeitada pelo Memory Engine:",
                 memory
             )
-
             continue
 
-        # Criamos também uma versão completa para
-        # devolver ao pipeline atual.
         evaluated_memory = dict(memory)
-
-        evaluated_memory.update(
-            evaluation
-        )
+        evaluated_memory.update(evaluation)
 
         saved_memories.append(
             evaluated_memory

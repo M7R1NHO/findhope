@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from difflib import SequenceMatcher
 
 from backend.atlas_memory import ATLAS_MEMORY
@@ -7,39 +8,76 @@ from backend.atlas_memory import ATLAS_MEMORY
 STOP_WORDS = {
     "a", "o", "os", "as",
     "de", "da", "do", "das", "dos",
-    "e", "é", "em", "no", "na",
-    "um", "uma", "para", "por",
-    "que", "se",
-    "eu", "meu", "minha", "meus", "minhas",
-    "tu", "teu", "tua", "seu", "sua"
+    "e", "em", "no", "na", "nos", "nas",
+    "um", "uma", "uns", "umas",
+    "para", "por", "com", "sem",
+    "que", "se", "isso", "isto", "aquilo",
+    "eu", "me", "mim",
+    "meu", "minha", "meus", "minhas",
+    "tu", "te", "ti",
+    "teu", "tua", "teus", "tuas",
+    "seu", "sua", "seus", "suas",
+    "ele", "ela", "eles", "elas",
+    "ja", "algum", "alguma",
+    "alguns", "algumas",
+    "ao", "aos",
+    "atlas",
+    "player",
+    "jogador"
 }
 
 
-def tokenize(text):
+# =========================================================
+# TEXTO
+# =========================================================
+
+def normalize_text(text):
     if not text:
-        return set()
+        return ""
+
+    text = str(text).lower()
+
+    text = unicodedata.normalize(
+        "NFD",
+        text
+    )
+
+    text = "".join(
+        char
+        for char in text
+        if unicodedata.category(char) != "Mn"
+    )
+
+    return text.strip()
+
+
+def tokenize(text):
+    text = normalize_text(text)
 
     words = re.findall(
-        r"[A-Za-zÀ-ÿ0-9_]+",
-        str(text).lower()
+        r"[a-z0-9_]+",
+        text
     )
 
     return {
         word
         for word in words
         if word not in STOP_WORDS
-        and len(word) > 1
+        and len(word) >= 3
     }
 
 
 def text_similarity(text_a, text_b):
+    text_a = normalize_text(text_a)
+    text_b = normalize_text(text_b)
+
     if not text_a or not text_b:
         return 0.0
 
     return SequenceMatcher(
         None,
-        str(text_a).lower(),
-        str(text_b).lower()
+        text_a,
+        text_b
     ).ratio()
 
 
@@ -50,93 +88,250 @@ def build_memory_text(memory):
     ).strip()
 
 
-def calculate_memory_score(
+# =========================================================
+# STEM SIMPLES
+# =========================================================
+
+def simple_stem(word):
+    """
+    Stem MUITO leve para pequenas variações.
+
+    Não tenta compreender sinónimos.
+    Apenas aproxima flexões comuns.
+
+    Ex.:
+    desculpas -> desculpa
+    ameaças   -> ameac
+    ameaçou   -> ameac
+    insultos  -> insult
+    """
+
+    word = normalize_text(word)
+
+    suffixes = [
+        "mente",
+        "coes",
+        "cao",
+        "ando",
+        "endo",
+        "indo",
+        "aram",
+        "eram",
+        "iram",
+        "ou",
+        "ei",
+        "ar",
+        "er",
+        "ir",
+        "es",
+        "os",
+        "as",
+        "s"
+    ]
+
+    for suffix in suffixes:
+        if (
+            word.endswith(suffix)
+            and len(word) - len(suffix) >= 4
+        ):
+            return word[:-len(suffix)]
+
+    return word
+
+
+def stem_tokens(text):
+    return {
+        simple_stem(token)
+        for token in tokenize(text)
+    }
+
+
+# =========================================================
+# RELEVÂNCIA
+# =========================================================
+
+def calculate_text_relevance(
     memory,
     original_message,
-    query_data
+    semantic_query
 ):
-    score = 0.0
-
-    requested_entity = query_data.get(
-        "entity",
-        "any"
+    memory_text = build_memory_text(
+        memory
     )
 
-    requested_category = query_data.get(
-        "category",
-        "any"
+    query_tokens = tokenize(
+        semantic_query
     )
 
-    semantic_query = query_data.get(
-        "query",
-        ""
+    message_tokens = tokenize(
+        original_message
     )
 
-    # --------------------------------------------------
-    # ENTIDADE
-    # --------------------------------------------------
+    memory_tokens = tokenize(
+        memory_text
+    )
 
-    if requested_entity != "any":
-        if memory.get("entity") == requested_entity:
-            score += 5.0
-        else:
-            score -= 3.0
+    query_stems = stem_tokens(
+        semantic_query
+    )
 
-    # --------------------------------------------------
-    # CATEGORIA
-    # --------------------------------------------------
+    message_stems = stem_tokens(
+        original_message
+    )
 
-    if requested_category != "any":
-        if memory.get("category") == requested_category:
-            score += 4.0
-        else:
-            score -= 2.0
+    memory_stems = stem_tokens(
+        memory_text
+    )
 
-    # --------------------------------------------------
-    # TEXTO DA MEMÓRIA
-    # --------------------------------------------------
-
-    memory_text = build_memory_text(memory)
-
-    query_tokens = tokenize(semantic_query)
-    message_tokens = tokenize(original_message)
-    memory_tokens = tokenize(memory_text)
-
-    # Query produzida pelo Interpreter
     query_overlap = len(
-        query_tokens.intersection(memory_tokens)
+        query_tokens & memory_tokens
     )
 
-    score += query_overlap * 2.0
-
-    # Mensagem original do jogador
     message_overlap = len(
-        message_tokens.intersection(memory_tokens)
+        message_tokens & memory_tokens
     )
 
-    score += message_overlap * 2.0
+    query_stem_overlap = len(
+        query_stems & memory_stems
+    )
 
-    # --------------------------------------------------
-    # FUZZY MATCH
-    # --------------------------------------------------
+    message_stem_overlap = len(
+        message_stems & memory_stems
+    )
 
     query_similarity = text_similarity(
         semantic_query,
         memory_text
     )
 
-    score += query_similarity * 3.0
-
-    original_similarity = text_similarity(
+    message_similarity = text_similarity(
         original_message,
         memory_text
     )
 
-    score += original_similarity * 2.0
+    return {
+        "query_overlap": query_overlap,
+        "message_overlap": message_overlap,
+        "query_stem_overlap": query_stem_overlap,
+        "message_stem_overlap": message_stem_overlap,
+        "query_similarity": query_similarity,
+        "message_similarity": message_similarity
+    }
 
-    # --------------------------------------------------
-    # IMPORTÂNCIA
-    # --------------------------------------------------
+
+def has_real_relevance(relevance):
+    """
+    Gate conservador.
+
+    Para recuperar uma memória deve existir
+    evidência lexical/conceitual real.
+
+    Similaridade fuzzy SOZINHA não basta.
+    """
+
+    if relevance["query_overlap"] >= 1:
+        return True
+
+    if relevance["message_overlap"] >= 1:
+        return True
+
+    if relevance["query_stem_overlap"] >= 1:
+        return True
+
+    if relevance["message_stem_overlap"] >= 1:
+        return True
+
+    return False
+
+
+# =========================================================
+# SCORE
+# =========================================================
+
+def calculate_memory_score(
+    memory,
+    original_message,
+    query_data,
+    relevance
+):
+    """
+    Metadados só ordenam memórias que JÁ
+    passaram pelo gate de relevância.
+    """
+
+    score = 0.0
+
+    score += (
+        relevance["query_overlap"]
+        * 5.0
+    )
+
+    score += (
+        relevance["query_stem_overlap"]
+        * 4.0
+    )
+
+    score += (
+        relevance["message_overlap"]
+        * 3.0
+    )
+
+    score += (
+        relevance["message_stem_overlap"]
+        * 2.0
+    )
+
+    # Similaridade agora é apenas desempate.
+    score += (
+        relevance["query_similarity"]
+        * 0.5
+    )
+
+    score += (
+        relevance["message_similarity"]
+        * 0.25
+    )
+
+    requested_entity = normalize_text(
+        query_data.get(
+            "entity",
+            "any"
+        )
+    )
+
+    requested_category = normalize_text(
+        query_data.get(
+            "category",
+            "any"
+        )
+    )
+
+    memory_entity = normalize_text(
+        memory.get(
+            "entity",
+            ""
+        )
+    )
+
+    memory_category = normalize_text(
+        memory.get(
+            "category",
+            ""
+        )
+    )
+
+    # Entity/category só ajudam a ORDENAR.
+    if (
+        requested_entity != "any"
+        and memory_entity == requested_entity
+    ):
+        score += 1.0
+
+    if (
+        requested_category != "any"
+        and memory_category == requested_category
+    ):
+        score += 1.0
 
     try:
         importance = float(
@@ -148,17 +343,6 @@ def calculate_memory_score(
     except (TypeError, ValueError):
         importance = 0.5
 
-    importance = max(
-        0.0,
-        min(importance, 1.0)
-    )
-
-    score += importance
-
-    # --------------------------------------------------
-    # CONFIANÇA
-    # --------------------------------------------------
-
     try:
         confidence = float(
             memory.get(
@@ -169,99 +353,123 @@ def calculate_memory_score(
     except (TypeError, ValueError):
         confidence = 1.0
 
+    importance = max(
+        0.0,
+        min(importance, 1.0)
+    )
+
     confidence = max(
         0.0,
         min(confidence, 1.0)
     )
 
-    score += confidence * 0.5
+    score += importance * 0.25
+    score += confidence * 0.10
 
     return score
 
 
+# =========================================================
+# DIRECT KEY
+# =========================================================
+
 def find_direct_key_matches(message):
     """
-    Fast-path para quando o jogador escreve
-    explicitamente uma key conhecida.
+    Fast-path para keys explicitamente
+    mencionadas na mensagem.
     """
 
-    message_tokens = tokenize(message)
+    message_tokens = tokenize(
+        message
+    )
+
+    message_stems = stem_tokens(
+        message
+    )
 
     matches = []
 
     for memory in ATLAS_MEMORY["memories"]:
-        key = str(
-            memory.get("key", "")
-        ).lower().strip()
+        key = memory.get(
+            "key",
+            ""
+        )
 
-        if not key:
+        key_tokens = tokenize(
+            key
+        )
+
+        key_stems = stem_tokens(
+            key
+        )
+
+        if not key_tokens:
             continue
 
-        key_tokens = tokenize(key)
+        if key_tokens.issubset(
+            message_tokens
+        ):
+            matches.append(
+                memory
+            )
+            continue
 
         if (
-            key_tokens
-            and key_tokens.issubset(
-                message_tokens
+            key_stems
+            and key_stems.issubset(
+                message_stems
             )
         ):
-            matches.append(memory)
+            matches.append(
+                memory
+            )
 
     return matches
 
 
-def find_lexical_matches(
+# =========================================================
+# QUERY DO INTERPRETER
+# =========================================================
+
+def retrieve_from_query(
     message,
-    limit=6
+    query_data,
+    limit
 ):
-    """
-    Fallback genérico.
+    semantic_query = str(
+        query_data.get(
+            "query",
+            ""
+        )
+    ).strip()
 
-    Mesmo quando o Memory Interpreter diz
-    need_memory=false, verificamos se a mensagem
-    atual tem relação lexical suficiente com
-    alguma memória existente.
-
-    Isto evita depender exclusivamente da key
-    interna criada pelo modelo.
-    """
-
-    message_tokens = tokenize(message)
-
-    if not message_tokens:
+    if not semantic_query:
         return []
 
     scored = []
 
     for memory in ATLAS_MEMORY["memories"]:
-        memory_text = build_memory_text(memory)
-        memory_tokens = tokenize(memory_text)
-
-        overlap = len(
-            message_tokens.intersection(
-                memory_tokens
-            )
+        relevance = calculate_text_relevance(
+            memory=memory,
+            original_message=message,
+            semantic_query=semantic_query
         )
 
-        similarity = text_similarity(
-            message,
-            memory_text
+        if not has_real_relevance(
+            relevance
+        ):
+            continue
+
+        score = calculate_memory_score(
+            memory=memory,
+            original_message=message,
+            query_data=query_data,
+            relevance=relevance
         )
 
-        score = 0.0
-
-        # Correspondência lexical direta
-        score += overlap * 3.0
-
-        # Correspondência fuzzy
-        score += similarity * 2.0
-
-        # Só aceitamos como fallback quando existe
-        # alguma evidência textual razoável.
-        if overlap > 0 or similarity >= 0.45:
-            scored.append(
-                (score, memory)
-            )
+        scored.append(
+            (score, memory)
+        )
 
     scored.sort(
         key=lambda item: item[0],
@@ -270,81 +478,160 @@ def find_lexical_matches(
 
     return [
         memory
-        for score, memory
+        for _, memory
         in scored[:limit]
     ]
 
 
-def retrieve_relevant_memories(
+# =========================================================
+# FALLBACK LOCAL
+# =========================================================
+
+def find_lexical_matches(
     message,
-    query_data,
     limit=6
 ):
-    memories = ATLAS_MEMORY["memories"]
+    """
+    Usado apenas quando o Interpreter NÃO
+    pediu recuperação explicitamente.
+    """
+
+    message_tokens = tokenize(
+        message
+    )
+
+    message_stems = stem_tokens(
+        message
+    )
+
+    if (
+        not message_tokens
+        and not message_stems
+    ):
+        return []
+
+    scored = []
+
+    for memory in ATLAS_MEMORY["memories"]:
+        memory_text = build_memory_text(
+            memory
+        )
+
+        memory_tokens = tokenize(
+            memory_text
+        )
+
+        memory_stems = stem_tokens(
+            memory_text
+        )
+
+        exact_overlap = len(
+            message_tokens
+            & memory_tokens
+        )
+
+        stem_overlap = len(
+            message_stems
+            & memory_stems
+        )
+
+        if (
+            exact_overlap == 0
+            and stem_overlap == 0
+        ):
+            continue
+
+        score = (
+            exact_overlap * 4.0
+            + stem_overlap * 3.0
+        )
+
+        scored.append(
+            (score, memory)
+        )
+
+    scored.sort(
+        key=lambda item: item[0],
+        reverse=True
+    )
+
+    return [
+        memory
+        for _, memory
+        in scored[:limit]
+    ]
+
+
+# =========================================================
+# FUNÇÃO PRINCIPAL
+# =========================================================
+
+def retrieve_relevant_memories(
+    message,
+    query_data=None,
+    limit=6
+):
+    """
+    Recupera somente memórias com evidência
+    textual real de relevância.
+
+    Ordem:
+    1. key explícita;
+    2. query semântica produzida pelo Interpreter;
+    3. fallback lexical local.
+
+    Regra fundamental:
+    METADATA NUNCA CRIA RELEVÂNCIA.
+    """
+
+    memories = ATLAS_MEMORY.get(
+        "memories",
+        []
+    )
 
     if not memories:
         return []
 
-    # --------------------------------------------------
-    # 1. KEY EXPLÍCITA
-    # --------------------------------------------------
+    if not isinstance(
+        query_data,
+        dict
+    ):
+        query_data = {
+            "need_memory": False,
+            "entity": "any",
+            "category": "any",
+            "query": ""
+        }
 
-    direct_matches = find_direct_key_matches(
-        message
+    # -----------------------------------------------------
+    # 1. DIRECT KEY
+    # -----------------------------------------------------
+
+    direct_matches = (
+        find_direct_key_matches(
+            message
+        )
     )
 
     if direct_matches:
         return direct_matches[:limit]
 
-    # --------------------------------------------------
-    # 2. QUERY SEMÂNTICA DO INTERPRETER
-    # --------------------------------------------------
+    # -----------------------------------------------------
+    # 2. INTERPRETER QUERY
+    # -----------------------------------------------------
 
-    if (
-        isinstance(query_data, dict)
-        and query_data.get(
-            "need_memory",
-            False
-        )
-    ):
-        scored = []
-
-        for memory in memories:
-            score = calculate_memory_score(
-                memory=memory,
-                original_message=message,
-                query_data=query_data
-            )
-
-            scored.append(
-                (score, memory)
-            )
-
-        scored.sort(
-            key=lambda item: item[0],
-            reverse=True
+    if query_data.get(
+        "need_memory"
+    ) is True:
+        return retrieve_from_query(
+            message=message,
+            query_data=query_data,
+            limit=limit
         )
 
-        results = [
-            memory
-            for score, memory
-            in scored[:limit]
-            if score > 0
-        ]
-
-        if results:
-            return results
-
-    # --------------------------------------------------
-    # 3. FALLBACK LEXICAL
-    # --------------------------------------------------
-    #
-    # O Interpreter pode ocasionalmente decidir
-    # need_memory=false numa pergunta que claramente
-    # se relaciona com algo já guardado.
-    #
-    # Nesse caso fazemos uma busca barata local.
-    # --------------------------------------------------
+    # -----------------------------------------------------
+    # 3. FALLBACK
+    # -----------------------------------------------------
 
     return find_lexical_matches(
         message=message,
