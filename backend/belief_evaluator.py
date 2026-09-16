@@ -12,15 +12,29 @@ def evaluate_memory(memory, world_state=None, knowledge=None):
     Avalia como Atlas deve interpretar epistemicamente
     uma memória.
 
-    Importante:
-    confidence = confiança de que a informação foi
-    corretamente extraída da mensagem.
+    confidence:
+        confiança de que a informação foi corretamente
+        extraída da mensagem.
 
-    plausibility = quão plausível Atlas considera
-    o conteúdo da informação.
+    plausibility:
+        quão plausível Atlas considera o conteúdo quando
+        ele representa uma afirmação sobre algo externo.
 
-    Uma memória pode ter confidence = 1.0 e ainda
-    assim ter plausibility baixa.
+    IMPORTANTE:
+
+    Um evento conversacional diretamente recebido por Atlas
+    pode ser aceite como acontecimento da conversa sem que
+    o conteúdo literal da mensagem seja considerado verdadeiro.
+
+    Exemplo:
+
+        "Vou comer a tua placa-mãe."
+
+    Atlas pode aceitar:
+        "O jogador ameaçou Atlas."
+
+    Isso NÃO significa aceitar:
+        "O jogador realmente vai comer a placa-mãe."
 
     Retorna:
     {
@@ -73,12 +87,6 @@ def evaluate_memory(memory, world_state=None, knowledge=None):
     # --------------------------------------------------
     # 1. DADOS PESSOAIS DO JOGADOR
     # --------------------------------------------------
-    #
-    # Nome, preferências, emoções e objetivos são
-    # normalmente informações autorreferidas.
-    #
-    # Atlas pode aceitá-las sem exigir prova externa.
-    # --------------------------------------------------
 
     if (
         entity == "player"
@@ -98,14 +106,6 @@ def evaluate_memory(memory, world_state=None, knowledge=None):
     # --------------------------------------------------
     # 2. DEFINIÇÕES PARTILHADAS
     # --------------------------------------------------
-    #
-    # Exemplo:
-    #
-    # "rt significa quero pizza"
-    #
-    # Isto não é uma afirmação sobre o mundo.
-    # É uma convenção criada entre jogador e Atlas.
-    # --------------------------------------------------
 
     if (
         entity == "shared"
@@ -118,11 +118,62 @@ def evaluate_memory(memory, world_state=None, knowledge=None):
         return result
 
     # --------------------------------------------------
-    # 3. EVENTOS DECLARADOS PELO JOGADOR
+    # 3. EVENTOS CONVERSACIONAIS DIRETAMENTE OBSERVADOS
     # --------------------------------------------------
     #
-    # Atlas pode lembrar-se perfeitamente de que o
-    # jogador disse algo sem assumir que aconteceu.
+    # category="relationship" representa uma interação
+    # que aconteceu na própria conversa entre jogador
+    # e Atlas.
+    #
+    # Exemplos:
+    # - insultou Atlas
+    # - pediu desculpa a Atlas
+    # - elogiou Atlas
+    # - ameaçou Atlas
+    # - demonstrou apoio
+    #
+    # Atlas recebeu diretamente essa interação.
+    #
+    # Portanto, pode aceitar que A INTERAÇÃO aconteceu.
+    #
+    # Isto NÃO significa que o conteúdo literal da fala
+    # seja objetivamente verdadeiro.
+    #
+    # "Vou destruir-te."
+    #
+    # Aceite:
+    #   o jogador ameaçou Atlas.
+    #
+    # Não necessariamente aceite:
+    #   o jogador realmente conseguirá destruir Atlas.
+    # --------------------------------------------------
+
+    if (
+        entity == "player"
+        and memory_type == "episodic"
+        and category == "relationship"
+    ):
+        result["epistemic_status"] = "accepted"
+        result["plausibility"] = 1.0
+
+        if importance >= 0.8:
+            result["reaction_hint"] = "serious"
+        else:
+            result["reaction_hint"] = "acknowledge"
+
+        return result
+
+    # --------------------------------------------------
+    # 4. EVENTOS EXTERNOS DECLARADOS PELO JOGADOR
+    # --------------------------------------------------
+    #
+    # Aqui Atlas lembra que o jogador DISSE que algo
+    # aconteceu.
+    #
+    # Mas Atlas não observou necessariamente o evento.
+    #
+    # Exemplo:
+    # "Eu matei o meu pai."
     # --------------------------------------------------
 
     if (
@@ -137,16 +188,7 @@ def evaluate_memory(memory, world_state=None, knowledge=None):
         result["plausibility"] = 0.5
 
     # --------------------------------------------------
-    # 4. PESO NARRATIVO
-    # --------------------------------------------------
-    #
-    # V1:
-    # Alguns acontecimentos devem receber atenção
-    # especial mesmo quando não estão confirmados.
-    #
-    # Esta lista é provisória.
-    # Futuramente poderemos substituir isto por um
-    # sistema mais contextual.
+    # 5. PESO NARRATIVO
     # --------------------------------------------------
 
     serious_terms = {
@@ -180,17 +222,17 @@ def evaluate_memory(memory, world_state=None, knowledge=None):
         )
 
     # --------------------------------------------------
-    # 5. CONTEXTO DO WORLD STATE
+    # 6. CONTEXTO DO WORLD STATE
     # --------------------------------------------------
     #
+    # Só aplicamos esta heurística a alegações externas.
+    #
+    # Eventos relationship NÃO chegam aqui porque já
+    # foram tratados como acontecimentos diretamente
+    # observados na conversa.
+    #
     # IMPORTANTE:
-    #
-    # Ausência de deteção NÃO prova que um evento
-    # não aconteceu.
-    #
-    # Ela pode apenas reduzir a plausibilidade de
-    # determinadas afirmações muito recentes ou
-    # incompatíveis com o contexto conhecido.
+    # ausência de deteção não prova ausência.
     # --------------------------------------------------
 
     if isinstance(world_state, dict):
@@ -238,6 +280,10 @@ def evaluate_memory(memory, world_state=None, knowledge=None):
             mentions_person
             and not detected_person
             and memory_type == "episodic"
+            and category in {
+                "event",
+                "experience"
+            }
         ):
             result["plausibility"] = min(
                 result["plausibility"],
@@ -247,20 +293,13 @@ def evaluate_memory(memory, world_state=None, knowledge=None):
             result["epistemic_status"] = "doubtful"
 
     # --------------------------------------------------
-    # 6. CONHECIMENTO
-    # --------------------------------------------------
-    #
-    # O parâmetro knowledge já faz parte da interface
-    # para permitir evolução futura.
-    #
-    # Nesta V1 ainda não fazemos inferências fortes
-    # automaticamente a partir dele.
+    # 7. CONHECIMENTO
     # --------------------------------------------------
 
     _ = knowledge
 
     # --------------------------------------------------
-    # 7. REAÇÃO RECOMENDADA
+    # 8. REAÇÃO RECOMENDADA
     # --------------------------------------------------
 
     weight = result["narrative_weight"]

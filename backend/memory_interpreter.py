@@ -150,28 +150,89 @@ confidence = 0..1
 importance = 0..1
 
 Regras:
-- Guarda apenas informação explícita e útil.
-- Não inventes nem deduzas.
-- Perguntas normalmente não criam NOVA memória, mas podem precisar de recuperar memória antiga.
-- Uma pergunta sobre o passado, identidade, preferências, definições, acontecimentos ou algo dito anteriormente deve normalmente usar need_memory=true.
-- player = sobre jogador.
-- atlas = sobre Atlas.
+- Guarda apenas informação explícita, relevante e potencialmente útil no futuro.
+- Não inventes, não deduzas acontecimentos e não acrescentes intenções que não foram expressas.
+
+- Memórias não são apenas factos declarados.
+  A própria mensagem pode representar um acontecimento da interação atual.
+
+- Ações sociais relevantes dirigidas ao jogador ou a Atlas podem criar memória episódica.
+  Exemplos de acontecimentos relevantes:
+  insultos, elogios, pedidos de desculpa, ameaças, promessas,
+  demonstrações importantes de confiança, rejeição, apoio,
+  hostilidade ou afeto.
+
+- Para uma ação social dirigida a Atlas:
+  memory_type="episodic"
+  entity="player"
+  category="relationship"
+
+- A key deve representar o acontecimento de forma curta e reutilizável.
+  O value deve descrever brevemente o que aconteceu.
+
+- Não guardes interações sociais triviais como cumprimentos,
+  confirmações simples, "ok", "sim", "não" ou conversa sem importância.
+  Guarda apenas acontecimentos que possam ser relevantes para
+  relacionamento, narrativa ou respostas futuras.
+
+- Perguntas normalmente não criam NOVA memória,
+  mas podem precisar de recuperar memória antiga.
+
+- Uma pergunta sobre o passado, identidade, preferências,
+  definições, acontecimentos, relacionamento ou algo dito
+  anteriormente deve normalmente usar need_memory=true.
+
+- Se a mensagem perguntar sobre uma interação anterior com Atlas,
+  procura memória de relationship ou event conforme o contexto.
+
+- player = informação ou ação do jogador.
+- atlas = informação ou ação sobre Atlas.
 - shared = códigos/definições combinadas entre ambos.
-- world = sobre mundo/missão.
-- Nome real: identity/name.
-- Nome preferido: identity/preferred_name.
+- world = informação sobre mundo/missão.
+
+- Nome real:
+  player / identity / name.
+
+- Nome preferido:
+  player / identity / preferred_name.
+
 - "X significa Y" como convenção:
-  shared/definition, key=X, value=Y.
-- semantic = estado/conhecimento.
-- episodic = acontecimento.
-- need_memory=true apenas se informação anterior
-  ajudar a responder.
+  shared / definition, key=X, value=Y.
+
+- semantic = estado, preferência, identidade ou conhecimento persistente.
+- episodic = algo que aconteceu.
+
+- need_memory=true apenas quando informação anterior
+  puder ajudar a responder.
+
 - Se need_memory=false:
-  entity/category="any" e query="".
-  - Mantém key e value na mesma língua da mensagem original.
+  entity="any"
+  category="any"
+  query=""
+
+- Mantém key e value na mesma língua da mensagem original.
 - Não traduzas a memória para outra língua.
-- Se a mensagem for uma pergunta sobre algo que o jogador possa ter dito anteriormente, usa need_memory=true.
-- Perguntas como "eu disse X?", "eu fiz X?", "qual é o meu X?" ou "lembras-te de X?" normalmente precisam de memória.
+
+- Perguntas como:
+  "eu disse X?",
+  "eu fiz X?",
+  "eu já te tratei assim?",
+  "qual é o meu X?",
+  "lembras-te de X?"
+  normalmente precisam de memória.
+
+- Não guardes uma pergunta apenas porque o assunto é grave,
+  polémico, estranho ou emocional.
+
+- Uma pergunta só deve criar memória episódica quando o próprio
+  ato de perguntar tiver relevância narrativa ou relacional clara.
+
+- Perguntar a opinião de Atlas sobre um assunto normalmente não
+  constitui, por si só, um acontecimento relacional memorável.
+
+- Distingue acontecimentos diretamente observados na conversa
+  de acontecimentos que o jogador apenas afirma terem ocorrido
+  fora da conversa.
 
 JSON apenas:
 {{
