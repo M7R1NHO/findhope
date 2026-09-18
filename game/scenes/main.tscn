@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://buloxm112bh8t"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_s5phl"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ec1ib"]
+
+[node name="Main" type="Node2D" unique_id=1872859629]
+
+[node name="Player" type="CharacterBody2D" parent="." unique_id=1093214856]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player" unique_id=1352344189]
+shape = SubResource("RectangleShape2D_s5phl")
+
+[node name="Visual" type="ColorRect" parent="Player" unique_id=1728959764]
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Atlas" type="CharacterBody2D" parent="." unique_id=1792037986]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Atlas" unique_id=1310704851]
+shape = SubResource("RectangleShape2D_ec1ib")
