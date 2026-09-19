@@ -193,7 +193,7 @@ def build_detection_context():
         lines.append(
             f"- {obj['name']} | "
             f"tipo: {obj['type']} | "
-            f"distância: {obj['distance']} m"
+            f"distância: {obj['proximity']}"
         )
 
     lines.append(

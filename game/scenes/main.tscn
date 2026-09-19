@@ -1,21 +1,92 @@
 [gd_scene format=3 uid="uid://buloxm112bh8t"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_s5phl"]
+[ext_resource type="Script" uid="uid://cux50ew1xh51n" path="res://scenes/player.gd" id="1_o5qli"]
+[ext_resource type="Script" uid="uid://cg4bewh02hmm2" path="res://scripts/main.gd" id="1_sugp2"]
+[ext_resource type="Script" uid="uid://be3papg8vqa8w" path="res://scenes/atlas.gd" id="2_0wfyh"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_ec1ib"]
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
+size = Vector2(180, 60)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_l8mnm"]
+radius = 18.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_sugp2"]
+radius = 14.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_jyhfs"]
+radius = 14.0
 
 [node name="Main" type="Node2D" unique_id=1872859629]
+script = ExtResource("1_sugp2")
+
+[node name="Ground" type="Polygon2D" parent="." unique_id=1191058292]
+color = Color(0.89568764, 0.84647185, 0.56997126, 1)
+polygon = PackedVector2Array(-1000, -700, 1000, -700, 1000, 700, -1000, 700)
+
+[node name="Ship" type="StaticBody2D" parent="." unique_id=202784240 groups=["detectable"]]
+position = Vector2(250, -150)
+
+[node name="Ship" type="Polygon2D" parent="Ship" unique_id=1636235921]
+color = Color(0.21206132, 0.00033903302, 0.56683713, 1)
+polygon = PackedVector2Array(-80, -35, 80, -35, 100, 0, 80, 35, -80, 35, -100, 0)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Ship" unique_id=1169714705]
+shape = SubResource("RectangleShape2D_l8mnm")
+
+[node name="Debris1" type="StaticBody2D" parent="." unique_id=925556185 groups=["detectable"]]
+position = Vector2(-350, 200)
+
+[node name="Debris1" type="Polygon2D" parent="Debris1" unique_id=2138797368]
+color = Color(0.13879198, 0.11522191, 0.48618102, 1)
+polygon = PackedVector2Array(-20, -10, 15, -15, 25, 5, 5, 20, -18, 12)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Debris1" unique_id=1874871130]
+shape = SubResource("CircleShape2D_l8mnm")
+
+[node name="Debris2" type="StaticBody2D" parent="." unique_id=2126926193 groups=["detectable"]]
+position = Vector2(350, 120)
+
+[node name="Debris1" type="Polygon2D" parent="Debris2" unique_id=1494008913]
+color = Color(0.13879198, 0.11522191, 0.48618102, 1)
+polygon = PackedVector2Array(-20, -10, 15, -15, 25, 5, 5, 20, -18, 12)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Debris2" unique_id=954898764]
+shape = SubResource("CircleShape2D_l8mnm")
+
+[node name="Debris3" type="StaticBody2D" parent="." unique_id=254546626 groups=["detectable"]]
+position = Vector2(-500, -400)
+
+[node name="Debris1" type="Polygon2D" parent="Debris3" unique_id=1855301745]
+color = Color(0.13879198, 0.11522191, 0.48618102, 1)
+polygon = PackedVector2Array(-20, -10, 15, -15, 25, 5, 5, 20, -18, 12)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Debris3" unique_id=120900381]
+shape = SubResource("CircleShape2D_l8mnm")
 
 [node name="Player" type="CharacterBody2D" parent="." unique_id=1093214856]
+position = Vector2(1, 1)
+script = ExtResource("1_o5qli")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Player" unique_id=1352344189]
-shape = SubResource("RectangleShape2D_s5phl")
+shape = SubResource("CircleShape2D_sugp2")
+debug_color = Color(0.93191767, 0.84052914, 0.9688814, 0.41960785)
 
-[node name="Visual" type="ColorRect" parent="Player" unique_id=1728959764]
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="Polygon2D" type="Polygon2D" parent="Player" unique_id=1895788500]
+color = Color(0.28235295, 0.9764706, 0.8862745, 1)
+polygon = PackedVector2Array(-20, -20, 20, -20, 20, 20, -20, 20)
+
+[node name="Camera2D" type="Camera2D" parent="Player" unique_id=234476532]
 
 [node name="Atlas" type="CharacterBody2D" parent="." unique_id=1792037986]
+position = Vector2(120, 0)
+script = ExtResource("2_0wfyh")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Atlas" unique_id=1310704851]
-shape = SubResource("RectangleShape2D_ec1ib")
+shape = SubResource("CircleShape2D_jyhfs")
+debug_color = Color(0.39186978, 0.5934412, 0.41877908, 0.41960785)
+
+[node name="Polygon2D" type="Polygon2D" parent="Atlas" unique_id=1301814110]
+color = Color(1, 1, 0.3019608, 1)
+polygon = PackedVector2Array(-20, -20, 20, -20, 20, 20, -20, 20)
+
+[node name="AtlasAPI" type="HTTPRequest" parent="." unique_id=2038477603]

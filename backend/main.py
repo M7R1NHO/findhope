@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+
 from backend.world_state import WORLD_STATE
-from backend.sensors import scan_world
-from backend.atlas_knowledge import get_atlas_knowledge
+from backend.sensors import process_godot_scan
 from backend.ia import ask_android
+
 from backend.atlas_knowledge import (
     get_atlas_knowledge,
     reset_atlas_knowledge
@@ -15,11 +16,17 @@ from backend.atlas_memory import (
     add_memory
 )
 
+
 app = FastAPI(title="Find Hope")
 
 
+# =========================================================
+# MODELS
+# =========================================================
+
 class ChatMessage(BaseModel):
     message: str
+
 
 class MemoryData(BaseModel):
     entity: str
@@ -30,13 +37,42 @@ class MemoryData(BaseModel):
     confidence: float = 1.0
     importance: float = 0.5
 
+
+class AtlasPosition(BaseModel):
+    x: float
+    y: float
+
+
+class GodotDetection(BaseModel):
+    id: str
+    name: str
+    type: str
+    distance_px: float
+
+
+class GodotScan(BaseModel):
+    atlas_position: AtlasPosition
+    detections: list[GodotDetection]
+
+
+# =========================================================
+# ROOT
+# =========================================================
+
 @app.get("/")
 def root():
-    return {"message": "Find Hope API online"}
+    return {
+        "message": "Find Hope API online"
+    }
 
+
+# =========================================================
+# CHAT
+# =========================================================
 
 @app.post("/chat")
 def chat(data: ChatMessage):
+
     response = ask_android(data.message)
 
     return {
@@ -44,45 +80,53 @@ def chat(data: ChatMessage):
         "response": response
     }
 
-@app.get("/world/scan")
-def scan():
-    atlas = WORLD_STATE["atlas"]
 
-    detected = scan_world(
-        atlas["position"],
-        atlas["radar_range"]
+# =========================================================
+# GODOT SENSOR BRIDGE
+# =========================================================
+
+@app.post("/world/scan")
+def receive_godot_scan(data: GodotScan):
+
+    atlas_position = {
+        "x": data.atlas_position.x,
+        "y": data.atlas_position.y
+    }
+
+    detections = [
+        {
+            "id": detection.id,
+            "name": detection.name,
+            "type": detection.type,
+            "distance_px": detection.distance_px
+        }
+        for detection in data.detections
+    ]
+
+    processed = process_godot_scan(
+        atlas_position,
+        detections
     )
 
     return {
-        "atlas_position": atlas["position"],
-        "radar_range": atlas["radar_range"],
-        "detected_objects": detected
+        "status": "scan processed",
+        "atlas_position": atlas_position,
+        "detected_objects": processed
     }
 
-@app.get("/atlas/knowledge")
-def atlas_knowledge():
-    return get_atlas_knowledge()
-
-@app.post("/atlas/reset-knowledge")
-def reset_knowledge():
-    reset_atlas_knowledge()
-
-    return {
-        "status": "Atlas knowledge reset"
-    }
 
 @app.get("/atlas/current-detections")
 def current_detections():
     return WORLD_STATE["atlas"]["current_detections"]
 
 
-class AtlasPosition(BaseModel):
-    x: float
-    y: float
-
+# =========================================================
+# ATLAS POSITION
+# =========================================================
 
 @app.post("/atlas/position")
 def update_atlas_position(data: AtlasPosition):
+
     WORLD_STATE["atlas"]["position"] = {
         "x": data.x,
         "y": data.y
@@ -93,6 +137,30 @@ def update_atlas_position(data: AtlasPosition):
         "position": WORLD_STATE["atlas"]["position"]
     }
 
+
+# =========================================================
+# KNOWLEDGE
+# =========================================================
+
+@app.get("/atlas/knowledge")
+def atlas_knowledge():
+    return get_atlas_knowledge()
+
+
+@app.post("/atlas/reset-knowledge")
+def reset_knowledge():
+
+    reset_atlas_knowledge()
+
+    return {
+        "status": "Atlas knowledge reset"
+    }
+
+
+# =========================================================
+# MEMORY
+# =========================================================
+
 @app.get("/atlas/memory")
 def atlas_memory():
     return get_atlas_memory()
@@ -100,6 +168,7 @@ def atlas_memory():
 
 @app.post("/atlas/memory")
 def create_memory(data: MemoryData):
+
     success = add_memory(
         entity=data.entity,
         category=data.category,
@@ -123,6 +192,7 @@ def create_memory(data: MemoryData):
 
 @app.post("/atlas/reset-memory")
 def reset_memory():
+
     reset_atlas_memory()
 
     return {

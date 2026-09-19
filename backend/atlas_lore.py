@@ -84,3 +84,19 @@ def build_lore_context():
     lines.append("- Informação desconhecida deve permanecer desconhecida")
 
     return "\n".join(lines)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
