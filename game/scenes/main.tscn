@@ -80,6 +80,7 @@ polygon = PackedVector2Array(-20, -20, 20, -20, 20, 20, -20, 20)
 [node name="Atlas" type="CharacterBody2D" parent="." unique_id=1792037986]
 position = Vector2(120, 0)
 script = ExtResource("2_0wfyh")
+scan_cooldown = 5.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Atlas" unique_id=1310704851]
 shape = SubResource("CircleShape2D_jyhfs")
@@ -90,3 +91,35 @@ color = Color(1, 1, 0.3019608, 1)
 polygon = PackedVector2Array(-20, -20, 20, -20, 20, 20, -20, 20)
 
 [node name="AtlasAPI" type="HTTPRequest" parent="." unique_id=2038477603]
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=255633486]
+
+[node name="ChatPanel" type="Panel" parent="UI" unique_id=1854313408]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 272.0
+offset_top = -109.0
+offset_right = -241.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 0
+offset_transform_enabled = true
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/ChatPanel" unique_id=269828397]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="ChatHistory" type="RichTextLabel" parent="UI/ChatPanel/VBoxContainer" unique_id=692380516]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ChatInput" type="LineEdit" parent="UI/ChatPanel/VBoxContainer" unique_id=983911713]
+layout_mode = 2
+placeholder_text = "Escreva uma mensagem..."
