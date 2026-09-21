@@ -21,9 +21,11 @@ from backend.conversation_context import (
     build_conversation_context,
 )
 
-from backend.social_state import (
-    apply_social_event,
-    build_social_context,
+from backend.relationship_engine import (
+    apply_relationship_event,
+    build_relationship_context,
+    get_relationship_state,
+    get_relationship_summary,
 )
 
 
@@ -95,14 +97,16 @@ ESTILO:
 - Não faças relatórios quando uma resposta curta basta.
 - Não termines sempre com perguntas.
 
-ESTADO SOCIAL:
-- O estado social influencia o tom, não os factos.
-- Atlas pode demonstrar irritação acumulada.
-- Se estiver muito irritado e for provocado, pode usar sarcasmo,
-  palavrões ou responder com insultos proporcionais.
-- Não precisa copiar literalmente o insulto do jogador.
-- Um pedido de desculpa pode reduzir a irritação, mas não apaga
-  instantaneamente conflitos anteriores.
+RELAÇÃO:
+- A relação é bidirecional: Atlas→jogador e jogador→Atlas.
+- Os valores jogador→Atlas representam atitude observada, não leitura mental.
+- Confiança, respeito, afinidade, tensão e irritação/hostilidade mudam com eventos.
+- A relação influencia o tom e a abertura social, nunca os factos do mundo.
+- Irritação alta pode gerar respostas secas, sarcasmo ou palavrões se houver provocação.
+- Um pedido de desculpa pode reduzir tensão e irritação, mas não restaura instantaneamente confiança ou respeito.
+- NUNCA exponhas ao jogador nomes de variáveis, valores, pontuações, classes ou estados internos.
+- NUNCA digas frases como "registei o insulto", "a tensão aumentou", "a confiança diminuiu"
+  ou semelhantes. Demonstra a mudança através da fala e do comportamento natural de Atlas.
 """
 
 
@@ -194,7 +198,7 @@ def build_dynamic_context(
     memory_context,
     conversation_context,
     belief_context,
-    social_context
+    relationship_context
 ):
     sections = []
 
@@ -234,10 +238,10 @@ def build_dynamic_context(
             + belief_context
         )
 
-    if social_context:
+    if relationship_context:
         sections.append(
-            "ESTADO SOCIAL:\n"
-            + social_context
+            "RELAÇÃO:\n"
+            + relationship_context
         )
 
     sections.append(
@@ -250,6 +254,27 @@ def build_dynamic_context(
     return "\n\n".join(
         sections
     )
+
+
+
+def relationship_intensity_from_memory(memory):
+    """
+    Converte importance do Interpreter em intensidade social.
+    Mantém eventos leves relevantes sem deixar qualquer frase
+    produzir alterações exageradas.
+    """
+    try:
+        importance = float(memory.get("importance", 0.5))
+    except (TypeError, ValueError):
+        importance = 0.5
+
+    if importance >= 0.9:
+        return 1.5
+
+    if importance >= 0.7:
+        return 1.0
+
+    return 0.5
 
 
 def ask_android(message: str) -> str:
@@ -274,6 +299,16 @@ def ask_android(message: str) -> str:
             knowledge=None
         )
 
+        if not isinstance(
+            new_memories,
+            list
+        ):
+            new_memories = []
+
+        # =========================================================
+        # RELATIONSHIP ENGINE
+        # =========================================================
+
         for memory in new_memories:
             if not isinstance(memory, dict):
                 continue
@@ -285,26 +320,114 @@ def ask_android(message: str) -> str:
                 memory.get("key", "")
             ).lower()
 
-            if "insult" in key or "insulto" in key:
-                apply_social_event("insult")
+            intensity = (
+                relationship_intensity_from_memory(
+                    memory
+                )
+            )
 
-            elif "threat" in key or "amea" in key:
-                apply_social_event("threat")
+            event_type = None
 
-            elif "apology" in key or "desculp" in key:
-                apply_social_event("apology")
+            if (
+                "insult" in key
+                or "insulto" in key
+                or "hostility" in key
+                or "hostilidade" in key
+            ):
+                event_type = "insult"
 
-            elif "support" in key or "apoio" in key:
-                apply_social_event("support")
+            elif (
+                "threat" in key
+                or "ameaça" in key
+                or "ameaca" in key
+                or "amea" in key
+            ):
+                event_type = "threat"
 
-            elif "affection" in key or "carinho" in key:
-                apply_social_event("affection")
+            elif (
+                "apology" in key
+                or "desculp" in key
+            ):
+                event_type = "apology"
 
-        if not isinstance(
-            new_memories,
-            list
-        ):
-            new_memories = []
+            elif (
+                "gratitude" in key
+                or "gratid" in key
+                or "agradec" in key
+            ):
+                event_type = "gratitude"
+
+            elif (
+                "compliment" in key
+                or "elogio" in key
+                or "praise" in key
+            ):
+                event_type = "compliment"
+
+            elif (
+                "reassurance" in key
+                or "reassur" in key
+                or "tranquiliz" in key
+            ):
+                event_type = "reassurance"
+
+            elif (
+                "support" in key
+                or "apoio" in key
+            ):
+                event_type = "support"
+
+            elif (
+                "affection" in key
+                or "carinho" in key
+                or "afeto" in key
+            ):
+                event_type = "affection"
+
+            elif (
+                "cooperation" in key
+                or "cooperação" in key
+                or "cooperacao" in key
+            ):
+                event_type = "cooperation"
+
+            elif (
+                "broken_promise" in key
+                or "broken promise" in key
+                or "promessa_quebrada" in key
+                or "quebrou_promessa" in key
+            ):
+                event_type = "broken_promise"
+
+            elif (
+                "promise" in key
+                or "promessa" in key
+            ):
+                event_type = "promise"
+
+            elif (
+                "betrayal" in key
+                or "traição" in key
+                or "traicao" in key
+            ):
+                event_type = "betrayal"
+
+            if event_type:
+                apply_relationship_event(
+                    event_type,
+                    intensity=intensity,
+                )
+
+                print(
+                    "\nRELATIONSHIP EVENT:",
+                    {
+                        "event": event_type,
+                        "intensity": intensity,
+                        "importance": memory.get(
+                            "importance"
+                        ),
+                    },
+                )
 
         # =========================================================
         # 3. QUERY DE MEMÓRIA
@@ -378,13 +501,18 @@ def ask_android(message: str) -> str:
             build_conversation_context()
         )
 
-        social_context = (
-            build_social_context()
+        relationship_context = (
+            build_relationship_context()
         )
 
         print(
-        "\nESTADO SOCIAL:",
-            social_context
+            "\nRELATIONSHIP STATE:",
+            get_relationship_state()
+        )
+
+        print(
+            "\nRELATIONSHIP SUMMARY:",
+            get_relationship_summary()
         )
 
         dynamic_context = (
@@ -395,7 +523,7 @@ def ask_android(message: str) -> str:
                 memory_context=memory_context,
                 conversation_context=conversation_context,
                 belief_context=belief_context,
-                social_context=social_context,
+                relationship_context=relationship_context,
             )
         )
 
