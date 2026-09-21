@@ -255,6 +255,34 @@ confidence and importance must be between 0 and 1.
             max_tokens=400
         )
 
+        # =========================================================
+        # TOKEN USAGE
+        # =========================================================
+
+        if completion.usage:
+            print(
+                "\n========== TOKENS INTERPRETER =========="
+            )
+
+            print(
+                "Prompt:",
+                completion.usage.prompt_tokens
+            )
+
+            print(
+                "Resposta:",
+                completion.usage.completion_tokens
+            )
+
+            print(
+                "Total:",
+                completion.usage.total_tokens
+            )
+
+            print(
+                "========================================"
+            )
+
         content = (
             completion
             .choices[0]

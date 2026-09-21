@@ -426,6 +426,93 @@ def find_direct_key_matches(message):
 
     return matches
 
+def find_structured_scope_matches(
+    query_data,
+    limit=6
+):
+    """
+    Fallback controlado para memórias semânticas estáveis.
+
+    É usado quando o Interpreter pediu memória explicitamente,
+    informou entity/category, mas a query textual não conseguiu
+    encontrar a memória por diferenças de vocabulário
+    (ex.: "nome" na pergunta e key canónica "name").
+
+    Não é usado para eventos/relacionamentos, onde recuperar
+    apenas por metadata seria permissivo demais.
+    """
+
+    allowed_categories = {
+        "identity",
+        "preference",
+        "definition",
+        "goal"
+    }
+
+    requested_entity = normalize_text(
+        query_data.get(
+            "entity",
+            "any"
+        )
+    )
+
+    requested_category = normalize_text(
+        query_data.get(
+            "category",
+            "any"
+        )
+    )
+
+    if requested_entity == "any":
+        return []
+
+    if requested_category not in allowed_categories:
+        return []
+
+    matches = []
+
+    for memory in ATLAS_MEMORY["memories"]:
+        memory_entity = normalize_text(
+            memory.get(
+                "entity",
+                ""
+            )
+        )
+
+        memory_category = normalize_text(
+            memory.get(
+                "category",
+                ""
+            )
+        )
+
+        if (
+            memory_entity == requested_entity
+            and memory_category == requested_category
+        ):
+            matches.append(
+                memory
+            )
+
+    matches.sort(
+        key=lambda memory: (
+            float(
+                memory.get(
+                    "importance",
+                    0.5
+                )
+            ),
+            float(
+                memory.get(
+                    "confidence",
+                    1.0
+                )
+            )
+        ),
+        reverse=True
+    )
+
+    return matches[:limit]
 
 # =========================================================
 # QUERY DO INTERPRETER
@@ -443,44 +530,50 @@ def retrieve_from_query(
         )
     ).strip()
 
-    if not semantic_query:
-        return []
-
     scored = []
 
-    for memory in ATLAS_MEMORY["memories"]:
-        relevance = calculate_text_relevance(
-            memory=memory,
-            original_message=message,
-            semantic_query=semantic_query
-        )
+    if semantic_query:
+        for memory in ATLAS_MEMORY["memories"]:
+            relevance = calculate_text_relevance(
+                memory=memory,
+                original_message=message,
+                semantic_query=semantic_query
+            )
 
-        if not has_real_relevance(
-            relevance
-        ):
-            continue
+            if not has_real_relevance(
+                relevance
+            ):
+                continue
 
-        score = calculate_memory_score(
-            memory=memory,
-            original_message=message,
-            query_data=query_data,
-            relevance=relevance
-        )
+            score = calculate_memory_score(
+                memory=memory,
+                original_message=message,
+                query_data=query_data,
+                relevance=relevance
+            )
 
-        scored.append(
-            (score, memory)
-        )
+            scored.append(
+                (score, memory)
+            )
 
     scored.sort(
         key=lambda item: item[0],
         reverse=True
     )
 
-    return [
+    lexical_results = [
         memory
         for _, memory
         in scored[:limit]
     ]
+
+    if lexical_results:
+        return lexical_results
+
+    return find_structured_scope_matches(
+        query_data=query_data,
+        limit=limit
+    )
 
 
 # =========================================================

@@ -16,8 +16,12 @@ const CHAT_URL := "http://127.0.0.1:8000/chat"
 const NORMAL_PLACEHOLDER := "Escreva uma mensagem..."
 const WAITING_PLACEHOLDER := "Android está a responder..."
 
+const MAX_VISIBLE_MESSAGES := 10
+
 
 var waiting_for_atlas: bool = false
+
+var visible_messages: Array[String] = []
 
 
 func _ready():
@@ -169,9 +173,27 @@ func add_chat_message(
 	speaker: String,
 	message: String
 ):
-	chat_history.append_text(
-		speaker + ": " + message + "\n\n"
+	var formatted_message = (
+		speaker + ": " + message
 	)
+
+	visible_messages.append(
+		formatted_message
+	)
+
+	if visible_messages.size() > MAX_VISIBLE_MESSAGES:
+		visible_messages.pop_front()
+
+	refresh_chat_history()
+
+
+func refresh_chat_history():
+	chat_history.clear()
+
+	for message in visible_messages:
+		chat_history.append_text(
+			message + "\n\n"
+		)
 
 	await get_tree().process_frame
 
