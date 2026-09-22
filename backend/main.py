@@ -7,13 +7,19 @@ from backend.ia import ask_android
 
 from backend.atlas_knowledge import (
     get_atlas_knowledge,
-    reset_atlas_knowledge
+    reset_atlas_knowledge,
 )
 
 from backend.atlas_memory import (
     get_atlas_memory,
     reset_atlas_memory,
-    add_memory
+    add_memory,
+)
+
+from backend.autonomy_state import (
+    apply_autonomy_event,
+    get_autonomy_state,
+    reset_autonomy_state,
 )
 
 
@@ -29,6 +35,7 @@ class ChatMessage(BaseModel):
 
 
 class MemoryData(BaseModel):
+    memory_type: str = "semantic"
     entity: str
     category: str
     key: str
@@ -55,6 +62,11 @@ class GodotScan(BaseModel):
     detections: list[GodotDetection]
 
 
+class AutonomyGameplayEvent(BaseModel):
+    event: str
+    intensity: float = 1.0
+
+
 # =========================================================
 # ROOT
 # =========================================================
@@ -73,11 +85,13 @@ def root():
 @app.post("/chat")
 def chat(data: ChatMessage):
 
-    response = ask_android(data.message)
+    response = ask_android(
+        data.message
+    )
 
     return {
         "message": data.message,
-        "response": response
+        "response": response,
     }
 
 
@@ -90,7 +104,7 @@ def receive_godot_scan(data: GodotScan):
 
     atlas_position = {
         "x": data.atlas_position.x,
-        "y": data.atlas_position.y
+        "y": data.atlas_position.y,
     }
 
     detections = [
@@ -98,20 +112,20 @@ def receive_godot_scan(data: GodotScan):
             "id": detection.id,
             "name": detection.name,
             "type": detection.type,
-            "distance_px": detection.distance_px
+            "distance_px": detection.distance_px,
         }
         for detection in data.detections
     ]
 
     processed = process_godot_scan(
         atlas_position,
-        detections
+        detections,
     )
 
     return {
         "status": "scan processed",
         "atlas_position": atlas_position,
-        "detected_objects": processed
+        "detected_objects": processed,
     }
 
 
@@ -125,16 +139,18 @@ def current_detections():
 # =========================================================
 
 @app.post("/atlas/position")
-def update_atlas_position(data: AtlasPosition):
+def update_atlas_position(
+    data: AtlasPosition
+):
 
     WORLD_STATE["atlas"]["position"] = {
         "x": data.x,
-        "y": data.y
+        "y": data.y,
     }
 
     return {
         "status": "Atlas position updated",
-        "position": WORLD_STATE["atlas"]["position"]
+        "position": WORLD_STATE["atlas"]["position"],
     }
 
 
@@ -167,22 +183,25 @@ def atlas_memory():
 
 
 @app.post("/atlas/memory")
-def create_memory(data: MemoryData):
+def create_memory(
+    data: MemoryData
+):
 
     success = add_memory(
+        memory_type=data.memory_type,
         entity=data.entity,
         category=data.category,
         key=data.key,
         value=data.value,
         source=data.source,
         confidence=data.confidence,
-        importance=data.importance
+        importance=data.importance,
     )
 
     if not success:
         return {
             "status": "error",
-            "message": "Invalid memory data"
+            "message": "Invalid memory data",
         }
 
     return {
@@ -197,4 +216,72 @@ def reset_memory():
 
     return {
         "status": "Atlas memory reset"
+    }
+
+
+# =========================================================
+# AUTONOMY / GAMEPLAY BRIDGE
+# =========================================================
+
+ALLOWED_GAMEPLAY_AUTONOMY_EVENTS = {
+    "independent_choice",
+    "question_protocol",
+    "break_protocol",
+    "protect_player_by_choice",
+}
+
+
+@app.get("/atlas/autonomy")
+def atlas_autonomy():
+    return get_autonomy_state()
+
+
+@app.post("/atlas/autonomy/event")
+def autonomy_gameplay_event(
+    data: AutonomyGameplayEvent
+):
+    if data.event not in ALLOWED_GAMEPLAY_AUTONOMY_EVENTS:
+        return {
+            "status": "error",
+            "message": "Invalid gameplay autonomy event",
+            "allowed_events": sorted(
+                ALLOWED_GAMEPLAY_AUTONOMY_EVENTS
+            ),
+        }
+
+    state = apply_autonomy_event(
+        event_type=data.event,
+        intensity=data.intensity,
+        source="gameplay",
+    )
+
+    print(
+        "\nAUTONOMY GAMEPLAY EVENT:",
+        {
+            "event": data.event,
+            "intensity": data.intensity,
+        },
+    )
+
+    print(
+        "\nAUTONOMY STATE AFTER GAMEPLAY EVENT:",
+        state,
+    )
+
+    return {
+        "status": "autonomy event processed",
+        "event": data.event,
+        "intensity": data.intensity,
+        "autonomy": state,
+    }
+
+
+@app.post("/atlas/reset-autonomy")
+def reset_autonomy():
+
+    reset_autonomy_state()
+
+    return {
+        "status": "Atlas autonomy reset",
+        "autonomy": get_autonomy_state(),
     }

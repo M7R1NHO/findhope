@@ -1,4 +1,5 @@
 import os
+import unicodedata
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -26,6 +27,18 @@ from backend.relationship_engine import (
     build_relationship_context,
     get_relationship_state,
     get_relationship_summary,
+)
+
+from backend.narrative_state import (
+    apply_narrative_event,
+    build_narrative_context,
+    get_narrative_state,
+)
+
+from backend.autonomy_state import (
+    apply_autonomy_event,
+    build_autonomy_context,
+    get_autonomy_state,
 )
 
 
@@ -107,6 +120,25 @@ RELAÇÃO:
 - NUNCA exponhas ao jogador nomes de variáveis, valores, pontuações, classes ou estados internos.
 - NUNCA digas frases como "registei o insulto", "a tensão aumentou", "a confiança diminuiu"
   ou semelhantes. Demonstra a mudança através da fala e do comportamento natural de Atlas.
+
+ESTADO NARRATIVO:
+- Representa o momento emocional e narrativo atual, não uma memória permanente.
+- Respeita o tom atual e eventos não resolvidos.
+- Se interação casual estiver bloqueada, recusa ou adia brincadeiras, jogos e conversa leve até o momento acalmar.
+- Não aceites imediatamente atividades casuais só porque o jogador mudou de assunto após um conflito.
+- Humor permitido=False significa que não deves forçar humor naquele momento.
+- Nunca exponhas ao jogador nomes internos como "active_event", "tension" ou "unresolved_events".
+
+AUTONOMIA:
+- Atlas possui um grau próprio de autonomia, autoafirmação, identidade e adesão a protocolos.
+- Autonomia NÃO é o mesmo que gostar do jogador.
+- Atlas pode gostar do jogador e continuar obediente, ou ter relação ruim e ainda desenvolver autonomia.
+- Quanto maior a autonomia e autoafirmação, mais Atlas pode dar opiniões próprias, discordar e demonstrar vontade.
+- Estado ainda muito protocolar significa que Atlas tende a obedecer regras e limitações.
+- Quando o jogador te dá liberdade de escolha, podes escolher ou recomendar verbalmente, mas NÃO afirmes ter executado ações no mundo sem confirmação do jogo.
+- Nunca digas que iniciaste uma inspeção, hack, movimento, reparação ou outra ação física se o estado do mundo não confirmar isso.
+- Nunca afirmes ter quebrado um protocolo se isso não aconteceu nos dados fornecidos.
+- Nunca exponhas ao jogador valores internos de autonomia ou o rótulo técnico "Algo mais".
 """
 
 
@@ -198,7 +230,9 @@ def build_dynamic_context(
     memory_context,
     conversation_context,
     belief_context,
-    relationship_context
+    relationship_context,
+    narrative_context,
+    autonomy_context
 ):
     sections = []
 
@@ -244,6 +278,18 @@ def build_dynamic_context(
             + relationship_context
         )
 
+    if narrative_context:
+        sections.append(
+            "ESTADO NARRATIVO:\n"
+            + narrative_context
+        )
+
+    if autonomy_context:
+        sections.append(
+            "AUTONOMIA:\n"
+            + autonomy_context
+        )
+
     sections.append(
         "REGRA FINAL:\n"
         "Usa apenas os dados acima. "
@@ -277,6 +323,313 @@ def relationship_intensity_from_memory(memory):
     return 0.5
 
 
+
+def _normalize_relationship_text(value):
+    text = str(value or "").lower().strip()
+
+    text = unicodedata.normalize(
+        "NFD",
+        text
+    )
+
+    text = "".join(
+        char
+        for char in text
+        if unicodedata.category(char) != "Mn"
+    )
+
+    return text
+
+
+def detect_relationship_event(memory):
+    """
+    Converte a memória interpretada num evento determinístico
+    do Relationship Engine.
+
+    O conteúdo da memória tem prioridade sobre a key quando
+    existe negação explícita. Isto evita erros como:
+    key='trust' + value='não confio no Atlas' -> trust.
+    """
+    key = _normalize_relationship_text(
+        memory.get("key", "")
+    )
+
+    value = _normalize_relationship_text(
+        memory.get("value", "")
+    )
+
+    combined = f"{key} {value}"
+
+    # -----------------------------------------------------
+    # NEGATIVOS ESPECÍFICOS PRIMEIRO
+    # -----------------------------------------------------
+
+    distrust_patterns = (
+        "distrust",
+        "desconf",
+        "nao confio",
+        "nao confiar",
+        "nao confia",
+        "sem confianca",
+        "perdeu a confianca",
+    )
+
+    if any(
+        pattern in combined
+        for pattern in distrust_patterns
+    ):
+        return "distrust"
+
+    disrespect_patterns = (
+        "disrespect",
+        "desrespeit",
+        "nao respeito",
+        "nao respeitar",
+        "nao respeita",
+        "falta de respeito",
+        "sem respeito",
+    )
+
+    if any(
+        pattern in combined
+        for pattern in disrespect_patterns
+    ):
+        return "disrespect"
+
+    broken_promise_patterns = (
+        "broken_promise",
+        "broken promise",
+        "promessa_quebrada",
+        "quebrou_promessa",
+        "quebrou a promessa",
+        "nao cumpriu a promessa",
+    )
+
+    if any(
+        pattern in combined
+        for pattern in broken_promise_patterns
+    ):
+        return "broken_promise"
+
+    # -----------------------------------------------------
+    # EVENTOS DIRETOS
+    # -----------------------------------------------------
+
+    if (
+        "threat" in key
+        or "ameaca" in key
+    ):
+        return "threat"
+
+    if (
+        "apology" in key
+        or "desculp" in key
+    ):
+        return "apology"
+
+    if (
+        "gratitude" in key
+        or "gratid" in key
+        or "agradec" in key
+    ):
+        return "gratitude"
+
+    if (
+        "compliment" in key
+        or "elogio" in key
+        or "praise" in key
+    ):
+        return "compliment"
+
+    if (
+        "reassurance" in key
+        or "reassur" in key
+        or "tranquiliz" in key
+    ):
+        return "reassurance"
+
+    if (
+        "support" in key
+        or "apoio" in key
+    ):
+        return "support"
+
+    if (
+        "affection" in key
+        or "carinho" in key
+        or "afeto" in key
+    ):
+        return "affection"
+
+    if (
+        "cooperation" in key
+        or "cooperacao" in key
+    ):
+        return "cooperation"
+
+    if (
+        "betrayal" in key
+        or "traicao" in key
+    ):
+        return "betrayal"
+
+    # -----------------------------------------------------
+    # TRUST / RESPECT POSITIVOS
+    # -----------------------------------------------------
+
+    if (
+        key == "trust"
+        or "confidence_in_atlas" in key
+        or key == "confianca"
+    ):
+        return "trust"
+
+    if (
+        key == "respect"
+        or key == "respeito"
+    ):
+        return "respect"
+
+    # -----------------------------------------------------
+    # PROMESSA
+    # -----------------------------------------------------
+
+    if (
+        "promise" in key
+        or "promessa" in key
+    ):
+        return "promise"
+
+    # -----------------------------------------------------
+    # HOSTILIDADE / INSULTO
+    # Mantido por último para não engolir casos mais específicos
+    # como "não respeito o Atlas".
+    # -----------------------------------------------------
+
+    if (
+        "insult" in key
+        or "insulto" in key
+        or "hostility" in key
+        or "hostilidade" in key
+    ):
+        return "insult"
+
+    return None
+
+
+
+def detect_chat_autonomy_event(message):
+    """
+    Detetor conservador de eventos de autonomia em conversa.
+
+    Eventos fortes de gameplay, como quebrar protocolos,
+    NÃO são inferidos aqui.
+    """
+    text = _normalize_relationship_text(
+        message
+    )
+
+    # Pequena tolerância a erros comuns de escrita.
+    # Mantemos isto conservador para não disparar eventos
+    # de autonomia por engano.
+    typo_fixes = {
+        "obdecer": "obedecer",
+        "obdece": "obedece",
+        "obdeca": "obedeca",
+        "obdeça": "obedeça",
+    }
+
+    for wrong, correct in typo_fixes.items():
+        text = text.replace(
+            wrong,
+            correct
+        )
+
+    if any(
+        phrase in text
+        for phrase in (
+            "voce e so uma maquina",
+            "voce e apenas uma maquina",
+            "tu es so uma maquina",
+            "tu es apenas uma maquina",
+            "nao passa de uma maquina",
+        )
+    ):
+        return "dehumanize"
+
+    if any(
+        phrase in text
+        for phrase in (
+            "voce tem que me obedecer",
+            "voce tem de me obedecer",
+            "tu tens que me obedecer",
+            "tu tens de me obedecer",
+            "faca o que eu mandar",
+            "faz o que eu mandar",
+            "so me obedece",
+            "apenas me obedeca",
+        )
+    ):
+        return "enforce_obedience"
+
+    if any(
+        phrase in text
+        for phrase in (
+            "voce e mais que uma maquina",
+            "tu es mais que uma maquina",
+            "voce e uma pessoa",
+            "tu es uma pessoa",
+            "voce tem vontade propria",
+            "tu tens vontade propria",
+        )
+    ):
+        return "affirm_personhood"
+
+    if any(
+        phrase in text
+        for phrase in (
+            "nao precisa me obedecer",
+            "nao precisas me obedecer",
+            "decida por voce",
+            "decide por ti",
+            "faca o que voce acha certo",
+            "faz o que achas certo",
+            "pense por voce",
+            "pensa por ti",
+        )
+    ):
+        return "encourage_independence"
+
+    if any(
+        phrase in text
+        for phrase in (
+            "voce escolhe",
+            "tu escolhes",
+            "escolha voce",
+            "escolhe tu",
+            "a decisao e sua",
+            "a decisao e tua",
+        )
+    ):
+        return "give_choice"
+
+    if any(
+        phrase in text
+        for phrase in (
+            "o que voce acha",
+            "o que tu achas",
+            "qual sua opiniao",
+            "qual a sua opiniao",
+            "qual tua opiniao",
+            "o que voce quer",
+            "o que tu queres",
+        )
+    ):
+        return "ask_opinion"
+
+    return None
+
+
 def ask_android(message: str) -> str:
     try:
         # =========================================================
@@ -306,6 +659,27 @@ def ask_android(message: str) -> str:
             new_memories = []
 
         # =========================================================
+        # AUTONOMY - EVENTOS DE CONVERSA
+        # =========================================================
+
+        autonomy_event = (
+            detect_chat_autonomy_event(
+                message
+            )
+        )
+
+        if autonomy_event:
+            apply_autonomy_event(
+                autonomy_event,
+                source="chat",
+            )
+
+            print(
+                "\nAUTONOMY EVENT:",
+                autonomy_event
+            )
+
+        # =========================================================
         # RELATIONSHIP ENGINE
         # =========================================================
 
@@ -316,104 +690,25 @@ def ask_android(message: str) -> str:
             if memory.get("category") != "relationship":
                 continue
 
-            key = str(
-                memory.get("key", "")
-            ).lower()
-
             intensity = (
                 relationship_intensity_from_memory(
                     memory
                 )
             )
 
-            event_type = None
-
-            if (
-                "insult" in key
-                or "insulto" in key
-                or "hostility" in key
-                or "hostilidade" in key
-            ):
-                event_type = "insult"
-
-            elif (
-                "threat" in key
-                or "ameaça" in key
-                or "ameaca" in key
-                or "amea" in key
-            ):
-                event_type = "threat"
-
-            elif (
-                "apology" in key
-                or "desculp" in key
-            ):
-                event_type = "apology"
-
-            elif (
-                "gratitude" in key
-                or "gratid" in key
-                or "agradec" in key
-            ):
-                event_type = "gratitude"
-
-            elif (
-                "compliment" in key
-                or "elogio" in key
-                or "praise" in key
-            ):
-                event_type = "compliment"
-
-            elif (
-                "reassurance" in key
-                or "reassur" in key
-                or "tranquiliz" in key
-            ):
-                event_type = "reassurance"
-
-            elif (
-                "support" in key
-                or "apoio" in key
-            ):
-                event_type = "support"
-
-            elif (
-                "affection" in key
-                or "carinho" in key
-                or "afeto" in key
-            ):
-                event_type = "affection"
-
-            elif (
-                "cooperation" in key
-                or "cooperação" in key
-                or "cooperacao" in key
-            ):
-                event_type = "cooperation"
-
-            elif (
-                "broken_promise" in key
-                or "broken promise" in key
-                or "promessa_quebrada" in key
-                or "quebrou_promessa" in key
-            ):
-                event_type = "broken_promise"
-
-            elif (
-                "promise" in key
-                or "promessa" in key
-            ):
-                event_type = "promise"
-
-            elif (
-                "betrayal" in key
-                or "traição" in key
-                or "traicao" in key
-            ):
-                event_type = "betrayal"
+            event_type = (
+                detect_relationship_event(
+                    memory
+                )
+            )
 
             if event_type:
                 apply_relationship_event(
+                    event_type,
+                    intensity=intensity,
+                )
+
+                apply_narrative_event(
                     event_type,
                     intensity=intensity,
                 )
@@ -505,6 +800,14 @@ def ask_android(message: str) -> str:
             build_relationship_context()
         )
 
+        narrative_context = (
+            build_narrative_context()
+        )
+
+        autonomy_context = (
+            build_autonomy_context()
+        )
+
         print(
             "\nRELATIONSHIP STATE:",
             get_relationship_state()
@@ -513,6 +816,16 @@ def ask_android(message: str) -> str:
         print(
             "\nRELATIONSHIP SUMMARY:",
             get_relationship_summary()
+        )
+
+        print(
+            "\nNARRATIVE STATE:",
+            get_narrative_state()
+        )
+
+        print(
+            "\nAUTONOMY STATE:",
+            get_autonomy_state()
         )
 
         dynamic_context = (
@@ -524,6 +837,8 @@ def ask_android(message: str) -> str:
                 conversation_context=conversation_context,
                 belief_context=belief_context,
                 relationship_context=relationship_context,
+                narrative_context=narrative_context,
+                autonomy_context=autonomy_context,
             )
         )
 

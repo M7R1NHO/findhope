@@ -190,6 +190,71 @@ EVENT_EFFECTS = {
         },
     },
 
+    "trust": {
+        "atlas_to_player": {
+            "trust": +2,
+            "respect": +1,
+            "affinity": +2,
+            "tension": -2,
+        },
+        "player_to_atlas": {
+            "trust": +7,
+            "respect": +2,
+            "affinity": +2,
+            "tension": -3,
+            "hostility": -1,
+        },
+    },
+
+    "distrust": {
+        "atlas_to_player": {
+            "trust": -2,
+            "affinity": -1,
+            "tension": +4,
+            "irritation": +1,
+        },
+        "player_to_atlas": {
+            "trust": -9,
+            "respect": -2,
+            "affinity": -2,
+            "tension": +6,
+            "hostility": +2,
+        },
+    },
+
+    "respect": {
+        "atlas_to_player": {
+            "trust": +1,
+            "respect": +3,
+            "affinity": +2,
+            "tension": -2,
+        },
+        "player_to_atlas": {
+            "trust": +2,
+            "respect": +7,
+            "affinity": +2,
+            "tension": -2,
+            "hostility": -1,
+        },
+    },
+
+    "disrespect": {
+        "atlas_to_player": {
+            "trust": -1,
+            "respect": -4,
+            "affinity": -2,
+            "tension": +6,
+            "irritation": +1,
+        },
+        "player_to_atlas": {
+            "trust": -2,
+            "respect": -8,
+            "affinity": -3,
+            "tension": +6,
+            "hostility": +5,
+        },
+    },
+
     "promise": {
         "atlas_to_player": {
             "trust": +2,
@@ -237,15 +302,6 @@ EVENT_EFFECTS = {
 
 
 def apply_relationship_event(event_type, intensity=1.0):
-    """
-    Aplica um evento social à relação.
-
-    intensity:
-        0.5 = leve
-        1.0 = normal
-        1.5 = forte
-        2.0 = muito forte
-    """
     effects = EVENT_EFFECTS.get(event_type)
 
     if not effects:
@@ -351,12 +407,8 @@ def get_relationship_summary():
 
 
 def build_relationship_context():
-    atlas = RELATIONSHIP_STATE[
-        "atlas_to_player"
-    ]
-    player = RELATIONSHIP_STATE[
-        "player_to_atlas"
-    ]
+    atlas = RELATIONSHIP_STATE["atlas_to_player"]
+    player = RELATIONSHIP_STATE["player_to_atlas"]
     summary = get_relationship_summary()
 
     return "\n".join([

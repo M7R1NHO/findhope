@@ -123,3 +123,5 @@ size_flags_vertical = 3
 [node name="ChatInput" type="LineEdit" parent="UI/ChatPanel/VBoxContainer" unique_id=983911713]
 layout_mode = 2
 placeholder_text = "Escreva uma mensagem..."
+
+[node name="AutonomyAPI" type="HTTPRequest" parent="." unique_id=1143749440]

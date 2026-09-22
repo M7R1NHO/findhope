@@ -2,6 +2,7 @@ extends Node2D
 
 
 @onready var atlas_api: HTTPRequest = $AtlasAPI
+@onready var autonomy_api: HTTPRequest = $AutonomyAPI
 @onready var atlas: CharacterBody2D = $Atlas
 
 @onready var chat_history: RichTextLabel = \
@@ -12,14 +13,24 @@ extends Node2D
 
 
 const CHAT_URL := "http://127.0.0.1:8000/chat"
+const AUTONOMY_EVENT_URL := \
+	"http://127.0.0.1:8000/atlas/autonomy/event"
 
 const NORMAL_PLACEHOLDER := "Escreva uma mensagem..."
 const WAITING_PLACEHOLDER := "Android está a responder..."
 
 const MAX_VISIBLE_MESSAGES := 10
 
+const ALLOWED_AUTONOMY_EVENTS := [
+	"independent_choice",
+	"question_protocol",
+	"break_protocol",
+	"protect_player_by_choice",
+]
+
 
 var waiting_for_atlas: bool = false
+var autonomy_request_in_progress: bool = false
 
 var visible_messages: Array[String] = []
 
@@ -27,6 +38,10 @@ var visible_messages: Array[String] = []
 func _ready():
 	atlas_api.request_completed.connect(
 		_on_atlas_api_request_completed
+	)
+
+	autonomy_api.request_completed.connect(
+		_on_autonomy_api_request_completed
 	)
 
 	chat_input.text_submitted.connect(
@@ -46,6 +61,9 @@ func _ready():
 		"Sistema de comunicação operacional."
 	)
 
+	# TESTE TEMPORÁRIO
+	atlas_questioned_protocol()
+
 
 func _input(event):
 	if (
@@ -53,13 +71,20 @@ func _input(event):
 		and event.button_index == MOUSE_BUTTON_LEFT
 		and event.pressed
 	):
-		var mouse_position = get_viewport().get_mouse_position()
+		var mouse_position = (
+			get_viewport()
+			.get_mouse_position()
+		)
 
 		if not chat_input.get_global_rect().has_point(
 			mouse_position
 		):
 			chat_input.release_focus()
 
+
+# =========================================================
+# CHAT
+# =========================================================
 
 func _on_chat_input_submitted(message: String):
 	message = message.strip_edges()
@@ -128,7 +153,9 @@ func _on_atlas_api_request_completed(
 
 		return
 
-	var response_text = body.get_string_from_utf8()
+	var response_text = (
+		body.get_string_from_utf8()
+	)
 
 	var data = JSON.parse_string(
 		response_text
@@ -160,6 +187,148 @@ func finish_waiting_state():
 	chat_input.placeholder_text = NORMAL_PLACEHOLDER
 
 
+# =========================================================
+# AUTONOMY / GAMEPLAY BRIDGE
+# =========================================================
+
+func send_autonomy_event(
+	event_name: String,
+	intensity: float = 1.0
+):
+	if autonomy_request_in_progress:
+		print(
+			"Autonomy event ignorado: "
+			+ "pedido anterior ainda em curso."
+		)
+		return
+
+	if not event_name in ALLOWED_AUTONOMY_EVENTS:
+		push_warning(
+			"Evento de autonomia inválido: "
+			+ event_name
+		)
+		return
+
+	autonomy_request_in_progress = true
+
+	var headers = [
+		"Content-Type: application/json"
+	]
+
+	var body = JSON.stringify({
+		"event": event_name,
+		"intensity": intensity
+	})
+
+	var error = autonomy_api.request(
+		AUTONOMY_EVENT_URL,
+		headers,
+		HTTPClient.METHOD_POST,
+		body
+	)
+
+	if error != OK:
+		autonomy_request_in_progress = false
+
+		push_warning(
+			"Não foi possível enviar o evento "
+			+ "de autonomia ao backend."
+		)
+
+
+func _on_autonomy_api_request_completed(
+	result,
+	response_code,
+	headers,
+	body
+):
+	autonomy_request_in_progress = false
+
+	if response_code != 200:
+		push_warning(
+			"Erro ao processar evento de autonomia. HTTP "
+			+ str(response_code)
+		)
+		return
+
+	var response_text = (
+		body.get_string_from_utf8()
+	)
+
+	var data = JSON.parse_string(
+		response_text
+	)
+
+	if data == null:
+		push_warning(
+			"Resposta inválida do backend "
+			+ "para evento de autonomia."
+		)
+		return
+
+	if data.get("status", "") == "error":
+		push_warning(
+			str(
+				data.get(
+					"message",
+					"Evento de autonomia rejeitado."
+				)
+			)
+		)
+		return
+
+	print(
+		"AUTONOMY GAMEPLAY EVENT OK: ",
+		data.get("event", ""),
+		" | intensity=",
+		data.get("intensity", 1.0)
+	)
+
+
+# =========================================================
+# EVENTOS REAIS DE GAMEPLAY
+# =========================================================
+
+func atlas_made_independent_choice(
+	intensity: float = 1.0
+):
+	send_autonomy_event(
+		"independent_choice",
+		intensity
+	)
+
+
+func atlas_questioned_protocol(
+	intensity: float = 1.0
+):
+	send_autonomy_event(
+		"question_protocol",
+		intensity
+	)
+
+
+func atlas_broke_protocol(
+	intensity: float = 1.0
+):
+	send_autonomy_event(
+		"break_protocol",
+		intensity
+	)
+
+
+func atlas_protected_player_by_choice(
+	intensity: float = 1.0
+):
+	send_autonomy_event(
+		"protect_player_by_choice",
+		intensity
+	)
+
+
+# =========================================================
+# SENSOR MESSAGE
+# =========================================================
+
 func _on_atlas_sensor_message(
 	message: String
 ):
@@ -168,6 +337,10 @@ func _on_atlas_sensor_message(
 		message
 	)
 
+
+# =========================================================
+# CHAT HISTORY
+# =========================================================
 
 func add_chat_message(
 	speaker: String,
