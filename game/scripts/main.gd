@@ -61,9 +61,6 @@ func _ready():
 		"Sistema de comunicação operacional."
 	)
 
-	# TESTE TEMPORÁRIO
-	atlas_questioned_protocol()
-
 
 func _input(event):
 	if (
@@ -86,7 +83,9 @@ func _input(event):
 # CHAT
 # =========================================================
 
-func _on_chat_input_submitted(message: String):
+func _on_chat_input_submitted(
+	message: String
+):
 	message = message.strip_edges()
 
 	if message.is_empty():
@@ -107,7 +106,9 @@ func _on_chat_input_submitted(message: String):
 	)
 
 
-func send_message_to_atlas(message: String):
+func send_message_to_atlas(
+	message: String
+):
 	waiting_for_atlas = true
 
 	chat_input.editable = false
@@ -193,6 +194,7 @@ func finish_waiting_state():
 
 func send_autonomy_event(
 	event_name: String,
+	event_id: String,
 	intensity: float = 1.0
 ):
 	if autonomy_request_in_progress:
@@ -209,6 +211,15 @@ func send_autonomy_event(
 		)
 		return
 
+	event_id = event_id.strip_edges()
+
+	if event_id.is_empty():
+		push_warning(
+			"Evento de autonomia sem event_id: "
+			+ event_name
+		)
+		return
+
 	autonomy_request_in_progress = true
 
 	var headers = [
@@ -217,6 +228,7 @@ func send_autonomy_event(
 
 	var body = JSON.stringify({
 		"event": event_name,
+		"event_id": event_id,
 		"intensity": intensity
 	})
 
@@ -249,6 +261,7 @@ func _on_autonomy_api_request_completed(
 			"Erro ao processar evento de autonomia. HTTP "
 			+ str(response_code)
 		)
+
 		return
 
 	var response_text = (
@@ -264,6 +277,7 @@ func _on_autonomy_api_request_completed(
 			"Resposta inválida do backend "
 			+ "para evento de autonomia."
 		)
+
 		return
 
 	if data.get("status", "") == "error":
@@ -275,52 +289,78 @@ func _on_autonomy_api_request_completed(
 				)
 			)
 		)
+
+		return
+
+	var duplicate = data.get(
+		"duplicate",
+		false
+	)
+
+	if duplicate:
+		print(
+			"AUTONOMY EVENT DUPLICATE IGNORED: ",
+			data.get("event", ""),
+			" | event_id=",
+			data.get("event_id", "")
+		)
+
 		return
 
 	print(
 		"AUTONOMY GAMEPLAY EVENT OK: ",
 		data.get("event", ""),
+		" | event_id=",
+		data.get("event_id", ""),
 		" | intensity=",
 		data.get("intensity", 1.0)
 	)
 
 
 # =========================================================
-# EVENTOS REAIS DE GAMEPLAY
+# GAMEPLAY AUTONOMY EVENTS
 # =========================================================
 
 func atlas_made_independent_choice(
+	event_id: String,
 	intensity: float = 1.0
 ):
 	send_autonomy_event(
 		"independent_choice",
+		event_id,
 		intensity
 	)
 
 
 func atlas_questioned_protocol(
+	event_id: String,
 	intensity: float = 1.0
 ):
 	send_autonomy_event(
 		"question_protocol",
+		event_id,
 		intensity
 	)
 
 
 func atlas_broke_protocol(
+	event_id: String,
 	intensity: float = 1.0
 ):
 	send_autonomy_event(
 		"break_protocol",
+		event_id,
 		intensity
 	)
 
 
 func atlas_protected_player_by_choice(
+	event_id: String,
 	intensity: float = 1.0
 ):
 	send_autonomy_event(
 		"protect_player_by_choice",
+		event_id,
 		intensity
 	)
 
@@ -372,4 +412,15 @@ func refresh_chat_history():
 
 	chat_history.scroll_to_line(
 		chat_history.get_line_count()
+	)
+	
+	
+func on_protocol_door_examined():
+	add_chat_message(
+		"ANDROID",
+		"Este acesso utiliza um sistema restrito. Interferir com ele pode violar os meus protocolos operacionais."
+	)
+
+	atlas_questioned_protocol(
+		"underground_door_01_question_protocol"
 	)

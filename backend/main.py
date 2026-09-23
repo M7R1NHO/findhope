@@ -66,6 +66,22 @@ class AutonomyGameplayEvent(BaseModel):
     event: str
     intensity: float = 1.0
 
+    # Identificador único do acontecimento no jogo.
+    # Exemplo:
+    # underground_door_01_break_protocol
+    event_id: str | None = None
+
+
+# =========================================================
+# GAMEPLAY EVENT TRACKING
+# =========================================================
+
+# IDs de eventos de gameplay que já foram processados.
+#
+# Por enquanto ficam em memória RAM.
+# Mais tarde poderão ser persistidos no SQLite.
+PROCESSED_AUTONOMY_EVENT_IDS: set[str] = set()
+
 
 # =========================================================
 # ROOT
@@ -100,7 +116,9 @@ def chat(data: ChatMessage):
 # =========================================================
 
 @app.post("/world/scan")
-def receive_godot_scan(data: GodotScan):
+def receive_godot_scan(
+    data: GodotScan
+):
 
     atlas_position = {
         "x": data.atlas_position.x,
@@ -131,7 +149,12 @@ def receive_godot_scan(data: GodotScan):
 
 @app.get("/atlas/current-detections")
 def current_detections():
-    return WORLD_STATE["atlas"]["current_detections"]
+
+    return WORLD_STATE[
+        "atlas"
+    ][
+        "current_detections"
+    ]
 
 
 # =========================================================
@@ -150,7 +173,11 @@ def update_atlas_position(
 
     return {
         "status": "Atlas position updated",
-        "position": WORLD_STATE["atlas"]["position"],
+        "position": WORLD_STATE[
+            "atlas"
+        ][
+            "position"
+        ],
     }
 
 
@@ -160,6 +187,7 @@ def update_atlas_position(
 
 @app.get("/atlas/knowledge")
 def atlas_knowledge():
+
     return get_atlas_knowledge()
 
 
@@ -179,6 +207,7 @@ def reset_knowledge():
 
 @app.get("/atlas/memory")
 def atlas_memory():
+
     return get_atlas_memory()
 
 
@@ -233,6 +262,7 @@ ALLOWED_GAMEPLAY_AUTONOMY_EVENTS = {
 
 @app.get("/atlas/autonomy")
 def atlas_autonomy():
+
     return get_autonomy_state()
 
 
@@ -240,14 +270,77 @@ def atlas_autonomy():
 def autonomy_gameplay_event(
     data: AutonomyGameplayEvent
 ):
-    if data.event not in ALLOWED_GAMEPLAY_AUTONOMY_EVENTS:
+
+    # -----------------------------------------------------
+    # VALIDATE EVENT TYPE
+    # -----------------------------------------------------
+
+    if (
+        data.event
+        not in ALLOWED_GAMEPLAY_AUTONOMY_EVENTS
+    ):
         return {
             "status": "error",
-            "message": "Invalid gameplay autonomy event",
+            "message": (
+                "Invalid gameplay autonomy event"
+            ),
             "allowed_events": sorted(
                 ALLOWED_GAMEPLAY_AUTONOMY_EVENTS
             ),
         }
+
+    # -----------------------------------------------------
+    # NORMALIZE EVENT ID
+    # -----------------------------------------------------
+
+    event_id = None
+
+    if data.event_id is not None:
+
+        normalized_event_id = (
+            data.event_id.strip()
+        )
+
+        if normalized_event_id:
+            event_id = normalized_event_id
+
+    # -----------------------------------------------------
+    # DUPLICATE PROTECTION
+    # -----------------------------------------------------
+
+    if (
+        event_id is not None
+        and event_id
+        in PROCESSED_AUTONOMY_EVENT_IDS
+    ):
+
+        state = get_autonomy_state()
+
+        print(
+            "\nAUTONOMY GAMEPLAY EVENT DUPLICATE:",
+            {
+                "event": data.event,
+                "event_id": event_id,
+            },
+        )
+
+        print(
+            "\nEVENT IGNORED - STATE UNCHANGED:",
+            state,
+        )
+
+        return {
+            "status": "duplicate event ignored",
+            "event": data.event,
+            "event_id": event_id,
+            "intensity": data.intensity,
+            "duplicate": True,
+            "autonomy": state,
+        }
+
+    # -----------------------------------------------------
+    # APPLY EVENT
+    # -----------------------------------------------------
 
     state = apply_autonomy_event(
         event_type=data.event,
@@ -255,10 +348,25 @@ def autonomy_gameplay_event(
         source="gameplay",
     )
 
+    # -----------------------------------------------------
+    # REGISTER EVENT ID
+    # -----------------------------------------------------
+
+    if event_id is not None:
+
+        PROCESSED_AUTONOMY_EVENT_IDS.add(
+            event_id
+        )
+
+    # -----------------------------------------------------
+    # DEBUG
+    # -----------------------------------------------------
+
     print(
         "\nAUTONOMY GAMEPLAY EVENT:",
         {
             "event": data.event,
+            "event_id": event_id,
             "intensity": data.intensity,
         },
     )
@@ -268,20 +376,33 @@ def autonomy_gameplay_event(
         state,
     )
 
+    # -----------------------------------------------------
+    # RESPONSE
+    # -----------------------------------------------------
+
     return {
         "status": "autonomy event processed",
         "event": data.event,
+        "event_id": event_id,
         "intensity": data.intensity,
+        "duplicate": False,
         "autonomy": state,
     }
 
+
+# =========================================================
+# AUTONOMY RESET
+# =========================================================
 
 @app.post("/atlas/reset-autonomy")
 def reset_autonomy():
 
     reset_autonomy_state()
 
+    PROCESSED_AUTONOMY_EVENT_IDS.clear()
+
     return {
         "status": "Atlas autonomy reset",
         "autonomy": get_autonomy_state(),
+        "processed_event_ids": [],
     }

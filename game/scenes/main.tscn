@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://cux50ew1xh51n" path="res://scenes/player.gd" id="1_o5qli"]
 [ext_resource type="Script" uid="uid://cg4bewh02hmm2" path="res://scripts/main.gd" id="1_sugp2"]
 [ext_resource type="Script" uid="uid://be3papg8vqa8w" path="res://scenes/atlas.gd" id="2_0wfyh"]
+[ext_resource type="Script" uid="uid://dpe8dva3ghx4m" path="res://scenes/protocol_door.gd" id="4_jyhfs"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
 size = Vector2(180, 60)
@@ -15,6 +16,8 @@ radius = 14.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_jyhfs"]
 radius = 14.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_5ui7g"]
 
 [node name="Main" type="Node2D" unique_id=1872859629]
 script = ExtResource("1_sugp2")
@@ -125,3 +128,11 @@ layout_mode = 2
 placeholder_text = "Escreva uma mensagem..."
 
 [node name="AutonomyAPI" type="HTTPRequest" parent="." unique_id=1143749440]
+
+[node name="ProtocolDoor" type="Area2D" parent="." unique_id=67136818 groups=["interactable"]]
+script = ExtResource("4_jyhfs")
+
+[node name="DoorVisual" type="Polygon2D" parent="ProtocolDoor" unique_id=1091522801]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ProtocolDoor" unique_id=1233854701]
+shape = SubResource("RectangleShape2D_5ui7g")

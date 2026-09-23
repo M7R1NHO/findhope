@@ -8,6 +8,8 @@ extends CharacterBody2D
 @export var min_y: float = -650.0
 @export var max_y: float = 650.0
 
+@export var interaction_range: float = 100.0
+
 
 var atlas: CharacterBody2D
 
@@ -66,13 +68,46 @@ func _unhandled_input(event):
 		event is InputEventKey
 		and event.pressed
 		and not event.echo
-		and event.keycode == KEY_SPACE
 	):
-		if atlas != null:
-			atlas.scan_environment()
+
+		if event.keycode == KEY_SPACE:
+			if atlas != null:
+				atlas.scan_environment()
+
+		if event.keycode == KEY_E:
+			try_interaction()
+
+
+func try_interaction():
+	var interactables = get_tree().get_nodes_in_group(
+		"interactable"
+	)
+
+	var closest_object = null
+	var closest_distance = interaction_range
+
+	for object in interactables:
+		if not object is Node2D:
+			continue
+
+		var distance = global_position.distance_to(
+			object.global_position
+		)
+
+		if distance <= closest_distance:
+			closest_distance = distance
+			closest_object = object
+
+	if closest_object == null:
+		return
+
+	if closest_object.has_method("examine"):
+		closest_object.examine()
 
 
 func is_typing_in_chat() -> bool:
-	var focused_control = get_viewport().gui_get_focus_owner()
+	var focused_control = (
+		get_viewport().gui_get_focus_owner()
+	)
 
 	return focused_control is LineEdit
