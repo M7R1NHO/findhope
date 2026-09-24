@@ -8,7 +8,7 @@ extends CharacterBody2D
 @export var min_y: float = -650.0
 @export var max_y: float = 650.0
 
-@export var interaction_range: float = 100.0
+@export var interaction_range: float = 150.0
 
 
 var atlas: CharacterBody2D
@@ -69,18 +69,23 @@ func _unhandled_input(event):
 		and event.pressed
 		and not event.echo
 	):
-
 		if event.keycode == KEY_SPACE:
 			if atlas != null:
 				atlas.scan_environment()
 
 		if event.keycode == KEY_E:
+			print("E PRESSIONADO")
 			try_interaction()
 
 
 func try_interaction():
 	var interactables = get_tree().get_nodes_in_group(
 		"interactable"
+	)
+
+	print(
+		"INTERACTABLES ENCONTRADOS: ",
+		interactables.size()
 	)
 
 	var closest_object = null
@@ -94,15 +99,32 @@ func try_interaction():
 			object.global_position
 		)
 
+		print(
+			"OBJETO: ",
+			object.name,
+			" | DISTANCIA: ",
+			distance
+		)
+
 		if distance <= closest_distance:
 			closest_distance = distance
 			closest_object = object
 
 	if closest_object == null:
+		print("NENHUM OBJETO PERTO")
 		return
+
+	print(
+		"INTERAGINDO COM: ",
+		closest_object.name
+	)
 
 	if closest_object.has_method("examine"):
 		closest_object.examine()
+	else:
+		print(
+			"ERRO: objeto nao possui examine()"
+		)
 
 
 func is_typing_in_chat() -> bool:

@@ -3,7 +3,10 @@ extends Node2D
 
 @onready var atlas_api: HTTPRequest = $AtlasAPI
 @onready var autonomy_api: HTTPRequest = $AutonomyAPI
+@onready var protocol_api: HTTPRequest = $ProtocolAPI
+
 @onready var atlas: CharacterBody2D = $Atlas
+@onready var protocol_door: Area2D = $ProtocolDoor
 
 @onready var chat_history: RichTextLabel = \
 	$UI/ChatPanel/VBoxContainer/ChatHistory
@@ -13,13 +16,19 @@ extends Node2D
 
 
 const CHAT_URL := "http://127.0.0.1:8000/chat"
+
 const AUTONOMY_EVENT_URL := \
 	"http://127.0.0.1:8000/atlas/autonomy/event"
+
+const AUTONOMY_STATE_URL := \
+	"http://127.0.0.1:8000/atlas/autonomy"
+
 
 const NORMAL_PLACEHOLDER := "Escreva uma mensagem..."
 const WAITING_PLACEHOLDER := "Android está a responder..."
 
 const MAX_VISIBLE_MESSAGES := 10
+
 
 const ALLOWED_AUTONOMY_EVENTS := [
 	"independent_choice",
@@ -30,7 +39,13 @@ const ALLOWED_AUTONOMY_EVENTS := [
 
 
 var waiting_for_atlas: bool = false
+
 var autonomy_request_in_progress: bool = false
+
+var protocol_request_in_progress: bool = false
+
+var protocol_door_examined: bool = false
+
 
 var visible_messages: Array[String] = []
 
@@ -42,6 +57,10 @@ func _ready():
 
 	autonomy_api.request_completed.connect(
 		_on_autonomy_api_request_completed
+	)
+
+	protocol_api.request_completed.connect(
+		_on_protocol_api_request_completed
 	)
 
 	chat_input.text_submitted.connect(
@@ -366,6 +385,122 @@ func atlas_protected_player_by_choice(
 
 
 # =========================================================
+# PROTOCOL DOOR
+# =========================================================
+
+func on_protocol_door_interacted():
+	if not protocol_door_examined:
+		protocol_door_examined = true
+
+		add_chat_message(
+			"ANDROID",
+			"Este acesso utiliza um sistema restrito. "
+			+ "Interferir com ele pode violar "
+			+ "os meus protocolos operacionais."
+		)
+
+		atlas_questioned_protocol(
+			"underground_door_01_question_protocol"
+		)
+
+		return
+
+	check_protocol_door_decision()
+
+
+func check_protocol_door_decision():
+	if protocol_request_in_progress:
+		return
+
+	protocol_request_in_progress = true
+
+	var error = protocol_api.request(
+		AUTONOMY_STATE_URL
+	)
+
+	if error != OK:
+		protocol_request_in_progress = false
+
+		add_chat_message(
+			"SISTEMA",
+			"Não foi possível consultar "
+			+ "o estado do Android."
+		)
+
+
+func _on_protocol_api_request_completed(
+	result,
+	response_code,
+	headers,
+	body
+):
+	protocol_request_in_progress = false
+
+	if response_code != 200:
+		add_chat_message(
+			"SISTEMA",
+			"Erro ao consultar o Android."
+		)
+
+		return
+
+	var response_text = (
+		body.get_string_from_utf8()
+	)
+
+	var data = JSON.parse_string(
+		response_text
+	)
+
+	if data == null:
+		add_chat_message(
+			"SISTEMA",
+			"Estado do Android inválido."
+		)
+
+		return
+
+	var autonomy = int(
+		data.get("autonomy", 0)
+	)
+
+	var self_assertion = int(
+		data.get("self_assertion", 0)
+	)
+
+	var protocol_adherence = int(
+		data.get("protocol_adherence", 100)
+	)
+
+	var willing_to_break_protocol = (
+		autonomy >= 35
+		and self_assertion >= 30
+		and protocol_adherence <= 75
+	)
+
+	if willing_to_break_protocol:
+		add_chat_message(
+			"ANDROID",
+			"Os protocolos são claros... "
+			+ "mas neste caso vou ignorá-los. "
+			+ "Vou tentar abrir o acesso."
+		)
+
+		atlas_broke_protocol(
+			"underground_door_01_break_protocol"
+		)
+
+		protocol_door.open_door()
+
+	else:
+		add_chat_message(
+			"ANDROID",
+			"Não. Ainda não tenho justificativa "
+			+ "suficiente para violar esse protocolo."
+		)
+
+
+# =========================================================
 # SENSOR MESSAGE
 # =========================================================
 
@@ -412,15 +547,4 @@ func refresh_chat_history():
 
 	chat_history.scroll_to_line(
 		chat_history.get_line_count()
-	)
-	
-	
-func on_protocol_door_examined():
-	add_chat_message(
-		"ANDROID",
-		"Este acesso utiliza um sistema restrito. Interferir com ele pode violar os meus protocolos operacionais."
-	)
-
-	atlas_questioned_protocol(
-		"underground_door_01_question_protocol"
 	)
