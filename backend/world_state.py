@@ -14,7 +14,7 @@ WORLD_STATE = {
 
         "radar_range": 50.0,
 
-        "current_detections": [] 
+        "current_detections": []
     },
 
     "ship": {

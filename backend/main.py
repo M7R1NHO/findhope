@@ -22,6 +22,12 @@ from backend.autonomy_state import (
     reset_autonomy_state,
 )
 
+from backend.gameplay_context import (
+    register_gameplay_event,
+    get_gameplay_context,
+    reset_gameplay_context,
+)
+
 
 app = FastAPI(title="Find Hope")
 
@@ -65,21 +71,20 @@ class GodotScan(BaseModel):
 class AutonomyGameplayEvent(BaseModel):
     event: str
     intensity: float = 1.0
-
-    # Identificador único do acontecimento no jogo.
-    # Exemplo:
-    # underground_door_01_break_protocol
     event_id: str | None = None
+
+
+class GameplayContextEvent(BaseModel):
+    event_id: str
+    event_type: str
+    description: str
+    active: bool = True
 
 
 # =========================================================
 # GAMEPLAY EVENT TRACKING
 # =========================================================
 
-# IDs de eventos de gameplay que já foram processados.
-#
-# Por enquanto ficam em memória RAM.
-# Mais tarde poderão ser persistidos no SQLite.
 PROCESSED_AUTONOMY_EVENT_IDS: set[str] = set()
 
 
@@ -149,7 +154,6 @@ def receive_godot_scan(
 
 @app.get("/atlas/current-detections")
 def current_detections():
-
     return WORLD_STATE[
         "atlas"
     ][
@@ -187,7 +191,6 @@ def update_atlas_position(
 
 @app.get("/atlas/knowledge")
 def atlas_knowledge():
-
     return get_atlas_knowledge()
 
 
@@ -207,7 +210,6 @@ def reset_knowledge():
 
 @app.get("/atlas/memory")
 def atlas_memory():
-
     return get_atlas_memory()
 
 
@@ -249,6 +251,61 @@ def reset_memory():
 
 
 # =========================================================
+# GAMEPLAY CONTEXT
+# =========================================================
+
+@app.get("/gameplay/context")
+def gameplay_context():
+    return get_gameplay_context()
+
+
+@app.post("/gameplay/context/event")
+def gameplay_context_event(
+    data: GameplayContextEvent
+):
+
+    success = register_gameplay_event(
+        event_id=data.event_id,
+        event_type=data.event_type,
+        description=data.description,
+        active=data.active,
+    )
+
+    if not success:
+        return {
+            "status": "error",
+            "message": "Invalid gameplay context event",
+        }
+
+    print(
+        "\nGAMEPLAY CONTEXT EVENT:",
+        {
+            "event_id": data.event_id,
+            "event_type": data.event_type,
+            "description": data.description,
+            "active": data.active,
+        },
+    )
+
+    return {
+        "status": "gameplay context updated",
+        "event_id": data.event_id,
+        "event_type": data.event_type,
+        "active": data.active,
+    }
+
+
+@app.post("/gameplay/context/reset")
+def reset_gameplay():
+
+    reset_gameplay_context()
+
+    return {
+        "status": "Gameplay context reset"
+    }
+
+
+# =========================================================
 # AUTONOMY / GAMEPLAY BRIDGE
 # =========================================================
 
@@ -262,7 +319,6 @@ ALLOWED_GAMEPLAY_AUTONOMY_EVENTS = {
 
 @app.get("/atlas/autonomy")
 def atlas_autonomy():
-
     return get_autonomy_state()
 
 
@@ -270,10 +326,6 @@ def atlas_autonomy():
 def autonomy_gameplay_event(
     data: AutonomyGameplayEvent
 ):
-
-    # -----------------------------------------------------
-    # VALIDATE EVENT TYPE
-    # -----------------------------------------------------
 
     if (
         data.event
@@ -289,10 +341,6 @@ def autonomy_gameplay_event(
             ),
         }
 
-    # -----------------------------------------------------
-    # NORMALIZE EVENT ID
-    # -----------------------------------------------------
-
     event_id = None
 
     if data.event_id is not None:
@@ -303,10 +351,6 @@ def autonomy_gameplay_event(
 
         if normalized_event_id:
             event_id = normalized_event_id
-
-    # -----------------------------------------------------
-    # DUPLICATE PROTECTION
-    # -----------------------------------------------------
 
     if (
         event_id is not None
@@ -338,29 +382,17 @@ def autonomy_gameplay_event(
             "autonomy": state,
         }
 
-    # -----------------------------------------------------
-    # APPLY EVENT
-    # -----------------------------------------------------
-
     state = apply_autonomy_event(
         event_type=data.event,
         intensity=data.intensity,
         source="gameplay",
     )
 
-    # -----------------------------------------------------
-    # REGISTER EVENT ID
-    # -----------------------------------------------------
-
     if event_id is not None:
 
         PROCESSED_AUTONOMY_EVENT_IDS.add(
             event_id
         )
-
-    # -----------------------------------------------------
-    # DEBUG
-    # -----------------------------------------------------
 
     print(
         "\nAUTONOMY GAMEPLAY EVENT:",
@@ -376,10 +408,6 @@ def autonomy_gameplay_event(
         state,
     )
 
-    # -----------------------------------------------------
-    # RESPONSE
-    # -----------------------------------------------------
-
     return {
         "status": "autonomy event processed",
         "event": data.event,
@@ -389,10 +417,6 @@ def autonomy_gameplay_event(
         "autonomy": state,
     }
 
-
-# =========================================================
-# AUTONOMY RESET
-# =========================================================
 
 @app.post("/atlas/reset-autonomy")
 def reset_autonomy():

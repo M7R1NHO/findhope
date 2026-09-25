@@ -18,7 +18,7 @@ radius = 14.0
 radius = 14.0
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_5ui7g"]
-size = Vector2(48, 44)
+size = Vector2(49.899994, 46)
 
 [node name="Main" type="Node2D" unique_id=1872859629]
 script = ExtResource("1_sugp2")
@@ -141,7 +141,7 @@ position = Vector2(260, -547)
 polygon = PackedVector2Array(-0.38, -1.71, 28.62, -19.71, 45.62, 6.29, 40.62, 21.29)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ProtocolDoor" unique_id=1233854701]
-position = Vector2(285, -549)
+position = Vector2(284.05, -548)
 shape = SubResource("RectangleShape2D_5ui7g")
 
 [node name="InteractionLabel" type="Label" parent="ProtocolDoor" unique_id=1627563366]
@@ -167,5 +167,29 @@ grow_vertical = 2
 theme_override_font_sizes/font_size = 10
 text = "ACESSO RESTRITO"
 horizontal_alignment = 1
+
+[node name="TerminalPanel" type="Panel" parent="ProtocolDoor" unique_id=224436374]
+offset_left = 342.1
+offset_top = -563.0
+offset_right = 419.1
+offset_bottom = -538.0
+
+[node name="TerminalTitle" type="Label" parent="ProtocolDoor/TerminalPanel" unique_id=1356303613]
+layout_mode = 0
+offset_left = 3.0
+offset_top = 2.0
+offset_right = 175.0
+offset_bottom = 25.0
+theme_override_font_sizes/font_size = 6
+text = "PYSSOA ACCESS NODE"
+
+[node name="TerminalState" type="Label" parent="ProtocolDoor/TerminalPanel" unique_id=87625557]
+layout_mode = 0
+offset_left = 3.0
+offset_top = 11.0
+offset_right = 175.0
+offset_bottom = 34.0
+theme_override_font_sizes/font_size = 9
+text = "LOCKED"
 
 [node name="ProtocolAPI" type="HTTPRequest" parent="." unique_id=1471413670]

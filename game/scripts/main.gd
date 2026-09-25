@@ -23,6 +23,9 @@ const AUTONOMY_EVENT_URL := \
 const AUTONOMY_STATE_URL := \
 	"http://127.0.0.1:8000/atlas/autonomy"
 
+const GAMEPLAY_CONTEXT_EVENT_URL := \
+	"http://127.0.0.1:8000/gameplay/context/event"
+
 
 const NORMAL_PLACEHOLDER := "Escreva uma mensagem..."
 const WAITING_PLACEHOLDER := "Android está a responder..."
@@ -39,13 +42,11 @@ const ALLOWED_AUTONOMY_EVENTS := [
 
 
 var waiting_for_atlas: bool = false
-
 var autonomy_request_in_progress: bool = false
-
 var protocol_request_in_progress: bool = false
-
 var protocol_door_examined: bool = false
 
+var protocol_api_mode: String = ""
 
 var visible_messages: Array[String] = []
 
@@ -280,7 +281,6 @@ func _on_autonomy_api_request_completed(
 			"Erro ao processar evento de autonomia. HTTP "
 			+ str(response_code)
 		)
-
 		return
 
 	var response_text = (
@@ -296,7 +296,6 @@ func _on_autonomy_api_request_completed(
 			"Resposta inválida do backend "
 			+ "para evento de autonomia."
 		)
-
 		return
 
 	if data.get("status", "") == "error":
@@ -308,7 +307,6 @@ func _on_autonomy_api_request_completed(
 				)
 			)
 		)
-
 		return
 
 	var duplicate = data.get(
@@ -323,7 +321,6 @@ func _on_autonomy_api_request_completed(
 			" | event_id=",
 			data.get("event_id", "")
 		)
-
 		return
 
 	print(
@@ -385,6 +382,54 @@ func atlas_protected_player_by_choice(
 
 
 # =========================================================
+# GAMEPLAY CONTEXT
+# =========================================================
+
+func send_gameplay_context_event(
+	event_id: String,
+	event_type: String,
+	description: String,
+	active: bool = true
+):
+	if protocol_request_in_progress:
+		print(
+			"Gameplay context adiado: "
+			+ "ProtocolAPI ocupado."
+		)
+		return
+
+	protocol_request_in_progress = true
+	protocol_api_mode = "gameplay_context"
+
+	var headers = [
+		"Content-Type: application/json"
+	]
+
+	var body = JSON.stringify({
+		"event_id": event_id,
+		"event_type": event_type,
+		"description": description,
+		"active": active
+	})
+
+	var error = protocol_api.request(
+		GAMEPLAY_CONTEXT_EVENT_URL,
+		headers,
+		HTTPClient.METHOD_POST,
+		body
+	)
+
+	if error != OK:
+		protocol_request_in_progress = false
+		protocol_api_mode = ""
+
+		push_warning(
+			"Não foi possível enviar "
+			+ "o contexto de gameplay."
+		)
+
+
+# =========================================================
 # PROTOCOL DOOR
 # =========================================================
 
@@ -393,6 +438,16 @@ func on_protocol_door_interacted():
 		protocol_door_examined = true
 
 		protocol_door.set_status_analyzing()
+
+		send_gameplay_context_event(
+			"underground_door_01_discovered",
+			"restricted_access_discovered",
+			"Atlas e o jogador estão diante de uma porta "
+			+ "ou terminal de acesso restrito. "
+			+ "O acesso pode exigir interferência num sistema "
+			+ "que entra em conflito com os protocolos "
+			+ "operacionais do Atlas."
+		)
 
 		add_chat_message(
 			"ANDROID",
@@ -417,6 +472,7 @@ func check_protocol_door_decision():
 	protocol_door.set_status_analyzing()
 
 	protocol_request_in_progress = true
+	protocol_api_mode = "autonomy_check"
 
 	var error = protocol_api.request(
 		AUTONOMY_STATE_URL
@@ -424,6 +480,7 @@ func check_protocol_door_decision():
 
 	if error != OK:
 		protocol_request_in_progress = false
+		protocol_api_mode = ""
 
 		add_chat_message(
 			"SISTEMA",
@@ -438,13 +495,21 @@ func _on_protocol_api_request_completed(
 	headers,
 	body
 ):
+	var completed_mode = protocol_api_mode
+
 	protocol_request_in_progress = false
+	protocol_api_mode = ""
 
 	if response_code != 200:
-		add_chat_message(
-			"SISTEMA",
-			"Erro ao consultar o Android."
-		)
+		if completed_mode == "autonomy_check":
+			add_chat_message(
+				"SISTEMA",
+				"Erro ao consultar o Android."
+			)
+		else:
+			push_warning(
+				"Erro ao atualizar contexto de gameplay."
+			)
 
 		return
 
@@ -457,11 +522,19 @@ func _on_protocol_api_request_completed(
 	)
 
 	if data == null:
-		add_chat_message(
-			"SISTEMA",
-			"Estado do Android inválido."
+		push_warning(
+			"Resposta inválida do ProtocolAPI."
 		)
+		return
 
+	if completed_mode == "gameplay_context":
+		print(
+			"GAMEPLAY CONTEXT OK: ",
+			data
+		)
+		return
+
+	if completed_mode != "autonomy_check":
 		return
 
 	var autonomy = int(

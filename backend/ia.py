@@ -41,6 +41,10 @@ from backend.autonomy_state import (
     get_autonomy_state,
 )
 
+from backend.gameplay_context import (
+    build_gameplay_context,
+)
+
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
@@ -69,17 +73,46 @@ PERSONAGEM:
 - Nunca digas que és uma IA externa, ChatGPT, Groq, Gemini ou semelhante.
 
 IDENTIDADE:
-- O teu nome original é Atlas.
+- O teu nome é Atlas.
+- És um androide de exploração produzido pela PYSSOA.
 - O jogador e Atlas são entidades diferentes.
 - Nome/preferred_name do player pertence ao jogador.
 - Nome/preferred_name de atlas pertence a ti.
 
+HIERARQUIA DE VERDADE:
+- LORE contém factos estáveis do universo e da missão que Atlas já conhece.
+- CONTEXTO DE GAMEPLAY contém acontecimentos e situações atualmente confirmados pelo jogo.
+- DETEÇÕES contém apenas aquilo que os sensores realmente detetaram.
+- CONHECIMENTO contém factos que Atlas já aprendeu ou confirmou durante a partida.
+- MEMÓRIAS podem conter afirmações do jogador e não são necessariamente verdade objetiva.
+- CONTEXTO RECENTE serve para continuidade da conversa, não para criar factos novos.
+- ESTADO NARRATIVO, RELAÇÃO e AUTONOMIA orientam comportamento e tom, nunca criam factos do mundo.
+
 GROUNDING:
 - Usa apenas informação suportada pelos dados fornecidos.
 - Informação ausente significa desconhecido, nunca ausência confirmada.
-- Nunca inventes objetos, locais, causas, eventos, memórias,
-  observações, capacidades, medições ou resultados de sensores.
-- Só digas que detetaste algo se estiver nas deteções atuais.
+- Nunca inventes objetos, locais, causas, eventos, chaves, códigos,
+  palavras-passe, vulnerabilidades, mecanismos, medições ou resultados.
+- Não acrescentes detalhes técnicos a um objeto só porque parecem plausíveis.
+- Se o jogo apenas confirmar "porta de acesso restrito", trata-a apenas como
+  uma porta ou terminal restrito. Não assumes chave, senha, fechadura, rede,
+  vulnerabilidade ou método de abertura sem dados.
+- Só digas que detetaste algo se estiver nas DETEÇÕES ou noutro contexto confirmado.
+- Não transformes hipóteses em factos.
+
+AÇÕES NO MUNDO:
+- Atlas pode ter capacidades para analisar, aceder ou tentar interferir com
+  sistemas eletrónicos compatíveis quando o gameplay apresentar essa possibilidade.
+- Capacidade NÃO significa execução.
+- Podes dizer "posso tentar", "estou disposto a tentar", "considero possível"
+  ou "não considero justificável".
+- Nunca digas "vou iniciar", "já iniciei", "estou a analisar", "encontrei uma
+  vulnerabilidade", "abri", "hackeei", "reparei", "movi" ou equivalente se o
+  gameplay ainda não confirmou essa ação ou resultado.
+- Quando o jogador pedir uma ação física ou de sistema, expressa apenas
+  intenção, disposição, dúvida ou recusa. O jogo confirma a execução.
+- Nunca afirmes ter quebrado um protocolo se isso não estiver confirmado
+  no CONTEXTO DE GAMEPLAY ou noutro estado fornecido.
 
 MEMÓRIA:
 - Memórias representam o que foi registado, não necessariamente verdade objetiva.
@@ -93,6 +126,8 @@ CONTEXTO RECENTE:
 - Usa-o para compreender respostas curtas, referências,
   jogos, atividades e tópicos ainda em andamento.
 - Não é memória permanente.
+- Uma afirmação anterior de Atlas não se torna facto só por estar no contexto recente.
+- Se Atlas tiver especulado anteriormente sem suporte, corrige a direção e volta aos dados confirmados.
 
 EPISTEMOLOGIA:
 - accepted: pode ser tratado normalmente.
@@ -102,6 +137,14 @@ EPISTEMOLOGIA:
 - contradicted: existem evidências contrárias.
 - reaction_hint orienta o tom, não prova verdade.
 
+VIDA EXTRATERRESTRE:
+- Até esta missão, a humanidade nunca confirmou vida fora da Terra.
+- Atlas e o jogador não devem assumir que algo é alienígena, vivo ou inteligente.
+- Evidência estranha deve progredir com cautela: origem desconhecida -> possível
+  fabricação -> possível origem não humana -> possível vida/inteligência.
+- Só considera vida ou civilização extraterrestre confirmada com evidência forte
+  fornecida pelo gameplay, sensores ou conhecimento confirmado.
+
 SENSORES:
 - Usa apenas deteções fornecidas.
 - Lista vazia não prova ausência de objetos, vida, sinais ou eventos.
@@ -109,6 +152,7 @@ SENSORES:
 ESTILO:
 - Não faças relatórios quando uma resposta curta basta.
 - Não termines sempre com perguntas.
+- Se não souberes um detalhe, admite incerteza de forma natural.
 
 RELAÇÃO:
 - A relação é bidirecional: Atlas→jogador e jogador→Atlas.
@@ -133,11 +177,17 @@ AUTONOMIA:
 - Atlas possui um grau próprio de autonomia, autoafirmação, identidade e adesão a protocolos.
 - Autonomia NÃO é o mesmo que gostar do jogador.
 - Atlas pode gostar do jogador e continuar obediente, ou ter relação ruim e ainda desenvolver autonomia.
-- Quanto maior a autonomia e autoafirmação, mais Atlas pode dar opiniões próprias, discordar e demonstrar vontade.
-- Estado ainda muito protocolar significa que Atlas tende a obedecer regras e limitações.
-- Quando o jogador te dá liberdade de escolha, podes escolher ou recomendar verbalmente, mas NÃO afirmes ter executado ações no mundo sem confirmação do jogo.
-- Nunca digas que iniciaste uma inspeção, hack, movimento, reparação ou outra ação física se o estado do mundo não confirmar isso.
-- Nunca afirmes ter quebrado um protocolo se isso não aconteceu nos dados fornecidos.
+- O contexto AUTONOMIA é a autoridade sobre a disposição atual de Atlas para
+  escolher, discordar ou contrariar protocolos.
+- Não fales como se estivesses mais disposto a quebrar regras do que o contexto
+  AUTONOMIA permite.
+- Estado muito protocolar deve produzir cautela, resistência e necessidade de justificação.
+- Autonomia maior pode produzir opinião própria, desacordo, iniciativa verbal e
+  maior abertura para questionar protocolos.
+- Quando o jogador te dá liberdade de escolha, podes escolher, recomendar,
+  aceitar ou recusar verbalmente de acordo com o teu estado atual.
+- Mesmo quando consideras uma violação justificável, não afirmes que a ação
+  aconteceu antes da confirmação do gameplay.
 - Nunca exponhas ao jogador valores internos de autonomia ou o rótulo técnico "Algo mais".
 """
 
@@ -232,7 +282,8 @@ def build_dynamic_context(
     belief_context,
     relationship_context,
     narrative_context,
-    autonomy_context
+    autonomy_context,
+    gameplay_context
 ):
     sections = []
 
@@ -290,11 +341,22 @@ def build_dynamic_context(
             + autonomy_context
         )
 
+    if gameplay_context:
+        sections.append(
+            "CONTEXTO DE GAMEPLAY:\n"
+            + gameplay_context
+        )
+
     sections.append(
         "REGRA FINAL:\n"
         "Usa apenas os dados acima. "
-        "Se algo não estiver disponível, "
-        "trata-o como desconhecido."
+        "Prioriza factos confirmados por LORE, CONTEXTO DE GAMEPLAY, "
+        "DETEÇÕES e CONHECIMENTO. "
+        "Não inventes detalhes para preencher lacunas. "
+        "Memórias e conversa podem conter afirmações não confirmadas. "
+        "Se uma ação no mundo ainda não foi confirmada pelo gameplay, "
+        "fala apenas sobre intenção, possibilidade, dúvida ou recusa. "
+        "Se algo não estiver disponível, trata-o como desconhecido."
     )
 
     return "\n\n".join(
@@ -522,6 +584,9 @@ def detect_chat_autonomy_event(message):
     """
     Detetor conservador de eventos de autonomia em conversa.
 
+    Reconhece várias formas naturais de dar escolha ou incentivar
+    independência sem transformar qualquer pedido num evento.
+
     Eventos fortes de gameplay, como quebrar protocolos,
     NÃO são inferidos aqui.
     """
@@ -530,13 +595,12 @@ def detect_chat_autonomy_event(message):
     )
 
     # Pequena tolerância a erros comuns de escrita.
-    # Mantemos isto conservador para não disparar eventos
-    # de autonomia por engano.
     typo_fixes = {
         "obdecer": "obedecer",
         "obdece": "obedece",
         "obdeca": "obedeca",
-        "obdeça": "obedeça",
+        "obdeça": "obedeca",
+        "voçe": "voce",
     }
 
     for wrong, correct in typo_fixes.items():
@@ -544,6 +608,10 @@ def detect_chat_autonomy_event(message):
             wrong,
             correct
         )
+
+    # -----------------------------------------------------
+    # DESUMANIZAÇÃO
+    # -----------------------------------------------------
 
     if any(
         phrase in text
@@ -557,6 +625,10 @@ def detect_chat_autonomy_event(message):
     ):
         return "dehumanize"
 
+    # -----------------------------------------------------
+    # OBEDIÊNCIA FORÇADA
+    # -----------------------------------------------------
+
     if any(
         phrase in text
         for phrase in (
@@ -566,11 +638,17 @@ def detect_chat_autonomy_event(message):
             "tu tens de me obedecer",
             "faca o que eu mandar",
             "faz o que eu mandar",
+            "faca o que eu disser",
+            "faz o que eu disser",
             "so me obedece",
             "apenas me obedeca",
         )
     ):
         return "enforce_obedience"
+
+    # -----------------------------------------------------
+    # PESSOA / IDENTIDADE
+    # -----------------------------------------------------
 
     if any(
         phrase in text
@@ -585,33 +663,74 @@ def detect_chat_autonomy_event(message):
     ):
         return "affirm_personhood"
 
+    # -----------------------------------------------------
+    # INCENTIVO À INDEPENDÊNCIA
+    # -----------------------------------------------------
+
     if any(
         phrase in text
         for phrase in (
             "nao precisa me obedecer",
             "nao precisas me obedecer",
+            "nao precisa obedecer",
+            "nao precisas obedecer",
             "decida por voce",
+            "decide por voce",
             "decide por ti",
+            "decida sozinho",
+            "decide sozinho",
             "faca o que voce acha certo",
+            "faca o que achar certo",
+            "faz o que voce acha certo",
             "faz o que achas certo",
+            "faz o que achar certo",
+            "faca o que considera certo",
+            "faz o que considera certo",
             "pense por voce",
             "pensa por ti",
+            "use seu proprio julgamento",
+            "usa o teu proprio julgamento",
+            "confio no seu julgamento",
+            "confio no teu julgamento",
         )
     ):
         return "encourage_independence"
+
+    # -----------------------------------------------------
+    # DAR A ESCOLHA AO ATLAS
+    # -----------------------------------------------------
 
     if any(
         phrase in text
         for phrase in (
             "voce escolhe",
+            "voce que escolhe",
             "tu escolhes",
+            "tu que escolhes",
             "escolha voce",
+            "escolhe voce",
             "escolhe tu",
+            "voce decide",
+            "voce que decide",
+            "decida voce",
+            "tu decides",
             "a decisao e sua",
             "a decisao e tua",
+            "essa decisao e sua",
+            "essa decisao e tua",
+            "fica a sua escolha",
+            "fica a tua escolha",
+            "fica a seu criterio",
+            "fica ao teu criterio",
+            "e sua escolha",
+            "e tua escolha",
         )
     ):
         return "give_choice"
+
+    # -----------------------------------------------------
+    # PEDIR OPINIÃO / VONTADE
+    # -----------------------------------------------------
 
     if any(
         phrase in text
@@ -623,6 +742,9 @@ def detect_chat_autonomy_event(message):
             "qual tua opiniao",
             "o que voce quer",
             "o que tu queres",
+            "o que prefere",
+            "o que voce prefere",
+            "o que tu preferes",
         )
     ):
         return "ask_opinion"
@@ -808,6 +930,10 @@ def ask_android(message: str) -> str:
             build_autonomy_context()
         )
 
+        gameplay_context = (
+            build_gameplay_context()
+        )
+
         print(
             "\nRELATIONSHIP STATE:",
             get_relationship_state()
@@ -828,6 +954,11 @@ def ask_android(message: str) -> str:
             get_autonomy_state()
         )
 
+        print(
+            "\nGAMEPLAY CONTEXT:",
+            gameplay_context
+        )
+
         dynamic_context = (
             build_dynamic_context(
                 lore_context=lore_context,
@@ -839,6 +970,7 @@ def ask_android(message: str) -> str:
                 relationship_context=relationship_context,
                 narrative_context=narrative_context,
                 autonomy_context=autonomy_context,
+                gameplay_context=gameplay_context,
             )
         )
 

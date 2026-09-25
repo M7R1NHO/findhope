@@ -8,6 +8,9 @@ extends Area2D
 @onready var status_label: Label = $StatusLabel
 @onready var door_visual: Node2D = $DoorVisual
 
+@onready var terminal_state: Label = \
+	$TerminalPanel/TerminalState
+
 
 var player: CharacterBody2D
 var is_open: bool = false
@@ -18,7 +21,7 @@ func _ready():
 
 	interaction_label.visible = false
 
-	status_label.text = "ACESSO RESTRITO"
+	set_status_restricted()
 
 
 func _process(_delta):
@@ -29,7 +32,6 @@ func _process(_delta):
 		interaction_label.visible = false
 		return
 
-	# Usa a posição VISUAL real da porta
 	var distance = door_visual.global_position.distance_to(
 		player.global_position
 	)
@@ -53,18 +55,22 @@ func examine():
 
 func set_status_restricted():
 	status_label.text = "ACESSO RESTRITO"
+	terminal_state.text = "LOCKED"
 
 
 func set_status_analyzing():
 	status_label.text = "ANALISANDO PROTOCOLO"
+	terminal_state.text = "ANALYZING"
 
 
 func set_status_denied():
 	status_label.text = "ACESSO NEGADO"
+	terminal_state.text = "DENIED"
 
 
 func set_status_granted():
 	status_label.text = "ACESSO LIBERADO"
+	terminal_state.text = "GRANTED"
 
 
 func open_door():
