@@ -392,6 +392,8 @@ func on_protocol_door_interacted():
 	if not protocol_door_examined:
 		protocol_door_examined = true
 
+		protocol_door.set_status_analyzing()
+
 		add_chat_message(
 			"ANDROID",
 			"Este acesso utiliza um sistema restrito. "
@@ -411,6 +413,8 @@ func on_protocol_door_interacted():
 func check_protocol_door_decision():
 	if protocol_request_in_progress:
 		return
+
+	protocol_door.set_status_analyzing()
 
 	protocol_request_in_progress = true
 
@@ -479,6 +483,8 @@ func _on_protocol_api_request_completed(
 	)
 
 	if willing_to_break_protocol:
+		protocol_door.set_status_granted()
+
 		add_chat_message(
 			"ANDROID",
 			"Os protocolos são claros... "
@@ -493,6 +499,8 @@ func _on_protocol_api_request_completed(
 		protocol_door.open_door()
 
 	else:
+		protocol_door.set_status_denied()
+
 		add_chat_message(
 			"ANDROID",
 			"Não. Ainda não tenho justificativa "

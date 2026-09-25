@@ -95,8 +95,15 @@ func try_interaction():
 		if not object is Node2D:
 			continue
 
+		var interaction_position = object.global_position
+
+		if object.has_node("DoorVisual"):
+			interaction_position = (
+				object.get_node("DoorVisual").global_position
+			)
+
 		var distance = global_position.distance_to(
-			object.global_position
+			interaction_position
 		)
 
 		print(

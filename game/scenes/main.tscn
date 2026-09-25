@@ -24,6 +24,7 @@ size = Vector2(48, 44)
 script = ExtResource("1_sugp2")
 
 [node name="Ground" type="Polygon2D" parent="." unique_id=1191058292]
+position = Vector2(0, 16)
 color = Color(0.89568764, 0.84647185, 0.56997126, 1)
 polygon = PackedVector2Array(-1000, -700, 1000, -700, 1000, 700, -1000, 700)
 
@@ -80,6 +81,7 @@ color = Color(0.28235295, 0.9764706, 0.8862745, 1)
 polygon = PackedVector2Array(-20, -20, 20, -20, 20, 20, -20, 20)
 
 [node name="Camera2D" type="Camera2D" parent="Player" unique_id=234476532]
+zoom = Vector2(1.6, 1.6)
 
 [node name="Atlas" type="CharacterBody2D" parent="." unique_id=1792037986]
 position = Vector2(120, 0)
@@ -131,14 +133,39 @@ placeholder_text = "Escreva uma mensagem..."
 [node name="AutonomyAPI" type="HTTPRequest" parent="." unique_id=1143749440]
 
 [node name="ProtocolDoor" type="Area2D" parent="." unique_id=67136818 groups=["interactable"]]
+position = Vector2(-76.1, 4)
 script = ExtResource("4_jyhfs")
 
 [node name="DoorVisual" type="Polygon2D" parent="ProtocolDoor" unique_id=1091522801]
-position = Vector2(-186, -136)
+position = Vector2(260, -547)
 polygon = PackedVector2Array(-0.38, -1.71, 28.62, -19.71, 45.62, 6.29, 40.62, 21.29)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ProtocolDoor" unique_id=1233854701]
-position = Vector2(-164.035, -133.555)
+position = Vector2(285, -549)
 shape = SubResource("RectangleShape2D_5ui7g")
+
+[node name="InteractionLabel" type="Label" parent="ProtocolDoor" unique_id=1627563366]
+visible = false
+offset_left = 233.0
+offset_top = -596.0
+offset_right = 340.0
+offset_bottom = -573.0
+text = "[E] INTERAGIR"
+
+[node name="StatusLabel" type="Label" parent="ProtocolDoor" unique_id=181230168]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 198.0
+offset_top = -525.0
+offset_right = 378.0
+offset_bottom = -511.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 10
+text = "ACESSO RESTRITO"
+horizontal_alignment = 1
 
 [node name="ProtocolAPI" type="HTTPRequest" parent="." unique_id=1471413670]
