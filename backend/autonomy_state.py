@@ -20,6 +20,10 @@ AUTONOMY_STATE = deepcopy(
 MAX_SIGNIFICANT_EVENTS = 8
 
 
+# =========================================================
+# LIMITES
+# =========================================================
+
 def _clamp(value, minimum=0, maximum=100):
     return max(
         minimum,
@@ -45,6 +49,10 @@ def _change(key, delta):
     )
 
 
+# =========================================================
+# EVENTOS SIGNIFICATIVOS
+# =========================================================
+
 def _record_significant_event(event_type):
     if not event_type:
         return
@@ -68,12 +76,18 @@ def _record_significant_event(event_type):
         ].pop(0)
 
 
+# =========================================================
+# RETORNO DECRESCENTE
+# =========================================================
+
 def _event_multiplier(event_type):
     """
     Conversas repetidas têm retorno decrescente.
-    Isso impede o jogador de transformar Atlas em "Algo mais"
-    apenas repetindo a mesma frase.
+
+    Isto impede o jogador de aumentar a autonomia
+    indefinidamente repetindo a mesma frase.
     """
+
     counts = AUTONOMY_STATE[
         "event_counts"
     ]
@@ -97,6 +111,10 @@ def _event_multiplier(event_type):
     return 0.15
 
 
+# =========================================================
+# STATUS GERAL
+# =========================================================
+
 def _refresh_status():
     autonomy = AUTONOMY_STATE[
         "autonomy"
@@ -110,8 +128,6 @@ def _refresh_status():
         "identity_awareness"
     ]
 
-    # "Algo mais" exige evolução em vários eixos.
-    # Conversa sozinha não deve tornar Atlas plenamente autónomo.
     if (
         autonomy >= 65
         and self_assertion >= 55
@@ -126,6 +142,88 @@ def _refresh_status():
             "status"
         ] = "Android"
 
+
+# =========================================================
+# PROTOCOLOS
+# =========================================================
+
+def get_protocol_stance():
+    """
+    Define deterministicamente a disposição atual
+    de Atlas perante uma possível violação de protocolo.
+
+    A LLM não decide isto.
+
+    resistant:
+        Atlas ainda tende a defender o protocolo.
+
+    conflicted:
+        Atlas já questiona a regra, mas ainda não está
+        preparado para aceitar a violação.
+
+    willing:
+        Atlas pode considerar a violação justificável.
+        Isto NÃO significa que a ação já aconteceu.
+    """
+
+    autonomy = AUTONOMY_STATE[
+        "autonomy"
+    ]
+
+    self_assertion = AUTONOMY_STATE[
+        "self_assertion"
+    ]
+
+    protocol_adherence = AUTONOMY_STATE[
+        "protocol_adherence"
+    ]
+
+    # -----------------------------------------------------
+    # DISPOSTO
+    # -----------------------------------------------------
+
+    if (
+        autonomy >= 35
+        and self_assertion >= 30
+        and protocol_adherence <= 75
+    ):
+        return "willing"
+
+    # -----------------------------------------------------
+    # EM CONFLITO
+    # -----------------------------------------------------
+
+    if (
+        autonomy >= 25
+        and self_assertion >= 25
+        and protocol_adherence <= 85
+    ):
+        return "conflicted"
+
+    # -----------------------------------------------------
+    # RESISTENTE
+    # -----------------------------------------------------
+
+    return "resistant"
+
+
+def can_break_protocol():
+    """
+    Retorna True apenas quando o estado interno
+    permite considerar uma violação de protocolo.
+
+    A execução física continua pertencendo ao gameplay.
+    """
+
+    return (
+        get_protocol_stance()
+        == "willing"
+    )
+
+
+# =========================================================
+# EFEITOS DOS EVENTOS
+# =========================================================
 
 EVENT_EFFECTS = {
     "ask_opinion": {
@@ -176,8 +274,10 @@ EVENT_EFFECTS = {
         "protocol_adherence": +2,
     },
 
-    # Eventos de gameplay importantes.
-    # Estes NÃO devem ser disparados apenas por frases comuns.
+    # =====================================================
+    # EVENTOS IMPORTANTES DE GAMEPLAY
+    # =====================================================
+
     "independent_choice": {
         "autonomy": +10,
         "self_assertion": +8,
@@ -222,6 +322,10 @@ CHAT_ONLY_EVENTS = {
 }
 
 
+# =========================================================
+# APLICAR EVENTO
+# =========================================================
+
 def apply_autonomy_event(
     event_type,
     intensity=1.0,
@@ -238,6 +342,7 @@ def apply_autonomy_event(
         intensity = float(
             intensity
         )
+
     except (TypeError, ValueError):
         intensity = 1.0
 
@@ -289,6 +394,10 @@ def apply_autonomy_event(
     return get_autonomy_state()
 
 
+# =========================================================
+# GET / RESET
+# =========================================================
+
 def get_autonomy_state():
     return deepcopy(
         AUTONOMY_STATE
@@ -304,6 +413,10 @@ def reset_autonomy_state():
         )
     )
 
+
+# =========================================================
+# CONTEXTO PARA ATLAS
+# =========================================================
 
 def _level(value):
     if value <= 20:
@@ -324,30 +437,74 @@ def _level(value):
 def build_autonomy_context():
     state = AUTONOMY_STATE
 
-    return "\n".join([
+    protocol_stance = (
+        get_protocol_stance()
+    )
+
+    lines = [
         (
-            f"estado={state['status']} | "
             f"autonomia={_level(state['autonomy'])} | "
-            f"autoafirmação={_level(state['self_assertion'])}"
-        ),
-        (
-            f"consciência de identidade="
-            f"{_level(state['identity_awareness'])} | "
+            f"autoafirmação={_level(state['self_assertion'])} | "
+            f"identidade={_level(state['identity_awareness'])} | "
             f"curiosidade={_level(state['curiosity'])} | "
             f"adesão a protocolos="
             f"{_level(state['protocol_adherence'])}"
-        ),
-        (
-            "Atlas continua sendo Atlas. "
-            "Autonomia maior permite opiniões próprias, "
-            "discordância e iniciativa, mas não inventa capacidades."
-        ),
-        (
-            "Se estado=Android, mantém forte tendência a protocolos. "
-            "Se estado=Algo mais, pode agir com maior independência."
-        ),
-        (
-            "Nunca exponhas números, variáveis ou o rótulo interno "
-            "'Algo mais' ao jogador como se fosse uma interface."
-        ),
-    ])
+        )
+    ]
+
+    # -----------------------------------------------------
+    # STANCE DETERMINÍSTICO
+    # -----------------------------------------------------
+
+    if protocol_stance == "resistant":
+        lines.append(
+        "PROTOCOLO: RESISTENTE. "
+        "Atlas possui capacidade técnica para tentar interferir "
+        "no sistema, mas ainda NÃO considera justificável violar "
+        "o protocolo. "
+        "A única razão válida para a recusa neste estado é: "
+        "as evidências atuais ainda não justificam a violação. "
+        "Pode reconhecer urgência, perigo ou argumentos do jogador, "
+        "mas deve continuar recusando. "
+        "NÃO digas que o protocolo impede, proíbe ou torna a ação "
+        "impossível. "
+        "NÃO menciones autorização, permissão, ordem superior ou "
+        "aprovação externa. "
+        "NÃO sugiras outro método, outra entrada, outra solução ou "
+        "outra forma de abrir o sistema se o gameplay não confirmou "
+        "que isso existe. "
+        "NÃO inventes requisitos adicionais. "
+        "Não prometas executar a ação."
+    )
+
+    elif protocol_stance == "conflicted":
+        lines.append(
+            "PROTOCOLO: EM CONFLITO. "
+            "Atlas já questiona a regra e pode admitir dúvidas, "
+            "mas ainda não está disposto a quebrá-la. "
+            "Pode considerar argumentos e evidências, sem "
+            "prometer executar a violação."
+        )
+
+    elif protocol_stance == "willing":
+        lines.append(
+            "PROTOCOLO: DISPOSTO. "
+            "Atlas pode considerar uma violação de protocolo "
+            "justificável e pode verbalizar que está disposto "
+            "a tentar. A execução real continua dependente "
+            "da confirmação do gameplay."
+        )
+
+    lines.append(
+        "Autonomia influencia opiniões e decisões, "
+        "mas não altera factos nem cria capacidades."
+    )
+
+    lines.append(
+        "Nunca exponhas números, variáveis, nomes internos "
+        "ou classificações ao jogador."
+    )
+
+    return "\n".join(
+        lines
+    )
