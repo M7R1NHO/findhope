@@ -3,7 +3,10 @@
 [ext_resource type="Script" uid="uid://cux50ew1xh51n" path="res://scenes/player.gd" id="1_o5qli"]
 [ext_resource type="Script" uid="uid://cg4bewh02hmm2" path="res://scripts/main.gd" id="1_sugp2"]
 [ext_resource type="Script" uid="uid://be3papg8vqa8w" path="res://scenes/atlas.gd" id="2_0wfyh"]
+[ext_resource type="Script" uid="uid://c83u4ei72o6yb" path="res://scripts/ship.gd" id="2_o6xl0"]
 [ext_resource type="Script" uid="uid://dpe8dva3ghx4m" path="res://scenes/protocol_door.gd" id="4_jyhfs"]
+[ext_resource type="Script" uid="uid://5ytsp6uu4yiw" path="res://scripts/ship_part.gd" id="5_tbgi4"]
+[ext_resource type="Script" uid="uid://s5ukqw2wf76t" path="res://scripts/ship_parts_manager.gd" id="5_tefeu"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
 size = Vector2(180, 60)
@@ -20,6 +23,18 @@ radius = 14.0
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_5ui7g"]
 size = Vector2(49.899994, 46)
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_s5phl"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ec1ib"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_asrk8"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_3cdu1"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1wrmv"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_0hu5e"]
+
 [node name="Main" type="Node2D" unique_id=1872859629]
 script = ExtResource("1_sugp2")
 
@@ -29,8 +44,9 @@ scale = Vector2(1.5029359, 1.5523736)
 color = Color(0.89568764, 0.84647185, 0.56997126, 1)
 polygon = PackedVector2Array(-1972.8656, -691.531, 1000, -700, 1032.6031, 1266.0216, -1976.1746, 1257.0033)
 
-[node name="Ship" type="StaticBody2D" parent="." unique_id=202784240 groups=["detectable"]]
+[node name="Ship" type="StaticBody2D" parent="." unique_id=202784240 groups=["detectable", "interactable"]]
 position = Vector2(250, -150)
+script = ExtResource("2_o6xl0")
 
 [node name="Ship" type="Polygon2D" parent="Ship" unique_id=1636235921]
 color = Color(0.21206132, 0.00033903302, 0.56683713, 1)
@@ -206,3 +222,78 @@ position = Vector2(859, 304)
 
 [node name="Polygon2D" type="Polygon2D" parent="AncientSculpture" unique_id=1158999476]
 polygon = PackedVector2Array(-2, -2, -3, 4, 4, 4, 4, -2, -1, -2)
+
+[node name="ShipPartsManager" type="Node" parent="." unique_id=197550663]
+script = ExtResource("5_tefeu")
+
+[node name="ShipPart1" type="Area2D" parent="." unique_id=690151459 groups=["interactable"]]
+position = Vector2(-45, -266)
+script = ExtResource("5_tbgi4")
+display_name = "Componente de energia"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart1" unique_id=1759831287]
+polygon = PackedVector2Array(-10, -9, -10, 9, 10, 10, 10, -10, -10, -10)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart1" unique_id=287921192]
+shape = SubResource("RectangleShape2D_s5phl")
+
+[node name="ShipPart2" type="Area2D" parent="." unique_id=705623041 groups=["interactable"]]
+position = Vector2(-275, 259)
+script = ExtResource("5_tbgi4")
+part_id = "ship_part_02"
+display_name = "Regulador térmico"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart2" unique_id=839292236]
+polygon = PackedVector2Array(-12, -10, -11, 9, 7, 10, 6, -9)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart2" unique_id=418850793]
+position = Vector2(-1, 0)
+shape = SubResource("RectangleShape2D_ec1ib")
+
+[node name="ShipPart3" type="Area2D" parent="." unique_id=1691141482 groups=["interactable"]]
+position = Vector2(-63, 146)
+script = ExtResource("5_tbgi4")
+part_id = "ship_part_03"
+display_name = "Módulo de navegação"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart3" unique_id=473261794]
+polygon = PackedVector2Array(-10, -10, -10, 9, 10, 10, 9, -12)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart3" unique_id=1837562401]
+shape = SubResource("RectangleShape2D_asrk8")
+
+[node name="ShipPart4" type="Area2D" parent="." unique_id=708895249 groups=["interactable"]]
+position = Vector2(-412, -101)
+script = ExtResource("5_tbgi4")
+part_id = "ship_part_04"
+display_name = "Unidade de combustível"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart4" unique_id=1704752544]
+polygon = PackedVector2Array(-10, -10, -10, 9, 10, 10, 10, -10)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart4" unique_id=645943870]
+shape = SubResource("RectangleShape2D_3cdu1")
+
+[node name="ShipPart5" type="Area2D" parent="." unique_id=728927646 groups=["interactable"]]
+position = Vector2(452, -320)
+script = ExtResource("5_tbgi4")
+part_id = "ship_part_05"
+display_name = "Circuito de controlo"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart5" unique_id=1958459635]
+polygon = PackedVector2Array(-9, -8, -8, 6, 9, 7, 8, -8)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart5" unique_id=623736468]
+shape = SubResource("RectangleShape2D_1wrmv")
+
+[node name="ShipPart6" type="Area2D" parent="." unique_id=672010131 groups=["interactable"]]
+position = Vector2(-99, -412)
+script = ExtResource("5_tbgi4")
+part_id = "ship_part_06"
+display_name = "Núcleo de comunicação"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart6" unique_id=1428804204]
+polygon = PackedVector2Array(-9, -8, -10, 8, 10, 7, 7, -7)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart6" unique_id=1109456360]
+shape = SubResource("RectangleShape2D_0hu5e")
