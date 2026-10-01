@@ -45,6 +45,10 @@ from backend.gameplay_context import (
     build_gameplay_context,
 )
 
+from backend.discovery_state import (
+    build_discovery_context,
+)
+
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
@@ -202,7 +206,8 @@ def build_dynamic_context(
     relationship_context,
     narrative_context,
     autonomy_context,
-    gameplay_context
+    gameplay_context,
+    discovery_context
 ):
     sections = []
 
@@ -264,6 +269,12 @@ def build_dynamic_context(
         sections.append(
             "CONTEXTO DE GAMEPLAY:\n"
             + gameplay_context
+        )
+
+    if discovery_context:
+        sections.append(
+            "DESCOBERTAS CONFIRMADAS:\n"
+            + discovery_context
         )
 
     sections.append(
@@ -856,6 +867,10 @@ def ask_android(message: str) -> str:
         if gameplay_context == "Nenhum acontecimento de gameplay ativo.":
             gameplay_context = ""
 
+        discovery_context = (
+            build_discovery_context()
+        )
+
         print(
             "\nRELATIONSHIP STATE:",
             get_relationship_state()
@@ -881,6 +896,11 @@ def ask_android(message: str) -> str:
             gameplay_context
         )
 
+        print(
+            "\nDISCOVERY CONTEXT:",
+            discovery_context
+        )
+
         dynamic_context = (
             build_dynamic_context(
                 lore_context=lore_context,
@@ -893,6 +913,7 @@ def ask_android(message: str) -> str:
                 narrative_context=narrative_context,
                 autonomy_context=autonomy_context,
                 gameplay_context=gameplay_context,
+                discovery_context=discovery_context,
             )
         )
 

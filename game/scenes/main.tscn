@@ -24,9 +24,10 @@ size = Vector2(49.899994, 46)
 script = ExtResource("1_sugp2")
 
 [node name="Ground" type="Polygon2D" parent="." unique_id=1191058292]
-position = Vector2(0, 16)
+position = Vector2(495.06366, -346.33853)
+scale = Vector2(1.5029359, 1.5523736)
 color = Color(0.89568764, 0.84647185, 0.56997126, 1)
-polygon = PackedVector2Array(-1000, -700, 1000, -700, 1000, 700, -1000, 700)
+polygon = PackedVector2Array(-1972.8656, -691.531, 1000, -700, 1032.6031, 1266.0216, -1976.1746, 1257.0033)
 
 [node name="Ship" type="StaticBody2D" parent="." unique_id=202784240 groups=["detectable"]]
 position = Vector2(250, -150)
@@ -193,3 +194,15 @@ theme_override_font_sizes/font_size = 9
 text = "LOCKED"
 
 [node name="ProtocolAPI" type="HTTPRequest" parent="." unique_id=1471413670]
+
+[node name="UnknownDebris" type="Node2D" parent="." unique_id=2128374097 groups=["detectable"]]
+position = Vector2(-872, 633)
+
+[node name="Polygon2D" type="Polygon2D" parent="UnknownDebris" unique_id=321733220]
+polygon = PackedVector2Array(-11, -8, -9, 8, 15, 8, 9, -13)
+
+[node name="AncientSculpture" type="Node2D" parent="." unique_id=225283512 groups=["detectable"]]
+position = Vector2(859, 304)
+
+[node name="Polygon2D" type="Polygon2D" parent="AncientSculpture" unique_id=1158999476]
+polygon = PackedVector2Array(-2, -2, -3, 4, 4, 4, 4, -2, -1, -2)

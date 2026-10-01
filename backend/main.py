@@ -28,6 +28,16 @@ from backend.gameplay_context import (
     reset_gameplay_context,
 )
 
+from backend.discovery_state import (
+    process_scan_discoveries,
+    get_discovery_state,
+    reset_discovery_state,
+)
+
+from backend.protocol_decision import (
+    evaluate_protocol_door,
+)
+
 
 app = FastAPI(title="Find Hope")
 
@@ -145,10 +155,29 @@ def receive_godot_scan(
         detections,
     )
 
+    new_discoveries = (
+        process_scan_discoveries(
+            detections
+        )
+    )
+
+    if new_discoveries:
+        print(
+            "\nNEW SURFACE DISCOVERIES:",
+            new_discoveries,
+        )
+
+        print(
+            "\nDISCOVERY STATE:",
+            get_discovery_state(),
+        )
+
     return {
         "status": "scan processed",
         "atlas_position": atlas_position,
         "detected_objects": processed,
+        "new_discoveries": new_discoveries,
+        "discovery_state": get_discovery_state(),
     }
 
 
@@ -251,6 +280,26 @@ def reset_memory():
 
 
 # =========================================================
+# DISCOVERIES
+# =========================================================
+
+@app.get("/gameplay/discoveries")
+def gameplay_discoveries():
+    return get_discovery_state()
+
+
+@app.post("/gameplay/discoveries/reset")
+def reset_discoveries():
+
+    reset_discovery_state()
+
+    return {
+        "status": "Gameplay discoveries reset",
+        "discoveries": get_discovery_state(),
+    }
+
+
+# =========================================================
 # GAMEPLAY CONTEXT
 # =========================================================
 
@@ -303,6 +352,25 @@ def reset_gameplay():
     return {
         "status": "Gameplay context reset"
     }
+
+
+# =========================================================
+# PROTOCOL DOOR DECISION
+# =========================================================
+
+@app.get("/gameplay/protocol-door/decision")
+def protocol_door_decision():
+
+    decision = (
+        evaluate_protocol_door()
+    )
+
+    print(
+        "\nPROTOCOL DOOR DECISION:",
+        decision,
+    )
+
+    return decision
 
 
 # =========================================================

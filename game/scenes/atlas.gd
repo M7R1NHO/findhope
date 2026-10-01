@@ -8,7 +8,6 @@ signal sensor_message(message: String)
 @export var follow_start_distance: float = 180.0
 @export var follow_stop_distance: float = 110.0
 @export var sensor_range: float = 250.0
-
 @export var scan_cooldown: float = 1.0
 
 
@@ -47,10 +46,16 @@ func _physics_process(_delta):
 		player.global_position
 	)
 
-	if not is_following and distance_to_player >= follow_start_distance:
+	if (
+		not is_following
+		and distance_to_player >= follow_start_distance
+	):
 		is_following = true
 
-	if is_following and distance_to_player <= follow_stop_distance:
+	if (
+		is_following
+		and distance_to_player <= follow_stop_distance
+	):
 		is_following = false
 
 	if is_following:
@@ -86,8 +91,28 @@ func scan_environment():
 
 	start_scan_cooldown()
 
-	var detectable_objects = get_tree().get_nodes_in_group(
-		"detectable"
+	var detectable_objects = (
+		get_tree()
+		.get_nodes_in_group(
+			"detectable"
+		)
+	)
+	
+	print(
+	"OBJETOS NO GRUPO DETECTABLE: ",
+	detectable_objects.size()
+)
+
+	for obj in detectable_objects:
+		print(
+		"DETECTABLE: ",
+		obj.name,
+		" | posição: ",
+		obj.global_position,
+		" | distância: ",
+		global_position.distance_to(
+			obj.global_position
+		)
 	)
 
 	var detections: Array = []
@@ -96,8 +121,11 @@ func scan_environment():
 	print("========== ATLAS SENSOR SCAN ==========")
 
 	for obj in detectable_objects:
-		var distance_px = global_position.distance_to(
-			obj.global_position
+		var distance_px = (
+			global_position
+			.distance_to(
+				obj.global_position
+			)
 		)
 
 		if distance_px <= sensor_range:
@@ -120,6 +148,8 @@ func scan_environment():
 
 			print(
 				obj.name,
+				" | tipo: ",
+				object_type,
 				" | distância interna: ",
 				round(distance_px),
 				" px"
@@ -155,8 +185,36 @@ func get_object_type(
 	object_name: String
 ) -> String:
 
+	# -----------------------------------------------------
+	# NAVE 47
+	# -----------------------------------------------------
+
 	if object_name == "Ship":
 		return "ship"
+
+	# -----------------------------------------------------
+	# DESTROÇOS DESCONHECIDOS
+	# IMPORTANTE:
+	# verificar antes dos destroços normais.
+	# -----------------------------------------------------
+
+	if object_name.begins_with(
+		"UnknownDebris"
+	):
+		return "unknown_debris"
+
+	# -----------------------------------------------------
+	# ESCULTURA ANTIGA
+	# -----------------------------------------------------
+
+	if object_name.begins_with(
+		"AncientSculpture"
+	):
+		return "ancient_sculpture"
+
+	# -----------------------------------------------------
+	# DESTROÇOS NORMAIS DA NAVE 47
+	# -----------------------------------------------------
 
 	if object_name.begins_with(
 		"Debris"
@@ -172,6 +230,16 @@ func get_object_display_name(
 
 	if object_name == "Ship":
 		return "Nave 47"
+
+	if object_name.begins_with(
+		"UnknownDebris"
+	):
+		return "Destroços de origem desconhecida"
+
+	if object_name.begins_with(
+		"AncientSculpture"
+	):
+		return "Escultura antiga"
 
 	if object_name.begins_with(
 		"Debris"
@@ -250,7 +318,9 @@ func _on_scan_request_completed(
 
 		return
 
-	var response_text = body.get_string_from_utf8()
+	var response_text = (
+		body.get_string_from_utf8()
+	)
 
 	var data = JSON.parse_string(
 		response_text
@@ -276,13 +346,57 @@ func _on_scan_request_completed(
 		[]
 	)
 
+	var new_discoveries = data.get(
+		"new_discoveries",
+		[]
+	)
+
+	print(
+		"Novas descobertas: ",
+		new_discoveries
+	)
+
 	show_scan_result(
 		detected_objects
+	)
+
+	show_new_discoveries(
+		new_discoveries
 	)
 
 	print(
 		"===================================="
 	)
+
+
+# =========================================================
+# NEW DISCOVERIES
+# =========================================================
+
+func show_new_discoveries(
+	new_discoveries: Array
+):
+	if new_discoveries.is_empty():
+		return
+
+	for discovery in new_discoveries:
+		var discovery_name = str(
+			discovery
+		)
+
+		if discovery_name == "unknown_debris":
+			sensor_message.emit(
+				"Estes destroços não correspondem "
+				+ "a nenhuma parte identificada da Nave 47. "
+				+ "A origem permanece desconhecida."
+			)
+
+		elif discovery_name == "ancient_sculpture":
+			sensor_message.emit(
+				"A estrutura parece ser uma escultura antiga. "
+				+ "Não tenho dados suficientes para determinar "
+				+ "a sua origem ou quem a construiu."
+			)
 
 
 # =========================================================
@@ -350,11 +464,26 @@ func get_article_and_name(
 	)
 
 	if object_type == "ship":
-		return "a " + object_name
+		return (
+			"a "
+			+ object_name
+		)
 
 	if object_type == "debris":
 		return (
 			"um "
+			+ object_name.to_lower()
+		)
+
+	if object_type == "unknown_debris":
+		return (
+			"os "
+			+ object_name.to_lower()
+		)
+
+	if object_type == "ancient_sculpture":
+		return (
+			"uma "
 			+ object_name.to_lower()
 		)
 

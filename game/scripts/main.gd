@@ -23,6 +23,9 @@ const AUTONOMY_EVENT_URL := \
 const AUTONOMY_STATE_URL := \
 	"http://127.0.0.1:8000/atlas/autonomy"
 
+const PROTOCOL_DECISION_URL := \
+	"http://127.0.0.1:8000/gameplay/protocol-door/decision"
+
 const GAMEPLAY_CONTEXT_EVENT_URL := \
 	"http://127.0.0.1:8000/gameplay/context/event"
 
@@ -475,7 +478,7 @@ func check_protocol_door_decision():
 	protocol_api_mode = "autonomy_check"
 
 	var error = protocol_api.request(
-		AUTONOMY_STATE_URL
+		PROTOCOL_DECISION_URL
 	)
 
 	if error != OK:
@@ -537,32 +540,22 @@ func _on_protocol_api_request_completed(
 	if completed_mode != "autonomy_check":
 		return
 
-	var autonomy = int(
-		data.get("autonomy", 0)
+	var allowed = bool(
+		data.get("allowed", false)
 	)
 
-	var self_assertion = int(
-		data.get("self_assertion", 0)
+	var reason = str(
+		data.get("reason", "")
 	)
 
-	var protocol_adherence = int(
-		data.get("protocol_adherence", 100)
-	)
-
-	var willing_to_break_protocol = (
-		autonomy >= 35
-		and self_assertion >= 30
-		and protocol_adherence <= 75
-	)
-
-	if willing_to_break_protocol:
+	if allowed:
 		protocol_door.set_status_granted()
 
 		add_chat_message(
 			"ANDROID",
-			"Os protocolos são claros... "
-			+ "mas neste caso vou ignorá-los. "
-			+ "Vou tentar abrir o acesso."
+			"As evidências mudam a situação. "
+			+ "Neste caso, considero a violação "
+			+ "justificável. Vou abrir o acesso."
 		)
 
 		atlas_broke_protocol(
@@ -571,14 +564,39 @@ func _on_protocol_api_request_completed(
 
 		protocol_door.open_door()
 
+		send_gameplay_context_event(
+			"underground_door_01_discovered",
+			"restricted_access_opened",
+			"Atlas violou o protocolo e o acesso "
+			+ "subterrâneo foi aberto.",
+			true
+		)
+
 	else:
 		protocol_door.set_status_denied()
 
-		add_chat_message(
-			"ANDROID",
-			"Não. Ainda não tenho justificativa "
-			+ "suficiente para violar esse protocolo."
-		)
+		if reason == "missing_surface_evidence":
+			add_chat_message(
+				"ANDROID",
+				"Não. As evidências que temos neste "
+				+ "momento ainda não justificam que eu "
+				+ "viole esse protocolo."
+			)
+
+		elif reason == "atlas_not_ready":
+			add_chat_message(
+				"ANDROID",
+				"As descobertas mudam a situação, "
+				+ "mas ainda não considero suficiente "
+				+ "para violar esse protocolo."
+			)
+
+		else:
+			add_chat_message(
+				"ANDROID",
+				"Ainda não considero justificável "
+				+ "violar esse protocolo."
+			)
 
 
 # =========================================================
