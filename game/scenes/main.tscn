@@ -162,11 +162,10 @@ position = Vector2(284.05, -548)
 shape = SubResource("RectangleShape2D_5ui7g")
 
 [node name="InteractionLabel" type="Label" parent="ProtocolDoor" unique_id=1627563366]
-visible = false
-offset_left = 233.0
-offset_top = -596.0
-offset_right = 340.0
-offset_bottom = -573.0
+offset_left = 268.1
+offset_top = -602.0
+offset_right = 375.1
+offset_bottom = -579.0
 text = "[E] INTERAGIR"
 
 [node name="StatusLabel" type="Label" parent="ProtocolDoor" unique_id=181230168]
@@ -297,3 +296,13 @@ polygon = PackedVector2Array(-9, -8, -10, 8, 10, 7, 7, -7)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart6" unique_id=1109456360]
 shape = SubResource("RectangleShape2D_0hu5e")
+
+[node name="UndergroundRoot" type="Node2D" parent="." unique_id=1394738691]
+z_index = -10
+position = Vector2(5000, 0)
+
+[node name="UndergroundSpawn" type="Marker2D" parent="UndergroundRoot" unique_id=936846538]
+
+[node name="Ground" type="Polygon2D" parent="UndergroundRoot" unique_id=1495629326]
+color = Color(0.061333723, 0.224395, 0.24063605, 1)
+polygon = PackedVector2Array(-1359, -1464, -1360, 1642, 2593, 1642, 2589, -1464)

@@ -128,10 +128,46 @@ func try_interaction():
 
 	if closest_object.has_method("examine"):
 		closest_object.examine()
+
 	else:
 		print(
 			"ERRO: objeto nao possui examine()"
 		)
+
+
+# =========================================================
+# MOVEMENT BOUNDS
+# =========================================================
+
+func set_movement_bounds(
+	new_min_x: float,
+	new_max_x: float,
+	new_min_y: float,
+	new_max_y: float
+):
+	min_x = new_min_x
+	max_x = new_max_x
+	min_y = new_min_y
+	max_y = new_max_y
+
+	print(
+		"PLAYER BOUNDS: ",
+		min_x,
+		" / ",
+		max_x,
+		" / ",
+		min_y,
+		" / ",
+		max_y
+	)
+
+
+func teleport_to(
+	target_position: Vector2
+):
+	velocity = Vector2.ZERO
+
+	global_position = target_position
 
 
 func is_typing_in_chat() -> bool:
