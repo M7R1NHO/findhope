@@ -304,5 +304,62 @@ position = Vector2(5000, 0)
 [node name="UndergroundSpawn" type="Marker2D" parent="UndergroundRoot" unique_id=936846538]
 
 [node name="Ground" type="Polygon2D" parent="UndergroundRoot" unique_id=1495629326]
+z_index = -10
+position = Vector2(-760.4027, -2266.6218)
+scale = Vector2(1.0489886, 1.506633)
 color = Color(0.061333723, 0.224395, 0.24063605, 1)
-polygon = PackedVector2Array(-1359, -1464, -1360, 1642, 2593, 1642, 2589, -1464)
+polygon = PackedVector2Array(-1931, -2231, -1904, 1752, 3424, 1752, 3458, -2243)
+
+[node name="Entrance" type="Node2D" parent="UndergroundRoot" unique_id=1389327057]
+
+[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Entrance" unique_id=1391577477]
+
+[node name="Hall" type="Node2D" parent="UndergroundRoot" unique_id=734955938]
+position = Vector2(0, -900)
+
+[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Hall" unique_id=41495015]
+
+[node name="TechnicalRoom" type="Node2D" parent="UndergroundRoot" unique_id=1910870662]
+position = Vector2(1100, -1650)
+
+[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/TechnicalRoom" unique_id=1532587663]
+
+[node name="Storage" type="Node2D" parent="UndergroundRoot" unique_id=1562357973]
+position = Vector2(-1100, -1650)
+
+[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Storage" unique_id=1146072367]
+
+[node name="Laboratory" type="Node2D" parent="UndergroundRoot" unique_id=489140660]
+position = Vector2(1100, -2700)
+
+[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Laboratory" unique_id=632372218]
+
+[node name="SupportRoom" type="Node2D" parent="UndergroundRoot" unique_id=1081191341]
+position = Vector2(0, -4000)
+
+[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/SupportRoom" unique_id=1040879991]
+
+[node name="Maintenance" type="Node2D" parent="UndergroundRoot" unique_id=662229551]
+position = Vector2(-1100, -2700)
+
+[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Maintenance" unique_id=896471106]
+
+[node name="Archives" type="Node2D" parent="UndergroundRoot" unique_id=1682911114]
+position = Vector2(-2200, -5000)
+
+[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Archives" unique_id=337088678]
+
+[node name="Security" type="Node2D" parent="UndergroundRoot" unique_id=314322378]
+position = Vector2(2200, -3500)
+
+[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Security" unique_id=1932328946]
+
+[node name="Sanctuary" type="Node2D" parent="UndergroundRoot" unique_id=91244696]
+position = Vector2(-2200, -3500)
+
+[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Sanctuary" unique_id=781218443]
+
+[node name="MainCore" type="Node2D" parent="UndergroundRoot" unique_id=279585254]
+position = Vector2(2200, -5000)
+
+[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/MainCore" unique_id=1994454124]
