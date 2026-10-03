@@ -7,6 +7,9 @@
 [ext_resource type="Script" uid="uid://dpe8dva3ghx4m" path="res://scenes/protocol_door.gd" id="4_jyhfs"]
 [ext_resource type="Script" uid="uid://5ytsp6uu4yiw" path="res://scripts/ship_part.gd" id="5_tbgi4"]
 [ext_resource type="Script" uid="uid://s5ukqw2wf76t" path="res://scripts/ship_parts_manager.gd" id="5_tefeu"]
+[ext_resource type="Script" uid="uid://d0vnv56ny4mf4" path="res://scripts/generated_layout.gd" id="8_tipki"]
+[ext_resource type="Script" uid="uid://bhit8crmy18r2" path="res://scripts/hack_manager.gd" id="9_85g3d"]
+[ext_resource type="Script" uid="uid://dr8cq0y082nvb" path="res://scripts/underground_door.gd" id="9_choun"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
 size = Vector2(180, 60)
@@ -310,56 +313,451 @@ scale = Vector2(1.0489886, 1.506633)
 color = Color(0.061333723, 0.224395, 0.24063605, 1)
 polygon = PackedVector2Array(-1931, -2231, -1904, 1752, 3424, 1752, 3458, -2243)
 
-[node name="Entrance" type="Node2D" parent="UndergroundRoot" unique_id=1389327057]
+[node name="GeneratedLayout" type="Node2D" parent="UndergroundRoot" unique_id=1096465]
+script = ExtResource("8_tipki")
 
-[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Entrance" unique_id=1391577477]
+[node name="Entrance" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=2087996705]
 
-[node name="Hall" type="Node2D" parent="UndergroundRoot" unique_id=734955938]
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Entrance" unique_id=497644257]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-366, -216, 366, -216, 366, 216, -366, 216)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Entrance" unique_id=2034915141]
+z_index = -7
+color = Color(0.18, 0.22, 0.25, 1)
+polygon = PackedVector2Array(-350, -200, 350, -200, 350, 200, -350, 200)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Entrance" unique_id=464742077]
+offset_left = -350.0
+offset_top = -30.0
+offset_right = 350.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "ENTRADA"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Hall" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1029979030]
 position = Vector2(0, -900)
 
-[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Hall" unique_id=41495015]
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Hall" unique_id=118251012]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-516, -316, 516, -316, 516, 316, -516, 316)
 
-[node name="TechnicalRoom" type="Node2D" parent="UndergroundRoot" unique_id=1910870662]
-position = Vector2(1100, -1650)
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Hall" unique_id=377713285]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-500, -300, 500, -300, 500, 300, -500, 300)
 
-[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/TechnicalRoom" unique_id=1532587663]
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Hall" unique_id=595769657]
+offset_left = -500.0
+offset_top = -30.0
+offset_right = 500.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "HALL DE ENTRADA"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="Storage" type="Node2D" parent="UndergroundRoot" unique_id=1562357973]
+[node name="Storage" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1236234418]
 position = Vector2(-1100, -1650)
 
-[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Storage" unique_id=1146072367]
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Storage" unique_id=279296285]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-366, -266, 366, -266, 366, 266, -366, 266)
 
-[node name="Laboratory" type="Node2D" parent="UndergroundRoot" unique_id=489140660]
-position = Vector2(1100, -2700)
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Storage" unique_id=280700980]
+z_index = -7
+color = Color(0.18, 0.22, 0.25, 1)
+polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
 
-[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Laboratory" unique_id=632372218]
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Storage" unique_id=1004261187]
+offset_left = -350.0
+offset_top = -30.0
+offset_right = 350.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "ARMAZÉM / PEÇAS"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="SupportRoom" type="Node2D" parent="UndergroundRoot" unique_id=1081191341]
-position = Vector2(0, -4000)
+[node name="TechnicalRoom" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1103727862]
+position = Vector2(1100, -1650)
 
-[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/SupportRoom" unique_id=1040879991]
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/TechnicalRoom" unique_id=1541984056]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-416, -291, 416, -291, 416, 291, -416, 291)
 
-[node name="Maintenance" type="Node2D" parent="UndergroundRoot" unique_id=662229551]
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/TechnicalRoom" unique_id=927157237]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/TechnicalRoom" unique_id=1835315034]
+offset_left = -400.0
+offset_top = -30.0
+offset_right = 400.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "SALA TÉCNICA / ENERGIA"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SupportRoom" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1143464157]
+position = Vector2(-2200, -1650)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/SupportRoom" unique_id=2128892313]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-366, -266, 366, -266, 366, 266, -366, 266)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/SupportRoom" unique_id=981481940]
+z_index = -7
+color = Color(0.18, 0.22, 0.25, 1)
+polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/SupportRoom" unique_id=337833858]
+offset_left = -350.0
+offset_top = -30.0
+offset_right = 350.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "SALA DE SUPORTE"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Security" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=146033951]
+position = Vector2(2200, -1650)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Security" unique_id=1564250963]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-366, -266, 366, -266, 366, 266, -366, 266)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Security" unique_id=762223754]
+z_index = -7
+color = Color(0.18, 0.22, 0.25, 1)
+polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Security" unique_id=1542724352]
+offset_left = -350.0
+offset_top = -30.0
+offset_right = 350.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "SEGURANÇA / CONTENÇÃO"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Archives" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=374313192]
 position = Vector2(-1100, -2700)
 
-[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Maintenance" unique_id=896471106]
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Archives" unique_id=179956802]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-416, -291, 416, -291, 416, 291, -416, 291)
 
-[node name="Archives" type="Node2D" parent="UndergroundRoot" unique_id=1682911114]
-position = Vector2(-2200, -5000)
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Archives" unique_id=1628494039]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
 
-[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Archives" unique_id=337088678]
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Archives" unique_id=908321447]
+offset_left = -400.0
+offset_top = -30.0
+offset_right = 400.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "ARQUIVOS / REGISTOS"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="Security" type="Node2D" parent="UndergroundRoot" unique_id=314322378]
-position = Vector2(2200, -3500)
+[node name="Laboratory" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1933946926]
+position = Vector2(1100, -2700)
 
-[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Security" unique_id=1932328946]
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Laboratory" unique_id=228271884]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-416, -291, 416, -291, 416, 291, -416, 291)
 
-[node name="Sanctuary" type="Node2D" parent="UndergroundRoot" unique_id=91244696]
-position = Vector2(-2200, -3500)
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Laboratory" unique_id=2047057795]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
 
-[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/Sanctuary" unique_id=781218443]
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Laboratory" unique_id=409363556]
+offset_left = -400.0
+offset_top = -30.0
+offset_right = 400.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "LABORATÓRIO / ANÁLISE"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="MainCore" type="Node2D" parent="UndergroundRoot" unique_id=279585254]
-position = Vector2(2200, -5000)
+[node name="Maintenance" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=453307074]
+position = Vector2(-2200, -2700)
 
-[node name="Polygon2D" type="Polygon2D" parent="UndergroundRoot/MainCore" unique_id=1994454124]
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Maintenance" unique_id=1290043337]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-366, -266, 366, -266, 366, 266, -366, 266)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Maintenance" unique_id=1347742324]
+z_index = -7
+color = Color(0.18, 0.22, 0.25, 1)
+polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Maintenance" unique_id=1287666179]
+offset_left = -350.0
+offset_top = -30.0
+offset_right = 350.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "OFICINA / MANUTENÇÃO"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Sanctuary" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1875207256]
+position = Vector2(-2200, -3800)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Sanctuary" unique_id=1830391711]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-566, -341, 566, -341, 566, 341, -566, 341)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Sanctuary" unique_id=345697583]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-550, -325, 550, -325, 550, 325, -550, 325)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Sanctuary" unique_id=1224368801]
+offset_left = -550.0
+offset_top = -30.0
+offset_right = 550.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "SANTUÁRIO / ESCULTURAS"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MainCore" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=523403001]
+position = Vector2(2200, -3800)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/MainCore" unique_id=247175583]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-566, -341, 566, -341, 566, 341, -566, 341)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/MainCore" unique_id=1594595423]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-550, -325, 550, -325, 550, 325, -550, 325)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/MainCore" unique_id=1884568392]
+offset_left = -550.0
+offset_top = -30.0
+offset_right = 550.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "NÚCLEO PRINCIPAL"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Corridor_Entrance_Hall" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1810291736]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Entrance_Hall" unique_id=724376469]
+z_index = -6
+position = Vector2(0, -400)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -212, 80, -212, 80, 212, -80, 212)
+
+[node name="Corridor_Hall_Storage" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=2017128283]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Hall_Storage" unique_id=782058992]
+z_index = -6
+position = Vector2(-300, -1425)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -237, 80, -237, 80, 237, -80, 237)
+
+[node name="Segment_1" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Hall_Storage" unique_id=1842268656]
+z_index = -6
+position = Vector2(-525, -1650)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-237, -80, 237, -80, 237, 80, -237, 80)
+
+[node name="Corridor_Hall_Technical" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=865876899]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Hall_Technical" unique_id=27161258]
+z_index = -6
+position = Vector2(300, -1425)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -237, 80, -237, 80, 237, -80, 237)
+
+[node name="Segment_1" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Hall_Technical" unique_id=535839140]
+z_index = -6
+position = Vector2(500, -1650)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-212, -80, 212, -80, 212, 80, -212, 80)
+
+[node name="Corridor_Storage_Support" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1954473804]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Storage_Support" unique_id=115325239]
+z_index = -6
+position = Vector2(-1650, -1650)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-212, -80, 212, -80, 212, 80, -212, 80)
+
+[node name="Corridor_Technical_Security" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=856774692]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Technical_Security" unique_id=192235487]
+z_index = -6
+position = Vector2(1675, -1650)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-187, -80, 187, -80, 187, 80, -187, 80)
+
+[node name="Corridor_Storage_Archives" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=2007820297]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Storage_Archives" unique_id=158742659]
+z_index = -6
+position = Vector2(-1100, -2162.5)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -274.5, 80, -274.5, 80, 274.5, -80, 274.5)
+
+[node name="Corridor_Technical_Laboratory" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1256918206]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Technical_Laboratory" unique_id=251709839]
+z_index = -6
+position = Vector2(1100, -2175)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -262, 80, -262, 80, 262, -80, 262)
+
+[node name="Corridor_Support_Maintenance" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=556263599]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Support_Maintenance" unique_id=1862373371]
+z_index = -6
+position = Vector2(-2200, -2175)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -287, 80, -287, 80, 287, -80, 287)
+
+[node name="Corridor_Archives_Sanctuary" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=981823126]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Archives_Sanctuary" unique_id=778144575]
+z_index = -6
+position = Vector2(-1100, -3137.5)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -174.5, 80, -174.5, 80, 174.5, -80, 174.5)
+
+[node name="Segment_1" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Archives_Sanctuary" unique_id=497393220]
+z_index = -6
+position = Vector2(-1375, -3300)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-287, -80, 287, -80, 287, 80, -287, 80)
+
+[node name="Segment_2" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Archives_Sanctuary" unique_id=1369313304]
+z_index = -6
+position = Vector2(-1650, -3387.5)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -99.5, 80, -99.5, 80, 99.5, -80, 99.5)
+
+[node name="Corridor_Laboratory_MainCore" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1018145179]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Laboratory_MainCore" unique_id=1348920363]
+z_index = -6
+position = Vector2(1100, -3137.5)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -174.5, 80, -174.5, 80, 174.5, -80, 174.5)
+
+[node name="Segment_1" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Laboratory_MainCore" unique_id=1969577909]
+z_index = -6
+position = Vector2(1375, -3300)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-287, -80, 287, -80, 287, 80, -287, 80)
+
+[node name="Segment_2" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Laboratory_MainCore" unique_id=1895098058]
+z_index = -6
+position = Vector2(1650, -3387.5)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -99.5, 80, -99.5, 80, 99.5, -80, 99.5)
+
+[node name="Corridor_Sanctuary_MainCore" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=522557167]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Sanctuary_MainCore" unique_id=1810889531]
+z_index = -6
+position = Vector2(0, -3800)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-1662, -80, 1662, -80, 1662, 80, -1662, 80)
+
+[node name="Corridor_Archives_Laboratory" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1952771809]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Archives_Laboratory" unique_id=613301353]
+z_index = -6
+position = Vector2(0, -2700)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-712, -80, 712, -80, 712, 80, -712, 80)
+
+[node name="GeneratedWalls" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=40977891]
+
+[node name="WallCollision" type="StaticBody2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls" unique_id=370442578]
+
+[node name="WallCollision_0" type="CollisionPolygon2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1051864882]
+build_mode = 1
+polygon = PackedVector2Array(-1650, -3487, -1570, -3487, -1570, -3380, -1088, -3380, -1088, -3312, -1020, -3312, -1020, -2975, -700, -2975, -700, -2425, -1020, -2425, -1020, -1900, -750, -1900, -750, -1730, -288, -1730, -288, -1662, -220, -1662, -220, -1200, 220, -1200, 220, -1662, 288, -1662, 288, -1730, 700, -1730, 700, -1925, 1020, -1925, 1020, -2425, 700, -2425, 700, -2975, 1020, -2975, 1020, -3312, 1088, -3312, 1088, -3380, 1570, -3380, 1570, -3487, 1650, -3487, 1650, -4125, 2750, -4125, 2750, -3475, 1730, -3475, 1730, -3288, 1662, -3288, 1662, -3220, 1180, -3220, 1180, -2975, 1500, -2975, 1500, -2425, 1180, -2425, 1180, -1925, 1500, -1925, 1500, -1730, 1850, -1730, 1850, -1900, 2550, -1900, 2550, -1400, 1850, -1400, 1850, -1570, 1500, -1570, 1500, -1375, 700, -1375, 700, -1570, 380, -1570, 380, -1200, 500, -1200, 500, -600, 80, -600, 80, -200, 350, -200, 350, 200, -350, 200, -350, -200, -80, -200, -80, -600, -500, -600, -500, -1200, -380, -1200, -380, -1570, -750, -1570, -750, -1400, -1450, -1400, -1450, -1570, -1850, -1570, -1850, -1400, -2550, -1400, -2550, -1900, -2280, -1900, -2280, -2450, -2550, -2450, -2550, -2950, -1850, -2950, -1850, -2450, -2120, -2450, -2120, -1900, -1850, -1900, -1850, -1730, -1450, -1730, -1450, -1900, -1180, -1900, -1180, -2425, -1500, -2425, -1500, -2975, -1180, -2975, -1180, -3220, -1662, -3220, -1662, -3288, -1730, -3288, -1730, -3475, -2750, -3475, -2750, -4125, -1650, -4125)
+
+[node name="WallCollision_1" type="CollisionPolygon2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=783375371]
+build_mode = 1
+polygon = PackedVector2Array(-1662, -3880, 1662, -3880, 1662, -3720, -1662, -3720)
+
+[node name="WallCollision_2" type="CollisionPolygon2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1958709022]
+build_mode = 1
+polygon = PackedVector2Array(-712, -2780, 712, -2780, 712, -2620, -712, -2620)
+
+[node name="WallVisuals" type="Node2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls" unique_id=940670574]
+
+[node name="WallLine_0" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=763130905]
+z_index = -4
+points = PackedVector2Array(-1650, -3487, -1570, -3487, -1570, -3380, -1088, -3380, -1088, -3312, -1020, -3312, -1020, -2975, -700, -2975, -700, -2425, -1020, -2425, -1020, -1900, -750, -1900, -750, -1730, -288, -1730, -288, -1662, -220, -1662, -220, -1200, 220, -1200, 220, -1662, 288, -1662, 288, -1730, 700, -1730, 700, -1925, 1020, -1925, 1020, -2425, 700, -2425, 700, -2975, 1020, -2975, 1020, -3312, 1088, -3312, 1088, -3380, 1570, -3380, 1570, -3487, 1650, -3487, 1650, -4125, 2750, -4125, 2750, -3475, 1730, -3475, 1730, -3288, 1662, -3288, 1662, -3220, 1180, -3220, 1180, -2975, 1500, -2975, 1500, -2425, 1180, -2425, 1180, -1925, 1500, -1925, 1500, -1730, 1850, -1730, 1850, -1900, 2550, -1900, 2550, -1400, 1850, -1400, 1850, -1570, 1500, -1570, 1500, -1375, 700, -1375, 700, -1570, 380, -1570, 380, -1200, 500, -1200, 500, -600, 80, -600, 80, -200, 350, -200, 350, 200, -350, 200, -350, -200, -80, -200, -80, -600, -500, -600, -500, -1200, -380, -1200, -380, -1570, -750, -1570, -750, -1400, -1450, -1400, -1450, -1570, -1850, -1570, -1850, -1400, -2550, -1400, -2550, -1900, -2280, -1900, -2280, -2450, -2550, -2450, -2550, -2950, -1850, -2950, -1850, -2450, -2120, -2450, -2120, -1900, -1850, -1900, -1850, -1730, -1450, -1730, -1450, -1900, -1180, -1900, -1180, -2425, -1500, -2425, -1500, -2975, -1180, -2975, -1180, -3220, -1662, -3220, -1662, -3288, -1730, -3288, -1730, -3475, -2750, -3475, -2750, -4125, -1650, -4125)
+closed = true
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_1" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=944139833]
+z_index = -4
+points = PackedVector2Array(-1662, -3880, 1662, -3880, 1662, -3720, -1662, -3720)
+closed = true
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_2" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=18499595]
+z_index = -4
+points = PackedVector2Array(-712, -2780, 712, -2780, 712, -2620, -712, -2620)
+closed = true
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="Doors" type="Node2D" parent="UndergroundRoot" unique_id=557246088]
+
+[node name="Door_01" type="Area2D" parent="UndergroundRoot/Doors" unique_id=1434545887]
+position = Vector2(700, -1650)
+script = ExtResource("9_choun")
+
+[node name="HackManager" type="Node" parent="." unique_id=830842068]
+script = ExtResource("9_85g3d")

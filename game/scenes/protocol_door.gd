@@ -3,8 +3,8 @@ extends Area2D
 
 @export var interaction_distance: float = 200.0
 
-@export var underground_half_width: float = 500.0
-@export var underground_half_height: float = 350.0
+@export var underground_half_width: float = 3200.0
+@export var underground_half_height: float = 4500.0
 
 @export var interaction_label_width: float = 200.0
 @export var interaction_label_height: float = 35.0
