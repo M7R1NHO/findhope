@@ -396,6 +396,21 @@ func on_hack_success():
 		HackAction.CLOSE:
 			close_door()
 
+# =========================================================
+# HACK CANCELADO
+# =========================================================
+
+func on_hack_cancelled():
+	hack_in_progress = false
+
+	if (
+		player_nearby
+		and not is_open
+		and interaction_label != null
+	):
+		interaction_label.show()
+
+
 
 # =========================================================
 # ABRIR

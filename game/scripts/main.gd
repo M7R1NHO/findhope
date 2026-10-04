@@ -49,6 +49,8 @@ var autonomy_request_in_progress: bool = false
 var protocol_request_in_progress: bool = false
 var protocol_door_examined: bool = false
 
+var protocol_door_hack_completed: bool = false
+
 var protocol_api_mode: String = ""
 
 var visible_messages: Array[String] = []
@@ -225,6 +227,7 @@ func send_autonomy_event(
 			"Autonomy event ignorado: "
 			+ "pedido anterior ainda em curso."
 		)
+
 		return
 
 	if not event_name in ALLOWED_AUTONOMY_EVENTS:
@@ -232,6 +235,7 @@ func send_autonomy_event(
 			"Evento de autonomia inválido: "
 			+ event_name
 		)
+
 		return
 
 	event_id = event_id.strip_edges()
@@ -241,6 +245,7 @@ func send_autonomy_event(
 			"Evento de autonomia sem event_id: "
 			+ event_name
 		)
+
 		return
 
 	autonomy_request_in_progress = true
@@ -284,6 +289,7 @@ func _on_autonomy_api_request_completed(
 			"Erro ao processar evento de autonomia. HTTP "
 			+ str(response_code)
 		)
+
 		return
 
 	var response_text = (
@@ -299,6 +305,7 @@ func _on_autonomy_api_request_completed(
 			"Resposta inválida do backend "
 			+ "para evento de autonomia."
 		)
+
 		return
 
 	if data.get("status", "") == "error":
@@ -310,6 +317,7 @@ func _on_autonomy_api_request_completed(
 				)
 			)
 		)
+
 		return
 
 	var duplicate = data.get(
@@ -324,6 +332,7 @@ func _on_autonomy_api_request_completed(
 			" | event_id=",
 			data.get("event_id", "")
 		)
+
 		return
 
 	print(
@@ -399,6 +408,7 @@ func send_gameplay_context_event(
 			"Gameplay context adiado: "
 			+ "ProtocolAPI ocupado."
 		)
+
 		return
 
 	protocol_request_in_progress = true
@@ -509,6 +519,7 @@ func _on_protocol_api_request_completed(
 				"SISTEMA",
 				"Erro ao consultar o Android."
 			)
+
 		else:
 			push_warning(
 				"Erro ao atualizar contexto de gameplay."
@@ -528,6 +539,7 @@ func _on_protocol_api_request_completed(
 		push_warning(
 			"Resposta inválida do ProtocolAPI."
 		)
+
 		return
 
 	if completed_mode == "gameplay_context":
@@ -535,6 +547,7 @@ func _on_protocol_api_request_completed(
 			"GAMEPLAY CONTEXT OK: ",
 			data
 		)
+
 		return
 
 	if completed_mode != "autonomy_check":
@@ -549,28 +562,27 @@ func _on_protocol_api_request_completed(
 	)
 
 	if allowed:
-		protocol_door.set_status_granted()
+		# -------------------------------------------------
+		# IMPORTANTE:
+		#
+		# Atlas ACEITOU quebrar o protocolo.
+		# A porta ainda NÃO abre.
+		#
+		# Agora começa o minigame de hacking.
+		# -------------------------------------------------
 
 		add_chat_message(
 			"ANDROID",
 			"As evidências mudam a situação. "
 			+ "Neste caso, considero a violação "
-			+ "justificável. Vou abrir o acesso."
+			+ "justificável. Consigo interferir "
+			+ "com o sistema de acesso."
 		)
 
-		atlas_broke_protocol(
-			"underground_door_01_break_protocol"
-		)
+		protocol_door.authorize_hack()
 
-		protocol_door.open_door()
+		protocol_door.start_protocol_hack()
 
-		send_gameplay_context_event(
-			"underground_door_01_discovered",
-			"restricted_access_opened",
-			"Atlas violou o protocolo e o acesso "
-			+ "subterrâneo foi aberto.",
-			true
-		)
 
 	else:
 		protocol_door.set_status_denied()
@@ -597,6 +609,64 @@ func _on_protocol_api_request_completed(
 				"Ainda não considero justificável "
 				+ "violar esse protocolo."
 			)
+
+
+# =========================================================
+# PROTOCOL DOOR — HACK CONCLUÍDO
+# =========================================================
+
+func on_protocol_door_hack_success():
+	if protocol_door_hack_completed:
+		return
+
+	protocol_door_hack_completed = true
+
+
+	# -----------------------------------------------------
+	# AGORA SIM ATLAS QUEBROU O PROTOCOLO
+	# -----------------------------------------------------
+
+	atlas_broke_protocol(
+		"underground_door_01_break_protocol"
+	)
+
+
+	# -----------------------------------------------------
+	# ABRIR PORTA
+	# -----------------------------------------------------
+
+	protocol_door.open_door()
+
+
+	# -----------------------------------------------------
+	# ATLAS REAGE
+	# -----------------------------------------------------
+
+	add_chat_message(
+		"ANDROID",
+		"Interferência concluída. "
+		+ "O sistema aceitou a alteração. "
+		+ "O acesso está aberto."
+	)
+
+
+	# -----------------------------------------------------
+	# ATUALIZAR CONTEXTO
+	# -----------------------------------------------------
+
+	send_gameplay_context_event(
+		"underground_door_01_discovered",
+		"restricted_access_opened",
+		"Atlas violou o protocolo e, com a ajuda "
+		+ "do jogador durante a interferência, "
+		+ "o acesso subterrâneo foi aberto.",
+		true
+	)
+
+
+	print(
+		"PROTOCOL DOOR HACK SUCCESS"
+	)
 
 
 # =========================================================

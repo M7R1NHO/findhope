@@ -24,8 +24,16 @@ var atlas: CharacterBody2D
 
 var underground_spawn: Node2D
 
+var hack_manager: Node = null
+
+
 var is_open: bool = false
+
 var entered_underground: bool = false
+
+var hack_authorized: bool = false
+
+var hack_in_progress: bool = false
 
 
 func _ready():
@@ -42,6 +50,15 @@ func _ready():
 	underground_spawn = main.get_node_or_null(
 		"UndergroundRoot/UndergroundSpawn"
 	)
+
+	hack_manager = main.get_node_or_null(
+		"HackManager"
+	)
+
+	if hack_manager == null:
+		push_warning(
+			"ProtocolDoor não encontrou HackManager."
+		)
 
 	setup_interaction_label()
 
@@ -95,6 +112,10 @@ func _process(_delta):
 		interaction_label.visible = false
 		return
 
+	if hack_in_progress:
+		interaction_label.visible = false
+		return
+
 	var interaction_position = global_position
 
 	if door_visual != null:
@@ -117,6 +138,9 @@ func _process(_delta):
 	if is_open:
 		interaction_label.text = "[E] ENTRAR"
 
+	elif hack_authorized:
+		interaction_label.text = "[E] ACESSAR"
+
 	else:
 		interaction_label.text = "[E] INTERAGIR"
 
@@ -131,6 +155,12 @@ func examine():
 
 	if is_open:
 		enter_underground()
+		return
+
+	# Atlas já aceitou quebrar o protocolo.
+	# Não precisamos consultar o backend novamente.
+	if hack_authorized:
+		start_protocol_hack()
 		return
 
 	var main = get_parent()
@@ -160,9 +190,129 @@ func set_status_denied():
 	terminal_state.text = "DENIED"
 
 
+func set_status_hack_ready():
+	status_label.text = "INTERFERÊNCIA DISPONÍVEL"
+	terminal_state.text = "READY"
+
+
+func set_status_hacking():
+	status_label.text = "INTERFERINDO NO SISTEMA"
+	terminal_state.text = "HACKING"
+
+
 func set_status_granted():
 	status_label.text = "ACESSO LIBERADO"
 	terminal_state.text = "GRANTED"
+
+
+# =========================================================
+# AUTORIZAR HACK
+# =========================================================
+
+func authorize_hack():
+	if is_open:
+		return
+
+	hack_authorized = true
+
+	set_status_hack_ready()
+
+	interaction_label.text = "[E] ACESSAR"
+
+	print(
+		"PROTOCOL DOOR HACK AUTHORIZED"
+	)
+
+
+# =========================================================
+# COMEÇAR HACK
+# =========================================================
+
+func start_protocol_hack():
+	if is_open:
+		return
+
+	if not hack_authorized:
+		return
+
+	if hack_in_progress:
+		return
+
+
+	if hack_manager == null:
+		var main = get_parent()
+
+		hack_manager = main.get_node_or_null(
+			"HackManager"
+		)
+
+
+	if hack_manager == null:
+		push_warning(
+			"Não foi possível iniciar o hack: "
+			+ "HackManager não encontrado."
+		)
+
+		set_status_hack_ready()
+
+		return
+
+
+	hack_in_progress = true
+
+	set_status_hacking()
+
+	interaction_label.visible = false
+
+
+	print(
+		"PROTOCOL DOOR HACK STARTED"
+	)
+
+
+	hack_manager.start_hack(
+		self
+	)
+
+
+# =========================================================
+# HACK CONCLUÍDO
+#
+# HackManager chama esta função quando o jogador
+# termina um dos 9 minigames.
+# =========================================================
+
+func on_hack_success():
+	hack_in_progress = false
+
+	var main = get_parent()
+
+	if main.has_method(
+		"on_protocol_door_hack_success"
+	):
+		main.on_protocol_door_hack_success()
+
+
+# =========================================================
+# HACK CANCELADO
+# =========================================================
+
+func on_hack_cancelled():
+	hack_in_progress = false
+
+	if is_open:
+		return
+
+	if hack_authorized:
+		set_status_hack_ready()
+
+	else:
+		set_status_restricted()
+
+
+	print(
+		"PROTOCOL DOOR HACK CANCELLED"
+	)
 
 
 # =========================================================
@@ -174,6 +324,8 @@ func open_door():
 		return
 
 	is_open = true
+
+	hack_in_progress = false
 
 	set_status_granted()
 
