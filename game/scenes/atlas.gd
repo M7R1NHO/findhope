@@ -4,7 +4,7 @@ extends CharacterBody2D
 signal sensor_message(message: String)
 
 
-@export var speed: float = 140.0
+@export var speed: float = 180.0
 @export var follow_start_distance: float = 180.0
 @export var follow_stop_distance: float = 110.0
 @export var sensor_range: float = 250.0

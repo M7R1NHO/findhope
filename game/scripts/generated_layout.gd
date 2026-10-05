@@ -40,6 +40,10 @@ var _gerar_layout_agora: bool = false
 @export var wall_width: float = 24.0
 
 
+const FORCED_OPENING_MARGIN: float = 18.0
+const AXIS_TOLERANCE: float = 1.0
+
+
 @export var room_color: Color = Color(
 	0.18,
 	0.22,
@@ -241,6 +245,59 @@ var corridors := {
 
 
 # =========================================================
+# ABERTURAS FORÇADAS
+#
+# Estes são exatamente os quatro pontos que estavam
+# a receber uma "tampa" de colisão.
+# =========================================================
+
+func get_forced_openings() -> Array:
+	var opening_size: float = (
+		corridor_width
+		+ FORCED_OPENING_MARGIN * 2.0
+	)
+
+
+	return [
+		{
+			"position": Vector2(
+				-700,
+				-2700
+			),
+			"orientation": "vertical",
+			"size": opening_size
+		},
+
+		{
+			"position": Vector2(
+				700,
+				-2700
+			),
+			"orientation": "vertical",
+			"size": opening_size
+		},
+
+		{
+			"position": Vector2(
+				-1650,
+				-3800
+			),
+			"orientation": "vertical",
+			"size": opening_size
+		},
+
+		{
+			"position": Vector2(
+				1650,
+				-3800
+			),
+			"orientation": "vertical",
+			"size": opening_size
+		}
+	]
+
+
+# =========================================================
 # REBUILD
 # =========================================================
 
@@ -248,26 +305,38 @@ func rebuild_layout():
 	if not is_inside_tree():
 		return
 
+
 	clear_generated_layout()
 
+
 	var walkable_polygons: Array = []
+
 
 	create_all_rooms(
 		walkable_polygons
 	)
 
+
 	create_all_corridors(
 		walkable_polygons
 	)
+
 
 	create_generated_walls(
 		walkable_polygons
 	)
 
+
 	print("")
-	print("======================================")
-	print("UNDERGROUND LAYOUT + WALLS GENERATED")
-	print("======================================")
+	print(
+		"======================================"
+	)
+	print(
+		"UNDERGROUND LAYOUT + WALLS GENERATED"
+	)
+	print(
+		"======================================"
+	)
 
 
 # =========================================================
@@ -276,6 +345,7 @@ func rebuild_layout():
 
 func clear_generated_layout():
 	var children = get_children()
+
 
 	for child in children:
 		remove_child(
@@ -295,9 +365,11 @@ func set_editor_owner(
 	if not Engine.is_editor_hint():
 		return
 
+
 	var scene_root = (
 		get_tree().edited_scene_root
 	)
+
 
 	if scene_root != null:
 		node.owner = scene_root
@@ -315,6 +387,7 @@ func create_all_rooms(
 			room_id
 		]
 
+
 		create_room(
 			room_id,
 			data,
@@ -329,12 +402,18 @@ func create_room(
 ):
 	var room_root = Node2D.new()
 
+
 	room_root.name = room_id
-	room_root.position = data["position"]
+
+	room_root.position = data[
+		"position"
+	]
+
 
 	add_child(
 		room_root
 	)
+
 
 	set_editor_owner(
 		room_root
@@ -347,7 +426,9 @@ func create_room(
 
 	var border = Polygon2D.new()
 
+
 	border.name = "Border"
+
 
 	border.polygon = rectangle_polygon(
 		data["size"]
@@ -357,12 +438,16 @@ func create_room(
 		)
 	)
 
+
 	border.color = border_color
+
 	border.z_index = -8
+
 
 	room_root.add_child(
 		border
 	)
+
 
 	set_editor_owner(
 		border
@@ -375,11 +460,16 @@ func create_room(
 
 	var floor = Polygon2D.new()
 
+
 	floor.name = "Floor"
 
+
 	floor.polygon = rectangle_polygon(
-		data["size"]
+		data[
+			"size"
+		]
 	)
+
 
 	if data.get(
 		"important",
@@ -390,11 +480,14 @@ func create_room(
 	else:
 		floor.color = room_color
 
+
 	floor.z_index = -7
+
 
 	room_root.add_child(
 		floor
 	)
+
 
 	set_editor_owner(
 		floor
@@ -407,40 +500,52 @@ func create_room(
 
 	var label = Label.new()
 
+
 	label.name = "RoomName"
-	label.text = data["name"]
+
+	label.text = data[
+		"name"
+	]
+
 
 	label.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
 
+
 	label.vertical_alignment = (
 		VERTICAL_ALIGNMENT_CENTER
 	)
+
 
 	label.add_theme_font_size_override(
 		"font_size",
 		24
 	)
 
+
 	label.add_theme_color_override(
 		"font_color",
 		label_color
 	)
+
 
 	label.position = Vector2(
 		-data["size"].x / 2.0,
 		-30.0
 	)
 
+
 	label.size = Vector2(
 		data["size"].x,
 		60.0
 	)
 
+
 	room_root.add_child(
 		label
 	)
+
 
 	set_editor_owner(
 		label
@@ -448,13 +553,17 @@ func create_room(
 
 
 	# -----------------------------------------------------
-	# POLÍGONO CAMINHÁVEL
+	# CAMINHÁVEL
 	# -----------------------------------------------------
 
 	walkable_polygons.append(
 		rectangle_polygon_at(
-			data["position"],
-			data["size"]
+			data[
+				"position"
+			],
+			data[
+				"size"
+			]
 		)
 	)
 
@@ -469,7 +578,9 @@ func create_all_corridors(
 	for corridor_name in corridors.keys():
 		create_corridor_path(
 			corridor_name,
-			corridors[corridor_name],
+			corridors[
+				corridor_name
+			],
 			walkable_polygons
 		)
 
@@ -481,21 +592,26 @@ func create_corridor_path(
 ):
 	var corridor_root = Node2D.new()
 
+
 	corridor_root.name = (
 		"Corridor_"
 		+ corridor_name
 	)
 
+
 	add_child(
 		corridor_root
 	)
+
 
 	set_editor_owner(
 		corridor_root
 	)
 
+
 	if points.size() < 2:
 		return
+
 
 	for index in range(
 		points.size() - 1
@@ -520,16 +636,20 @@ func create_corridor_segment(
 		end - start
 	)
 
+
 	var length = (
 		direction.length()
 	)
 
+
 	if length <= 0.0:
 		return
+
 
 	var center = (
 		start + end
 	) / 2.0
+
 
 	var segment_size: Vector2
 
@@ -562,23 +682,30 @@ func create_corridor_segment(
 
 	var segment = Polygon2D.new()
 
+
 	segment.name = (
 		"Segment_"
 		+ str(index)
 	)
 
+
 	segment.position = center
+
 
 	segment.polygon = rectangle_polygon(
 		segment_size
 	)
 
+
 	segment.color = corridor_color
+
 	segment.z_index = -6
+
 
 	parent.add_child(
 		segment
 	)
+
 
 	set_editor_owner(
 		segment
@@ -586,7 +713,7 @@ func create_corridor_segment(
 
 
 	# -----------------------------------------------------
-	# ÁREA CAMINHÁVEL DO CORREDOR
+	# ÁREA CAMINHÁVEL
 	# -----------------------------------------------------
 
 	walkable_polygons.append(
@@ -607,6 +734,7 @@ func create_generated_walls(
 	if walkable_polygons.is_empty():
 		return
 
+
 	var merged_polygons = (
 		merge_walkable_polygons(
 			walkable_polygons
@@ -616,11 +744,14 @@ func create_generated_walls(
 
 	var walls_root = Node2D.new()
 
+
 	walls_root.name = "GeneratedWalls"
+
 
 	add_child(
 		walls_root
 	)
+
 
 	set_editor_owner(
 		walls_root
@@ -628,16 +759,19 @@ func create_generated_walls(
 
 
 	# -----------------------------------------------------
-	# COLISÃO
+	# COLLISION
 	# -----------------------------------------------------
 
 	var wall_body = StaticBody2D.new()
 
+
 	wall_body.name = "WallCollision"
+
 
 	walls_root.add_child(
 		wall_body
 	)
+
 
 	set_editor_owner(
 		wall_body
@@ -650,89 +784,506 @@ func create_generated_walls(
 
 	var visuals = Node2D.new()
 
+
 	visuals.name = "WallVisuals"
+
 
 	walls_root.add_child(
 		visuals
 	)
+
 
 	set_editor_owner(
 		visuals
 	)
 
 
-	for index in range(
-		merged_polygons.size()
-	):
-		var polygon: PackedVector2Array = (
-			merged_polygons[index]
-		)
+	var wall_index: int = 0
 
 
-		# =================================================
-		# COLLISION POLYGON
-		# =================================================
+	for polygon in merged_polygons:
 
-		var collision = (
-			CollisionPolygon2D.new()
-		)
-
-		collision.name = (
-			"WallCollision_"
-			+ str(index)
-		)
-
-		collision.build_mode = (
-			CollisionPolygon2D.BUILD_SEGMENTS
-		)
-
-		collision.polygon = polygon
-
-		wall_body.add_child(
-			collision
-		)
-
-		set_editor_owner(
-			collision
-		)
+		if polygon.size() < 2:
+			continue
 
 
-		# =================================================
-		# LINHA VISUAL
-		# =================================================
+		for point_index in range(
+			polygon.size()
+		):
 
-		var line = Line2D.new()
+			var start: Vector2 = (
+				polygon[
+					point_index
+				]
+			)
 
-		line.name = (
-			"WallLine_"
-			+ str(index)
-		)
 
-		line.points = polygon
+			var next_index = (
+				(point_index + 1)
+				% polygon.size()
+			)
 
-		line.closed = true
 
-		line.width = wall_width
+			var end: Vector2 = (
+				polygon[
+					next_index
+				]
+			)
 
-		line.default_color = (
-			wall_color
-		)
 
-		line.antialiased = true
+			var pieces = (
+				cut_wall_segment_for_openings(
+					start,
+					end
+				)
+			)
 
-		line.z_index = -4
 
-		visuals.add_child(
-			line
-		)
+			for piece in pieces:
 
-		set_editor_owner(
-			line
-		)
+				if piece.size() < 2:
+					continue
+
+
+				var piece_start: Vector2 = (
+					piece[0]
+				)
+
+
+				var piece_end: Vector2 = (
+					piece[1]
+				)
+
+
+				if (
+					piece_start.distance_to(
+						piece_end
+					)
+					< 0.5
+				):
+					continue
+
+
+				create_wall_collision_segment(
+					wall_body,
+					piece_start,
+					piece_end,
+					wall_index
+				)
+
+
+				create_wall_visual_segment(
+					visuals,
+					piece_start,
+					piece_end,
+					wall_index
+				)
+
+
+				wall_index += 1
+
+
+	print(
+		"GENERATED WALL SEGMENTS: ",
+		wall_index
+	)
+
+
+	print(
+		"FORCED OPENINGS CREATED: 4"
+	)
 
 
 # =========================================================
-# UNIR TODA A ÁREA CAMINHÁVEL
+# CORTAR ABERTURAS NAS PAREDES
+# =========================================================
+
+func cut_wall_segment_for_openings(
+	start: Vector2,
+	end: Vector2
+) -> Array:
+
+	# -----------------------------------------------------
+	# PAREDE VERTICAL
+	# -----------------------------------------------------
+
+	if abs(
+		start.x - end.x
+	) <= AXIS_TOLERANCE:
+
+		var x: float = (
+			(start.x + end.x)
+			/ 2.0
+		)
+
+
+		var low: float = min(
+			start.y,
+			end.y
+		)
+
+
+		var high: float = max(
+			start.y,
+			end.y
+		)
+
+
+		var intervals: Array = [
+			Vector2(
+				low,
+				high
+			)
+		]
+
+
+		for opening in get_forced_openings():
+
+			if str(
+				opening[
+					"orientation"
+				]
+			) != "vertical":
+				continue
+
+
+			var center: Vector2 = (
+				opening[
+					"position"
+				]
+			)
+
+
+			if abs(
+				x - center.x
+			) > AXIS_TOLERANCE:
+				continue
+
+
+			var opening_size: float = float(
+				opening[
+					"size"
+				]
+			)
+
+
+			var cut_low: float = (
+				center.y
+				- opening_size / 2.0
+			)
+
+
+			var cut_high: float = (
+				center.y
+				+ opening_size / 2.0
+			)
+
+
+			intervals = subtract_interval(
+				intervals,
+				cut_low,
+				cut_high
+			)
+
+
+		var result: Array = []
+
+
+		for interval in intervals:
+
+			result.append([
+				Vector2(
+					x,
+					interval.x
+				),
+
+				Vector2(
+					x,
+					interval.y
+				)
+			])
+
+
+		return result
+
+
+	# -----------------------------------------------------
+	# PAREDE HORIZONTAL
+	# -----------------------------------------------------
+
+	if abs(
+		start.y - end.y
+	) <= AXIS_TOLERANCE:
+
+		var y: float = (
+			(start.y + end.y)
+			/ 2.0
+		)
+
+
+		var low: float = min(
+			start.x,
+			end.x
+		)
+
+
+		var high: float = max(
+			start.x,
+			end.x
+		)
+
+
+		var intervals: Array = [
+			Vector2(
+				low,
+				high
+			)
+		]
+
+
+		for opening in get_forced_openings():
+
+			if str(
+				opening[
+					"orientation"
+				]
+			) != "horizontal":
+				continue
+
+
+			var center: Vector2 = (
+				opening[
+					"position"
+				]
+			)
+
+
+			if abs(
+				y - center.y
+			) > AXIS_TOLERANCE:
+				continue
+
+
+			var opening_size: float = float(
+				opening[
+					"size"
+				]
+			)
+
+
+			var cut_low: float = (
+				center.x
+				- opening_size / 2.0
+			)
+
+
+			var cut_high: float = (
+				center.x
+				+ opening_size / 2.0
+			)
+
+
+			intervals = subtract_interval(
+				intervals,
+				cut_low,
+				cut_high
+			)
+
+
+		var result: Array = []
+
+
+		for interval in intervals:
+
+			result.append([
+				Vector2(
+					interval.x,
+					y
+				),
+
+				Vector2(
+					interval.y,
+					y
+				)
+			])
+
+
+		return result
+
+
+	# -----------------------------------------------------
+	# FALLBACK
+	# -----------------------------------------------------
+
+	return [
+		[
+			start,
+			end
+		]
+	]
+
+
+# =========================================================
+# SUBTRAIR INTERVALO
+# =========================================================
+
+func subtract_interval(
+	intervals: Array,
+	cut_low: float,
+	cut_high: float
+) -> Array:
+
+	var result: Array = []
+
+
+	for interval in intervals:
+
+		var interval_low: float = (
+			interval.x
+		)
+
+
+		var interval_high: float = (
+			interval.y
+		)
+
+
+		# Sem intersecção.
+		if (
+			cut_high <= interval_low
+			or cut_low >= interval_high
+		):
+			result.append(
+				interval
+			)
+
+			continue
+
+
+		# Parte antes da abertura.
+		if cut_low > interval_low:
+
+			result.append(
+				Vector2(
+					interval_low,
+					min(
+						cut_low,
+						interval_high
+					)
+				)
+			)
+
+
+		# Parte depois da abertura.
+		if cut_high < interval_high:
+
+			result.append(
+				Vector2(
+					max(
+						cut_high,
+						interval_low
+					),
+					interval_high
+				)
+			)
+
+
+	return result
+
+
+# =========================================================
+# SEGMENTO DE COLLISION
+# =========================================================
+
+func create_wall_collision_segment(
+	wall_body: StaticBody2D,
+	start: Vector2,
+	end: Vector2,
+	index: int
+):
+
+	var collision = CollisionShape2D.new()
+
+
+	collision.name = (
+		"WallCollision_"
+		+ str(index)
+	)
+
+
+	var shape = SegmentShape2D.new()
+
+
+	shape.a = start
+
+	shape.b = end
+
+
+	collision.shape = shape
+
+
+	wall_body.add_child(
+		collision
+	)
+
+
+	set_editor_owner(
+		collision
+	)
+
+
+# =========================================================
+# SEGMENTO VISUAL
+# =========================================================
+
+func create_wall_visual_segment(
+	visuals: Node2D,
+	start: Vector2,
+	end: Vector2,
+	index: int
+):
+
+	var line = Line2D.new()
+
+
+	line.name = (
+		"WallLine_"
+		+ str(index)
+	)
+
+
+	line.points = PackedVector2Array([
+		start,
+		end
+	])
+
+
+	line.width = wall_width
+
+
+	line.default_color = (
+		wall_color
+	)
+
+
+	line.antialiased = true
+
+
+	line.z_index = -4
+
+
+	visuals.add_child(
+		line
+	)
+
+
+	set_editor_owner(
+		line
+	)
+
+
+# =========================================================
+# UNIR ÁREA CAMINHÁVEL
 # =========================================================
 
 func merge_walkable_polygons(
@@ -741,7 +1292,9 @@ func merge_walkable_polygons(
 
 	var merged: Array = []
 
+
 	for polygon in source_polygons:
+
 		merged.append(
 			polygon
 		)
@@ -749,14 +1302,19 @@ func merge_walkable_polygons(
 
 	var changed = true
 
+
 	while changed:
+
 		changed = false
 
+
 		var i = 0
+
 
 		while i < merged.size():
 
 			var j = i + 1
+
 
 			while j < merged.size():
 
@@ -767,24 +1325,31 @@ func merge_walkable_polygons(
 					)
 				)
 
-				# Se virou apenas um polígono,
-				# então havia contacto/intersecção.
+
 				if result.size() == 1:
 
-					merged[i] = result[0]
+					merged[i] = (
+						result[0]
+					)
+
 
 					merged.remove_at(
 						j
 					)
 
+
 					changed = true
+
 
 					break
 
+
 				j += 1
+
 
 			if changed:
 				break
+
 
 			i += 1
 
@@ -803,6 +1368,7 @@ func rectangle_polygon(
 	var half = (
 		size / 2.0
 	)
+
 
 	return PackedVector2Array([
 		Vector2(
@@ -828,7 +1394,7 @@ func rectangle_polygon(
 
 
 # =========================================================
-# RETÂNGULO EM POSIÇÃO DO MAPA
+# RETÂNGULO NO MAPA
 # =========================================================
 
 func rectangle_polygon_at(
@@ -842,13 +1408,17 @@ func rectangle_polygon_at(
 		)
 	)
 
+
 	var result = (
 		PackedVector2Array()
 	)
 
+
 	for point in local_polygon:
+
 		result.append(
 			point + center
 		)
+
 
 	return result
