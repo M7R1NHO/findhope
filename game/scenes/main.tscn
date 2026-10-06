@@ -13,7 +13,12 @@
 [ext_resource type="Script" uid="uid://dpt7vlhgx7i2r" path="res://scripts/underground_doors_manager.gd" id="9_ya4ey"]
 [ext_resource type="Script" uid="uid://bmkt2wpnde21k" path="res://scripts/alien_life_discovery.gd" id="11_eb6dy"]
 [ext_resource type="Script" uid="uid://chknd663bnmt5" path="res://scripts/alien_encounter_manager.gd" id="12_trceg"]
+[ext_resource type="Script" uid="uid://c3ljt0bhaiuaq" path="res://scripts/facility_map_terminal.gd" id="13_jkv2x"]
 [ext_resource type="Script" uid="uid://bjbmiamypmerq" path="res://scripts/fight_manager.gd" id="14_a8y0u"]
+[ext_resource type="Script" uid="uid://cknev37ufeh83" path="res://scripts/facility_room_tracker.gd" id="14_jbj1t"]
+[ext_resource type="Script" uid="uid://cyplkmvrwgerx" path="res://scripts/sonic_equipment.gd" id="15_dp3eg"]
+[ext_resource type="Script" uid="uid://bkkk4wvy8wbsx" path="res://scripts/technical_energy_system.gd" id="16_0ld40"]
+[ext_resource type="Script" uid="uid://5p08d08iaggn" path="res://scripts/pause_menu.gd" id="17_muem4"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
 size = Vector2(180, 60)
@@ -2372,8 +2377,26 @@ script = ExtResource("11_eb6dy")
 script = ExtResource("12_trceg")
 base_encounter_chance = 1.0
 
+[node name="FacilityMapTerminal" type="Area2D" parent="UndergroundRoot" unique_id=795860082]
+position = Vector2(0, -1050)
+script = ExtResource("13_jkv2x")
+
+[node name="FacilityRoomTracker" type="Node" parent="UndergroundRoot" unique_id=184428949]
+script = ExtResource("14_jbj1t")
+
+[node name="SonicEquipament" type="Area2D" parent="UndergroundRoot" unique_id=234613210]
+position = Vector2(-1250, -1850)
+script = ExtResource("15_dp3eg")
+
+[node name="TechnicalEnergySystem" type="Node2D" parent="UndergroundRoot" unique_id=442326681]
+script = ExtResource("16_0ld40")
+
 [node name="HackManager" type="Node" parent="." unique_id=830842068]
 script = ExtResource("9_85g3d")
 
 [node name="FightManager" type="Node" parent="." unique_id=624016461]
 script = ExtResource("14_a8y0u")
+
+[node name="PauseMenu" type="Node" parent="." unique_id=2140934688]
+script = ExtResource("17_muem4")
+main_menu_scene_path = "uid://du4rktewgxl5l"

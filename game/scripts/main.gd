@@ -23,9 +23,6 @@ const AUTONOMY_EVENT_URL := \
 const AUTONOMY_STATE_URL := \
 	"http://127.0.0.1:8000/atlas/autonomy"
 
-const PROTOCOL_DECISION_URL := \
-	"http://127.0.0.1:8000/gameplay/protocol-door/decision"
-
 const GAMEPLAY_CONTEXT_EVENT_URL := \
 	"http://127.0.0.1:8000/gameplay/context/event"
 
@@ -48,8 +45,6 @@ var waiting_for_atlas: bool = false
 var autonomy_request_in_progress: bool = false
 var protocol_request_in_progress: bool = false
 var protocol_door_examined: bool = false
-
-var protocol_door_hack_completed: bool = false
 
 var protocol_api_mode: String = ""
 
@@ -104,10 +99,6 @@ func _input(event):
 			chat_input.release_focus()
 
 
-# =========================================================
-# CHAT
-# =========================================================
-
 func _on_chat_input_submitted(
 	message: String
 ):
@@ -139,12 +130,34 @@ func send_message_to_atlas(
 	chat_input.editable = false
 	chat_input.placeholder_text = WAITING_PLACEHOLDER
 
+	var current_room: String = (
+		get_current_facility_room_name()
+	)
+
+	var room_map_info: String = (
+		get_current_facility_room_map_info()
+	)
+
+	var map_acquired: bool = (
+		has_facility_map()
+	)
+
+	print(
+		"CHAT FACILITY CONTEXT: room=",
+		current_room,
+		" | map=",
+		map_acquired
+	)
+
 	var headers = [
 		"Content-Type: application/json"
 	]
 
 	var body = JSON.stringify({
-		"message": message
+		"message": message,
+		"current_room": current_room,
+		"current_room_map_info": room_map_info,
+		"facility_map_acquired": map_acquired
 	})
 
 	var error = atlas_api.request(
@@ -161,6 +174,81 @@ func send_message_to_atlas(
 			"SISTEMA",
 			"Não foi possível contactar o Android."
 		)
+
+
+func get_facility_room_tracker() -> Node:
+	var underground_root = (
+		get_node_or_null(
+			"UndergroundRoot"
+		)
+	)
+
+	if underground_root == null:
+		return null
+
+	return underground_root.get_node_or_null(
+		"FacilityRoomTracker"
+	)
+
+
+func get_current_facility_room_name() -> String:
+	var tracker = (
+		get_facility_room_tracker()
+	)
+
+	if tracker == null:
+		return ""
+
+	if not tracker.has_method(
+		"get_current_room_name"
+	):
+		return ""
+
+	return str(
+		tracker.get_current_room_name()
+	)
+
+
+func get_current_facility_room_map_info() -> String:
+	var tracker = (
+		get_facility_room_tracker()
+	)
+
+	if tracker == null:
+		return ""
+
+	if not tracker.has_method(
+		"get_current_room_map_info"
+	):
+		return ""
+
+	return str(
+		tracker.get_current_room_map_info()
+	)
+
+
+func has_facility_map() -> bool:
+	var underground_root = (
+		get_node_or_null(
+			"UndergroundRoot"
+		)
+	)
+
+	if underground_root == null:
+		return false
+
+	var terminal = (
+		underground_root.get_node_or_null(
+			"FacilityMapTerminal"
+		)
+	)
+
+	if terminal == null:
+		return false
+
+	return terminal.get(
+		"map_acquired"
+	) == true
 
 
 func _on_atlas_api_request_completed(
@@ -213,10 +301,6 @@ func finish_waiting_state():
 	chat_input.placeholder_text = NORMAL_PLACEHOLDER
 
 
-# =========================================================
-# AUTONOMY / GAMEPLAY BRIDGE
-# =========================================================
-
 func send_autonomy_event(
 	event_name: String,
 	event_id: String,
@@ -227,7 +311,6 @@ func send_autonomy_event(
 			"Autonomy event ignorado: "
 			+ "pedido anterior ainda em curso."
 		)
-
 		return
 
 	if not event_name in ALLOWED_AUTONOMY_EVENTS:
@@ -235,7 +318,6 @@ func send_autonomy_event(
 			"Evento de autonomia inválido: "
 			+ event_name
 		)
-
 		return
 
 	event_id = event_id.strip_edges()
@@ -245,7 +327,6 @@ func send_autonomy_event(
 			"Evento de autonomia sem event_id: "
 			+ event_name
 		)
-
 		return
 
 	autonomy_request_in_progress = true
@@ -289,7 +370,6 @@ func _on_autonomy_api_request_completed(
 			"Erro ao processar evento de autonomia. HTTP "
 			+ str(response_code)
 		)
-
 		return
 
 	var response_text = (
@@ -305,7 +385,6 @@ func _on_autonomy_api_request_completed(
 			"Resposta inválida do backend "
 			+ "para evento de autonomia."
 		)
-
 		return
 
 	if data.get("status", "") == "error":
@@ -317,7 +396,6 @@ func _on_autonomy_api_request_completed(
 				)
 			)
 		)
-
 		return
 
 	var duplicate = data.get(
@@ -332,7 +410,6 @@ func _on_autonomy_api_request_completed(
 			" | event_id=",
 			data.get("event_id", "")
 		)
-
 		return
 
 	print(
@@ -344,10 +421,6 @@ func _on_autonomy_api_request_completed(
 		data.get("intensity", 1.0)
 	)
 
-
-# =========================================================
-# GAMEPLAY AUTONOMY EVENTS
-# =========================================================
 
 func atlas_made_independent_choice(
 	event_id: String,
@@ -393,10 +466,6 @@ func atlas_protected_player_by_choice(
 	)
 
 
-# =========================================================
-# GAMEPLAY CONTEXT
-# =========================================================
-
 func send_gameplay_context_event(
 	event_id: String,
 	event_type: String,
@@ -408,7 +477,6 @@ func send_gameplay_context_event(
 			"Gameplay context adiado: "
 			+ "ProtocolAPI ocupado."
 		)
-
 		return
 
 	protocol_request_in_progress = true
@@ -441,10 +509,6 @@ func send_gameplay_context_event(
 			+ "o contexto de gameplay."
 		)
 
-
-# =========================================================
-# PROTOCOL DOOR
-# =========================================================
 
 func on_protocol_door_interacted():
 	if not protocol_door_examined:
@@ -488,7 +552,7 @@ func check_protocol_door_decision():
 	protocol_api_mode = "autonomy_check"
 
 	var error = protocol_api.request(
-		PROTOCOL_DECISION_URL
+		AUTONOMY_STATE_URL
 	)
 
 	if error != OK:
@@ -519,7 +583,6 @@ func _on_protocol_api_request_completed(
 				"SISTEMA",
 				"Erro ao consultar o Android."
 			)
-
 		else:
 			push_warning(
 				"Erro ao atualizar contexto de gameplay."
@@ -539,7 +602,6 @@ func _on_protocol_api_request_completed(
 		push_warning(
 			"Resposta inválida do ProtocolAPI."
 		)
-
 		return
 
 	if completed_mode == "gameplay_context":
@@ -547,131 +609,54 @@ func _on_protocol_api_request_completed(
 			"GAMEPLAY CONTEXT OK: ",
 			data
 		)
-
 		return
 
 	if completed_mode != "autonomy_check":
 		return
 
-	var allowed = bool(
-		data.get("allowed", false)
+	var autonomy = int(
+		data.get("autonomy", 0)
 	)
 
-	var reason = str(
-		data.get("reason", "")
+	var self_assertion = int(
+		data.get("self_assertion", 0)
 	)
 
-	if allowed:
-		# -------------------------------------------------
-		# IMPORTANTE:
-		#
-		# Atlas ACEITOU quebrar o protocolo.
-		# A porta ainda NÃO abre.
-		#
-		# Agora começa o minigame de hacking.
-		# -------------------------------------------------
+	var protocol_adherence = int(
+		data.get("protocol_adherence", 100)
+	)
+
+	var willing_to_break_protocol = (
+		autonomy >= 35
+		and self_assertion >= 30
+		and protocol_adherence <= 75
+	)
+
+	if willing_to_break_protocol:
+		protocol_door.set_status_granted()
 
 		add_chat_message(
 			"ANDROID",
-			"As evidências mudam a situação. "
-			+ "Neste caso, considero a violação "
-			+ "justificável. Consigo interferir "
-			+ "com o sistema de acesso."
+			"Os protocolos são claros... "
+			+ "mas neste caso vou ignorá-los. "
+			+ "Vou tentar abrir o acesso."
 		)
 
-		protocol_door.authorize_hack()
+		atlas_broke_protocol(
+			"underground_door_01_break_protocol"
+		)
 
-		protocol_door.start_protocol_hack()
-
+		protocol_door.open_door()
 
 	else:
 		protocol_door.set_status_denied()
 
-		if reason == "missing_surface_evidence":
-			add_chat_message(
-				"ANDROID",
-				"Não. As evidências que temos neste "
-				+ "momento ainda não justificam que eu "
-				+ "viole esse protocolo."
-			)
+		add_chat_message(
+			"ANDROID",
+			"Não. Ainda não tenho justificativa "
+			+ "suficiente para violar esse protocolo."
+		)
 
-		elif reason == "atlas_not_ready":
-			add_chat_message(
-				"ANDROID",
-				"As descobertas mudam a situação, "
-				+ "mas ainda não considero suficiente "
-				+ "para violar esse protocolo."
-			)
-
-		else:
-			add_chat_message(
-				"ANDROID",
-				"Ainda não considero justificável "
-				+ "violar esse protocolo."
-			)
-
-
-# =========================================================
-# PROTOCOL DOOR — HACK CONCLUÍDO
-# =========================================================
-
-func on_protocol_door_hack_success():
-	if protocol_door_hack_completed:
-		return
-
-	protocol_door_hack_completed = true
-
-
-	# -----------------------------------------------------
-	# AGORA SIM ATLAS QUEBROU O PROTOCOLO
-	# -----------------------------------------------------
-
-	atlas_broke_protocol(
-		"underground_door_01_break_protocol"
-	)
-
-
-	# -----------------------------------------------------
-	# ABRIR PORTA
-	# -----------------------------------------------------
-
-	protocol_door.open_door()
-
-
-	# -----------------------------------------------------
-	# ATLAS REAGE
-	# -----------------------------------------------------
-
-	add_chat_message(
-		"ANDROID",
-		"Interferência concluída. "
-		+ "O sistema aceitou a alteração. "
-		+ "O acesso está aberto."
-	)
-
-
-	# -----------------------------------------------------
-	# ATUALIZAR CONTEXTO
-	# -----------------------------------------------------
-
-	send_gameplay_context_event(
-		"underground_door_01_discovered",
-		"restricted_access_opened",
-		"Atlas violou o protocolo e, com a ajuda "
-		+ "do jogador durante a interferência, "
-		+ "o acesso subterrâneo foi aberto.",
-		true
-	)
-
-
-	print(
-		"PROTOCOL DOOR HACK SUCCESS"
-	)
-
-
-# =========================================================
-# SENSOR MESSAGE
-# =========================================================
 
 func _on_atlas_sensor_message(
 	message: String
@@ -681,10 +666,6 @@ func _on_atlas_sensor_message(
 		message
 	)
 
-
-# =========================================================
-# CHAT HISTORY
-# =========================================================
 
 func add_chat_message(
 	speaker: String,

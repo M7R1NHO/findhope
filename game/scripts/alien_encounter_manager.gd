@@ -2366,96 +2366,74 @@ func create_threat_choice_ui(
 	title_text: String,
 	description_text: String
 ):
-
 	destroy_encounter_ui()
-
 
 	encounter_layer = CanvasLayer.new()
 
-
 	encounter_layer.layer = 300
-
 
 	encounter_layer.process_mode = (
 		Node.PROCESS_MODE_ALWAYS
 	)
 
-
 	add_child(
 		encounter_layer
 	)
 
-
 	encounter_overlay = ColorRect.new()
-
 
 	encounter_overlay.set_anchors_and_offsets_preset(
 		Control.PRESET_FULL_RECT
 	)
 
-
 	encounter_overlay.color = Color.BLACK
-
 
 	encounter_overlay.mouse_filter = (
 		Control.MOUSE_FILTER_STOP
 	)
 
-
 	encounter_layer.add_child(
 		encounter_overlay
 	)
 
-
 	var center = CenterContainer.new()
-
 
 	center.set_anchors_and_offsets_preset(
 		Control.PRESET_FULL_RECT
 	)
 
-
 	encounter_overlay.add_child(
 		center
 	)
 
-
 	var container = VBoxContainer.new()
-
 
 	container.custom_minimum_size = Vector2(
 		600,
 		350
 	)
 
-
 	container.add_theme_constant_override(
 		"separation",
 		20
 	)
 
-
 	center.add_child(
 		container
 	)
 
-
 	var title = Label.new()
 
-
 	title.text = title_text
-
 
 	title.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
 
-
 	title.add_theme_font_size_override(
 		"font_size",
 		34
 	)
-
 
 	title.add_theme_color_override(
 		"font_color",
@@ -2467,40 +2445,32 @@ func create_threat_choice_ui(
 		)
 	)
 
-
 	container.add_child(
 		title
 	)
 
-
 	var description = Label.new()
-
 
 	description.text = (
 		description_text
 	)
 
-
 	description.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
 
-
 	description.autowrap_mode = (
 		TextServer.AUTOWRAP_WORD_SMART
 	)
-
 
 	description.add_theme_font_size_override(
 		"font_size",
 		20
 	)
 
-
 	container.add_child(
 		description
 	)
-
 
 	create_choice_button(
 		container,
@@ -2508,26 +2478,41 @@ func create_threat_choice_ui(
 		"run"
 	)
 
-
-	create_choice_button(
-		container,
-		"FIGHT",
-		"fight"
-	)
-
+	if (
+		fight_manager != null
+		and fight_manager.has_method(
+			"is_combat_unlocked"
+		)
+		and fight_manager.is_combat_unlocked()
+	):
+		create_choice_button(
+			container,
+			"FIGHT",
+			"fight"
+		)
 
 	encounter_status = Label.new()
 
+	if (
+		fight_manager != null
+		and fight_manager.has_method(
+			"is_combat_unlocked"
+		)
+		and fight_manager.is_combat_unlocked()
+	):
+		encounter_status.text = (
+			"Escolha uma ação."
+		)
 
-	encounter_status.text = (
-		"Escolha uma ação."
-	)
-
+	else:
+		encounter_status.text = (
+			"Atlas ainda não possui um método "
+			+ "para enfrentar a criatura."
+		)
 
 	encounter_status.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
-
 
 	container.add_child(
 		encounter_status

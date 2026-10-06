@@ -1,1212 +1,1400 @@
 extends Node
 
 
-# =========================================================
-# SINAIS
-# =========================================================
-
 signal fight_won(atlas_hp)
 signal atlas_destroyed
 
 
-# =========================================================
-# CONFIGURAÇÃO
-# =========================================================
-
 @export var atlas_max_hp: int = 100
-@export var creature_max_hp: int = 70
 
-@export var energy_per_turn: int = 3
-@export var cards_per_turn: int = 4
+@export var attack_phase_duration: float = 6.0
+@export var position_phase_duration: float = 5.0
 
+@export var actor_move_speed: float = 280.0
 
-# =========================================================
-# CARTAS
-# =========================================================
+@export var claw_speed: float = 470.0
+@export var bite_speed: float = 330.0
 
-const CARD_PULSE := "pulse"
-const CARD_FOCUSED := "focused"
-const CARD_BARRIER := "barrier"
-const CARD_COUNTER := "counter"
-const CARD_OVERLOAD := "overload"
-const CARD_REPAIR := "repair"
+@export var hit_invulnerability: float = 0.45
 
-
-const CARD_DATA := {
-
-	CARD_PULSE: {
-		"name": "DISPARO DE PULSO",
-		"cost": 1,
-		"damage": 9,
-		"block": 0,
-		"heal": 0,
-		"self_damage": 0,
-		"description": "9 DANO"
-	},
-
-
-	CARD_FOCUSED: {
-		"name": "RAJADA CONCENTRADA",
-		"cost": 2,
-		"damage": 20,
-		"block": 0,
-		"heal": 0,
-		"self_damage": 0,
-		"description": "20 DANO"
-	},
-
-
-	CARD_BARRIER: {
-		"name": "BARREIRA CINÉTICA",
-		"cost": 1,
-		"damage": 0,
-		"block": 12,
-		"heal": 0,
-		"self_damage": 0,
-		"description": "+12 DEFESA"
-	},
-
-
-	CARD_COUNTER: {
-		"name": "CONTRA-ATAQUE",
-		"cost": 2,
-		"damage": 10,
-		"block": 8,
-		"heal": 0,
-		"self_damage": 0,
-		"description": "10 DANO | +8 DEFESA"
-	},
-
-
-	CARD_OVERLOAD: {
-		"name": "SOBRECARGA",
-		"cost": 3,
-		"damage": 32,
-		"block": 0,
-		"heal": 0,
-		"self_damage": 6,
-		"description": "32 DANO | ATLAS -6 HP"
-	},
-
-
-	CARD_REPAIR: {
-		"name": "REPARO DE CAMPO",
-		"cost": 2,
-		"damage": 0,
-		"block": 0,
-		"heal": 9,
-		"self_damage": 0,
-		"description": "ATLAS +9 HP"
-	}
-}
-
-
-const CARD_IDS := [
-	CARD_PULSE,
-	CARD_FOCUSED,
-	CARD_BARRIER,
-	CARD_COUNTER,
-	CARD_OVERLOAD,
-	CARD_REPAIR
-]
-
-
-# =========================================================
-# ESTADO PERSISTENTE
-# =========================================================
 
 var atlas_hp: int = 100
 
+var sonic_damage: int = 1
 
-# =========================================================
-# ESTADO DO COMBATE
-# =========================================================
+var fight_active: bool = false
+var turn_number: int = 1
+
+var combat_unlocked: bool = false
 
 var rng := RandomNumberGenerator.new()
 
-var fight_active: bool = false
-var turn_locked: bool = false
 
-var creature_hp: int = 0
-
-var current_energy: int = 0
-var current_block: int = 0
-
-var turn_number: int = 1
-
-var enemy_intent_name: String = ""
-var enemy_intent_damage: int = 0
+enum FightPhase {
+	NONE,
+	CHOICE,
+	DODGE,
+	POSITION,
+	RESOLVE,
+	ENDING
+}
 
 
-# =========================================================
-# UI
-# =========================================================
+var fight_phase: int = FightPhase.NONE
+
 
 var fight_layer: CanvasLayer = null
 
-var atlas_hp_bar: ProgressBar = null
-var creature_hp_bar: ProgressBar = null
+var fight_root: Control = null
 
-var atlas_hp_label: Label = null
-var creature_hp_label: Label = null
-
-var energy_label: Label = null
-var block_label: Label = null
-
-var intent_label: Label = null
+var life_label: Label = null
+var damage_label: Label = null
 var turn_label: Label = null
+
+var phase_label: Label = null
+var timer_label: Label = null
+var control_label: Label = null
 var combat_log: Label = null
 
-var cards_container: GridContainer = null
-
-var end_turn_button: Button = null
+var cards_container: HBoxContainer = null
 
 
-# =========================================================
-# READY
-# =========================================================
+var arena: Control = null
+
+var arena_size := Vector2(
+	720,
+	420
+)
+
+
+var player_token: ColorRect = null
+var atlas_token: ColorRect = null
+
+var actor_size := Vector2(
+	24,
+	24
+)
+
+
+var player_position := Vector2.ZERO
+var atlas_position := Vector2.ZERO
+
+var selected_actor: int = 1
+
+
+var player_hit_cooldown: float = 0.0
+var atlas_hit_cooldown: float = 0.0
+
+
+var hazards: Array = []
+
+var attack_time_remaining: float = 0.0
+var attack_spawn_timer: float = 0.0
+
+var current_attack_type: String = ""
+
+
+var red_zone: ColorRect = null
+var blue_zone: ColorRect = null
+
+var red_zone_rect := Rect2()
+var blue_zone_rect := Rect2()
+
+var position_time_remaining: float = 0.0
+
+
+var defeat_layer: CanvasLayer = null
+
 
 func _ready():
-
 	process_mode = Node.PROCESS_MODE_ALWAYS
-
 
 	rng.randomize()
 
-
 	atlas_hp = atlas_max_hp
 
-
 	print(
-		"FIGHT MANAGER READY | ATLAS HP: ",
+		"FIGHT MANAGER READY | VIDA: ",
 		atlas_hp
 	)
 
 
-# =========================================================
-# COMEÇAR COMBATE
-# =========================================================
-
-func start_fight():
-
-	if fight_active:
-		return
-
-
-	fight_active = true
-
-	turn_locked = false
-
-
-	creature_hp = (
-		creature_max_hp
-	)
-
-
-	current_energy = 0
-
-	current_block = 0
-
-
-	turn_number = 1
-
-
-	get_tree().paused = true
-
-
-	create_fight_ui()
-
-
-	start_player_turn()
-
-
-	print("")
-	print(
-		"======================================"
-	)
-
-	print(
-		"FIGHT STARTED"
-	)
-
-	print(
-		"ATLAS HP: ",
-		atlas_hp,
-		" / ",
-		atlas_max_hp
-	)
-
-	print(
-		"CREATURE HP: ",
-		creature_hp
-	)
-
-	print(
-		"======================================"
-	)
-
-
-# =========================================================
-# COMEÇAR TURNO DO PLAYER
-# =========================================================
-
-func start_player_turn():
-
+func _process(delta: float):
 	if not fight_active:
 		return
 
-
-	# =====================================================
-	# DESBLOQUEAR NOVO TURNO
-	# =====================================================
-
-	turn_locked = false
-
-
-	current_energy = (
-		energy_per_turn
+	player_hit_cooldown = max(
+		0.0,
+		player_hit_cooldown - delta
 	)
 
+	atlas_hit_cooldown = max(
+		0.0,
+		atlas_hit_cooldown - delta
+	)
 
-	current_block = 0
+	if (
+		fight_phase == FightPhase.DODGE
+		or fight_phase == FightPhase.POSITION
+	):
+		update_actor_movement(
+			delta
+		)
+
+	if fight_phase == FightPhase.DODGE:
+		update_dodge_phase(
+			delta
+		)
+
+	elif fight_phase == FightPhase.POSITION:
+		update_position_phase(
+			delta
+		)
 
 
-	# =====================================================
-	# IMPORTANTE
-	#
-	# O botão era desativado no final do turno anterior,
-	# mas não estava sendo reativado.
-	# =====================================================
+func _unhandled_input(event):
+	if not fight_active:
+		return
 
-	if end_turn_button != null:
+	if not (
+		event is InputEventKey
+	):
+		return
 
-		end_turn_button.disabled = false
+	if (
+		not event.pressed
+		or event.echo
+	):
+		return
+
+	if event.keycode == KEY_1:
+		selected_actor = 1
+
+		update_actor_selection()
+
+		get_viewport().set_input_as_handled()
+
+	elif event.keycode == KEY_2:
+		selected_actor = 2
+
+		update_actor_selection()
+
+		get_viewport().set_input_as_handled()
 
 
-	choose_enemy_intent()
+func start_fight():
+	if fight_active:
+		return
+
+	fight_active = true
+
+	fight_phase = FightPhase.NONE
+
+	turn_number = 1
+
+	sonic_damage = 1
+
+	player_hit_cooldown = 0.0
+	atlas_hit_cooldown = 0.0
+
+	get_tree().paused = true
+
+	create_fight_ui()
+
+	reset_actor_positions()
+
+	start_choice_phase()
+
+	print("")
+	print("======================================")
+	print("SONIC FIGHT STARTED")
+	print("SHARED LIFE: ", atlas_hp)
+	print("STARTING SONIC DAMAGE: ", sonic_damage)
+	print("======================================")
 
 
-	draw_cards()
+func start_choice_phase():
+	if not fight_active:
+		return
 
+	fight_phase = FightPhase.CHOICE
+
+	clear_hazards()
+
+	hide_position_zones()
+
+	if cards_container != null:
+		cards_container.visible = true
+
+	if phase_label != null:
+		phase_label.text = (
+			"ESCOLHA UM AJUSTE ANTES DO ATAQUE"
+		)
+
+	if timer_label != null:
+		timer_label.text = ""
+
+	if combat_log != null:
+		combat_log.text = (
+			"A criatura prepara o próximo ataque."
+		)
+
+	create_turn_cards()
 
 	update_ui()
 
 
-	if combat_log != null:
-
-		combat_log.text = (
-			"Escolha os modos de ataque do Atlas."
-		)
-
-
-	print(
-		"PLAYER TURN STARTED: ",
-		turn_number
-	)
-
-
-# =========================================================
-# INTENÇÃO DA CRIATURA
-# =========================================================
-
-func choose_enemy_intent():
-
-	var intents := [
-
-		{
-			"name": "MORDIDA",
-			"damage": 10
-		},
-
-		{
-			"name": "INVESTIDA",
-			"damage": 16
-		},
-
-		{
-			"name": "ATAQUE BRUTAL",
-			"damage": 20
-		},
-
-		{
-			"name": "CIRCUNDAR",
-			"damage": 0
-		}
-	]
-
-
-	var intent: Dictionary = (
-		intents[
-			rng.randi_range(
-				0,
-				intents.size() - 1
-			)
-		]
-	)
-
-
-	enemy_intent_name = str(
-		intent[
-			"name"
-		]
-	)
-
-
-	enemy_intent_damage = int(
-		intent[
-			"damage"
-		]
-	)
-
-
-# =========================================================
-# COMPRAR CARTAS
-# =========================================================
-
-func draw_cards():
-
+func create_turn_cards():
 	clear_cards()
 
-
-	var pool = (
-		CARD_IDS.duplicate()
+	create_card_button(
+		"+10 VIDA",
+		"Recupera 10 de Vida Compartilhada",
+		"heal"
 	)
 
-
-	pool.shuffle()
-
-
-	var amount = min(
-		cards_per_turn,
-		pool.size()
+	create_card_button(
+		"+3 DANO",
+		"Aumenta o Dano Sonoro em 3",
+		"damage"
 	)
 
+	create_card_button(
+		"+5 VIDA / +2 DANO",
+		"Recupera 5 de Vida e aumenta 2 de Dano",
+		"balanced"
+	)
 
-	for index in range(
-		amount
-	):
-
-		create_card_button(
-			pool[
-				index
-			]
-		)
-
-
-# =========================================================
-# CRIAR CARTA
-# =========================================================
 
 func create_card_button(
+	title: String,
+	description: String,
 	card_id: String
 ):
-
-	var data: Dictionary = (
-		CARD_DATA[
-			card_id
-		]
-	)
-
+	if cards_container == null:
+		return
 
 	var button = Button.new()
 
-
 	button.custom_minimum_size = Vector2(
-		310,
-		90
+		225,
+		82
 	)
-
 
 	button.text = (
-		str(
-			data[
-				"name"
-			]
-		)
+		title
 		+ "\n"
-		+ str(
-			data[
-				"description"
-			]
-		)
-		+ "\nCUSTO: "
-		+ str(
-			data[
-				"cost"
-			]
-		)
+		+ description
 	)
-
 
 	button.add_theme_font_size_override(
 		"font_size",
-		16
+		14
 	)
-
-
-	button.set_meta(
-		"card_id",
-		card_id
-	)
-
-
-	button.set_meta(
-		"used",
-		false
-	)
-
 
 	button.pressed.connect(
-		on_card_pressed.bind(
-			card_id,
-			button
+		on_card_selected.bind(
+			card_id
 		)
 	)
-
 
 	cards_container.add_child(
 		button
 	)
 
 
-# =========================================================
-# JOGAR CARTA
-# =========================================================
-
-func on_card_pressed(
-	card_id: String,
-	button: Button
+func on_card_selected(
+	card_id: String
 ):
-
 	if not fight_active:
 		return
 
-
-	if turn_locked:
+	if fight_phase != FightPhase.CHOICE:
 		return
 
-
-	if button == null:
-		return
-
-
-	if bool(
-		button.get_meta(
-			"used",
-			false
-		)
-	):
-		return
-
-
-	var data: Dictionary = (
-		CARD_DATA[
-			card_id
-		]
-	)
-
-
-	var cost = int(
-		data[
-			"cost"
-		]
-	)
-
-
-	# =====================================================
-	# ENERGIA
-	# =====================================================
-
-	if current_energy < cost:
-
-		if combat_log != null:
-
-			combat_log.text = (
-				"ENERGIA INSUFICIENTE"
-			)
-
-
-		return
-
-
-	current_energy -= cost
-
-
-	button.set_meta(
-		"used",
-		true
-	)
-
-
-	button.disabled = true
-
-
-	# =====================================================
-	# DANO
-	# =====================================================
-
-	var damage = int(
-		data[
-			"damage"
-		]
-	)
-
-
-	if damage > 0:
-
-		creature_hp = max(
-			0,
-			creature_hp - damage
-		)
-
-
-	# =====================================================
-	# DEFESA
-	# =====================================================
-
-	var block = int(
-		data[
-			"block"
-		]
-	)
-
-
-	if block > 0:
-
-		current_block += block
-
-
-	# =====================================================
-	# REPARAÇÃO
-	# =====================================================
-
-	var heal = int(
-		data[
-			"heal"
-		]
-	)
-
-
-	if heal > 0:
-
-		atlas_hp = min(
-			atlas_max_hp,
-			atlas_hp + heal
-		)
-
-
-	# =====================================================
-	# AUTO-DANO
-	# =====================================================
-
-	var self_damage = int(
-		data[
-			"self_damage"
-		]
-	)
-
-
-	if self_damage > 0:
-
-		atlas_hp = max(
-			0,
-			atlas_hp - self_damage
-		)
-
-
-	# =====================================================
-	# LOG
-	# =====================================================
-
-	if combat_log != null:
-
-		combat_log.text = (
-			str(
-				data[
-					"name"
-				]
-			)
-			+ " executado."
-		)
-
-
-	update_ui()
-
-
-	update_card_availability()
-
-
-	# =====================================================
-	# ATLAS MORREU
-	# =====================================================
-
-	if atlas_hp <= 0:
-
-		atlas_death()
-
-		return
-
-
-	# =====================================================
-	# CRIATURA MORREU
-	# =====================================================
-
-	if creature_hp <= 0:
-
-		finish_fight_victory()
-
-
-# =========================================================
-# DISPONIBILIDADE DAS CARTAS
-# =========================================================
-
-func update_card_availability():
-
-	if cards_container == null:
-		return
-
-
-	for child in (
-		cards_container.get_children()
-	):
-
-		if not (
-			child is Button
-		):
-			continue
-
-
-		var button: Button = child
-
-
-		if bool(
-			button.get_meta(
-				"used",
-				false
-			)
-		):
-
-			button.disabled = true
-
-			continue
-
-
-		var card_id = str(
-			button.get_meta(
-				"card_id",
-				""
-			)
-		)
-
-
-		if card_id.is_empty():
-			continue
-
-
-		var data: Dictionary = (
-			CARD_DATA[
-				card_id
-			]
-		)
-
-
-		var cost = int(
-			data[
-				"cost"
-			]
-		)
-
-
-		# Agora as cartas caras ficam visualmente
-		# indisponíveis se não houver energia.
-		button.disabled = (
-			current_energy < cost
-		)
-
-
-# =========================================================
-# TERMINAR TURNO
-# =========================================================
-
-func end_player_turn():
-
-	if not fight_active:
-		return
-
-
-	if turn_locked:
-		return
-
-
-	turn_locked = true
-
-
-	# =====================================================
-	# BLOQUEAR INPUT DURANTE TURNO DA CRIATURA
-	# =====================================================
+	fight_phase = FightPhase.RESOLVE
 
 	set_cards_disabled(
 		true
 	)
 
+	match card_id:
 
-	if end_turn_button != null:
-
-		end_turn_button.disabled = true
-
-
-	print(
-		"PLAYER TURN ENDED: ",
-		turn_number
-	)
-
-
-	# =====================================================
-	# ATAQUE DA CRIATURA
-	# =====================================================
-
-	var damage_received = max(
-		0,
-		enemy_intent_damage
-		- current_block
-	)
-
-
-	atlas_hp = max(
-		0,
-		atlas_hp
-		- damage_received
-	)
-
-
-	if combat_log != null:
-
-		if enemy_intent_damage <= 0:
-
-			combat_log.text = (
-				"A criatura circunda Atlas "
-				+ "e não ataca neste turno."
+		"heal":
+			atlas_hp = min(
+				atlas_max_hp,
+				atlas_hp + 10
 			)
 
-
-		elif damage_received <= 0:
-
-			combat_log.text = (
-				"Atlas bloqueou completamente "
-				+ enemy_intent_name
-				+ "."
-			)
-
-
-		else:
-
-			combat_log.text = (
-				enemy_intent_name
-				+ " atingiu Atlas: -"
-				+ str(
-					damage_received
+			if combat_log != null:
+				combat_log.text = (
+					"Vida Compartilhada +10."
 				)
-				+ " HP"
+
+		"damage":
+			sonic_damage += 3
+
+			if combat_log != null:
+				combat_log.text = (
+					"Dano Sonoro +3."
+				)
+
+		"balanced":
+			atlas_hp = min(
+				atlas_max_hp,
+				atlas_hp + 5
 			)
 
+			sonic_damage += 2
+
+			if combat_log != null:
+				combat_log.text = (
+					"Vida +5 // Dano Sonoro +2."
+				)
 
 	update_ui()
 
+	await get_tree().create_timer(
+		0.55,
+		true
+	).timeout
+
+	if not fight_active:
+		return
+
+	start_dodge_phase()
+
+
+func start_dodge_phase():
+	fight_phase = FightPhase.DODGE
+
+	clear_cards()
+
+	if cards_container != null:
+		cards_container.visible = false
+
+	hide_position_zones()
+
+	selected_actor = 1
+
+	update_actor_selection()
+
+	attack_time_remaining = (
+		attack_phase_duration
+	)
+
+	attack_spawn_timer = 0.15
+
+	if turn_number % 2 == 1:
+		current_attack_type = "claw"
+
+	else:
+		current_attack_type = "bite"
+
+	if current_attack_type == "claw":
+		if phase_label != null:
+			phase_label.text = (
+				"ATAQUE DA CRIATURA // GARRA"
+			)
+
+	else:
+		if phase_label != null:
+			phase_label.text = (
+				"ATAQUE DA CRIATURA // MORDIDA"
+			)
+
+	if combat_log != null:
+		combat_log.text = (
+			"[1] PLAYER   [2] ATLAS   //   WASD PARA MOVER"
+		)
 
 	print(
-		"CREATURE ACTION: ",
-		enemy_intent_name,
-		" | DAMAGE RECEIVED: ",
-		damage_received
+		"TURN ",
+		turn_number,
+		" CREATURE ATTACK: ",
+		current_attack_type.to_upper()
 	)
 
 
-	# =====================================================
-	# ATLAS DESTRUÍDO
-	# =====================================================
+func update_dodge_phase(
+	delta: float
+):
+	attack_time_remaining -= delta
 
-	if atlas_hp <= 0:
+	attack_spawn_timer -= delta
 
-		await get_tree().create_timer(
-			0.8,
-			true
-		).timeout
+	if timer_label != null:
+		timer_label.text = (
+			"ATAQUE: "
+			+ str(
+				max(
+					0.0,
+					attack_time_remaining
+				)
+			).pad_decimals(1)
+			+ "s"
+		)
+
+	if attack_spawn_timer <= 0.0:
+
+		if current_attack_type == "claw":
+			spawn_claw_attack()
+
+			attack_spawn_timer = 0.72
+
+		else:
+			spawn_bite_attack()
+
+			attack_spawn_timer = 1.05
+
+	update_hazards(
+		delta
+	)
+
+	if attack_time_remaining <= 0.0:
+		start_position_phase()
 
 
-		atlas_death()
+func spawn_claw_attack():
+	var base_y = rng.randf_range(
+		75.0,
+		arena_size.y - 75.0
+	)
 
+	var from_left = (
+		rng.randi_range(
+			0,
+			1
+		)
+		== 0
+	)
+
+	for offset in [
+		-30.0,
+		0.0,
+		30.0
+	]:
+		var rect: Rect2
+		var velocity: Vector2
+
+		if from_left:
+			rect = Rect2(
+				Vector2(
+					-125,
+					base_y + offset
+				),
+				Vector2(
+					125,
+					12
+				)
+			)
+
+			velocity = Vector2(
+				claw_speed,
+				0
+			)
+
+		else:
+			rect = Rect2(
+				Vector2(
+					arena_size.x,
+					base_y + offset
+				),
+				Vector2(
+					125,
+					12
+				)
+			)
+
+			velocity = Vector2(
+				-claw_speed,
+				0
+			)
+
+		create_hazard(
+			rect,
+			velocity,
+			Color(
+				0.95,
+				0.22,
+				0.16,
+				1.0
+			)
+		)
+
+
+func spawn_bite_attack():
+	var columns: int = 6
+
+	var lane_width: float = (
+		arena_size.x
+		/ float(columns)
+	)
+
+	var safe_lane = rng.randi_range(
+		0,
+		columns - 1
+	)
+
+	for index in range(
+		columns
+	):
+		if index == safe_lane:
+			continue
+
+		var x = (
+			index * lane_width
+			+ lane_width / 2.0
+			- 25.0
+		)
+
+		var top_rect = Rect2(
+			Vector2(
+				x,
+				-50
+			),
+			Vector2(
+				50,
+				48
+			)
+		)
+
+		var bottom_rect = Rect2(
+			Vector2(
+				x,
+				arena_size.y + 2
+			),
+			Vector2(
+				50,
+				48
+			)
+		)
+
+		create_hazard(
+			top_rect,
+			Vector2(
+				0,
+				bite_speed
+			),
+			Color(
+				0.76,
+				0.18,
+				0.28,
+				1.0
+			)
+		)
+
+		create_hazard(
+			bottom_rect,
+			Vector2(
+				0,
+				-bite_speed
+			),
+			Color(
+				0.76,
+				0.18,
+				0.28,
+				1.0
+			)
+		)
+
+
+func create_hazard(
+	rect: Rect2,
+	velocity: Vector2,
+	hazard_color: Color
+):
+	if arena == null:
 		return
 
+	var visual = ColorRect.new()
 
-	# =====================================================
-	# ESPERA PEQUENA
-	# =====================================================
+	visual.mouse_filter = (
+		Control.MOUSE_FILTER_IGNORE
+	)
+
+	visual.position = rect.position
+	visual.size = rect.size
+	visual.color = hazard_color
+
+	arena.add_child(
+		visual
+	)
+
+	hazards.append({
+		"rect": rect,
+		"velocity": velocity,
+		"visual": visual
+	})
+
+
+func update_hazards(
+	delta: float
+):
+	for index in range(
+		hazards.size() - 1,
+		-1,
+		-1
+	):
+		var hazard: Dictionary = hazards[
+			index
+		]
+
+		var rect: Rect2 = hazard[
+			"rect"
+		]
+
+		var velocity: Vector2 = hazard[
+			"velocity"
+		]
+
+		rect.position += (
+			velocity * delta
+		)
+
+		hazard["rect"] = rect
+
+		var visual: ColorRect = hazard[
+			"visual"
+		]
+
+		if (
+			visual != null
+			and is_instance_valid(
+				visual
+			)
+		):
+			visual.position = rect.position
+
+		check_hazard_collision(
+			rect
+		)
+
+		if hazard_outside_arena(
+			rect
+		):
+			remove_hazard(
+				index
+			)
+
+
+func check_hazard_collision(
+	hazard_rect: Rect2
+):
+	var player_rect = get_actor_rect(
+		player_position
+	)
+
+	var atlas_rect = get_actor_rect(
+		atlas_position
+	)
+
+	if hazard_rect.intersects(
+		player_rect
+	):
+		hit_actor(
+			"player"
+		)
+
+	if hazard_rect.intersects(
+		atlas_rect
+	):
+		hit_actor(
+			"atlas"
+		)
+
+
+func hit_actor(
+	actor_name: String
+):
+	if actor_name == "player":
+
+		if player_hit_cooldown > 0.0:
+			return
+
+		player_hit_cooldown = (
+			hit_invulnerability
+		)
+
+	else:
+
+		if atlas_hit_cooldown > 0.0:
+			return
+
+		atlas_hit_cooldown = (
+			hit_invulnerability
+		)
+
+	atlas_hp = max(
+		0,
+		atlas_hp - 1
+	)
+
+	if combat_log != null:
+
+		if actor_name == "player":
+			combat_log.text = (
+				"PLAYER atingido // Vida Compartilhada -1"
+			)
+
+		else:
+			combat_log.text = (
+				"ATLAS atingido // Vida Compartilhada -1"
+			)
+
+	update_ui()
+
+	if atlas_hp <= 0:
+		shared_life_defeat()
+
+
+func hazard_outside_arena(
+	rect: Rect2
+) -> bool:
+	return (
+		rect.end.x < -150.0
+		or rect.position.x > arena_size.x + 150.0
+		or rect.end.y < -150.0
+		or rect.position.y > arena_size.y + 150.0
+	)
+
+
+func remove_hazard(
+	index: int
+):
+	if (
+		index < 0
+		or index >= hazards.size()
+	):
+		return
+
+	var hazard: Dictionary = hazards[
+		index
+	]
+
+	var visual = hazard.get(
+		"visual"
+	)
+
+	if (
+		visual != null
+		and is_instance_valid(
+			visual
+		)
+	):
+		visual.queue_free()
+
+	hazards.remove_at(
+		index
+	)
+
+
+func clear_hazards():
+	for hazard in hazards:
+		var visual = hazard.get(
+			"visual"
+		)
+
+		if (
+			visual != null
+			and is_instance_valid(
+				visual
+			)
+		):
+			visual.queue_free()
+
+	hazards.clear()
+
+
+func start_position_phase():
+	if not fight_active:
+		return
+
+	fight_phase = FightPhase.POSITION
+
+	clear_hazards()
+
+	position_time_remaining = (
+		position_phase_duration
+	)
+
+	selected_actor = 1
+
+	create_position_zones()
+
+	update_actor_selection()
+
+	if phase_label != null:
+		phase_label.text = (
+			"POSICIONAMENTO PARA DESCARGA SONORA"
+		)
+
+	if combat_log != null:
+		combat_log.text = (
+			"PLAYER → ZONA AZUL   //   ATLAS → ZONA VERMELHA"
+		)
+
+	print(
+		"POSITION PHASE | SONIC DAMAGE: ",
+		sonic_damage
+	)
+
+
+func create_position_zones():
+	if (
+		red_zone == null
+		or blue_zone == null
+	):
+		return
+
+	var zone_size := Vector2(
+		155,
+		140
+	)
+
+	var left_position := Vector2(
+		70,
+		140
+	)
+
+	var right_position := Vector2(
+		arena_size.x
+		- zone_size.x
+		- 70,
+		140
+	)
+
+	if turn_number % 2 == 1:
+
+		red_zone_rect = Rect2(
+			left_position,
+			zone_size
+		)
+
+		blue_zone_rect = Rect2(
+			right_position,
+			zone_size
+		)
+
+	else:
+
+		red_zone_rect = Rect2(
+			right_position,
+			zone_size
+		)
+
+		blue_zone_rect = Rect2(
+			left_position,
+			zone_size
+		)
+
+	red_zone.position = (
+		red_zone_rect.position
+	)
+
+	red_zone.size = (
+		red_zone_rect.size
+	)
+
+	blue_zone.position = (
+		blue_zone_rect.position
+	)
+
+	blue_zone.size = (
+		blue_zone_rect.size
+	)
+
+	red_zone.visible = true
+	blue_zone.visible = true
+
+
+func hide_position_zones():
+	if red_zone != null:
+		red_zone.visible = false
+
+	if blue_zone != null:
+		blue_zone.visible = false
+
+
+func update_position_phase(
+	delta: float
+):
+	position_time_remaining -= delta
+
+	if timer_label != null:
+		timer_label.text = (
+			"POSICIONE-SE: "
+			+ str(
+				max(
+					0.0,
+					position_time_remaining
+				)
+			).pad_decimals(1)
+			+ "s"
+		)
+
+	if position_time_remaining <= 0.0:
+		finish_position_phase()
+
+
+func finish_position_phase():
+	if not fight_active:
+		return
+
+	if fight_phase != FightPhase.POSITION:
+		return
+
+	fight_phase = FightPhase.RESOLVE
+
+	var atlas_ready = (
+		red_zone_rect.has_point(
+			atlas_position
+		)
+	)
+
+	var player_safe = (
+		blue_zone_rect.has_point(
+			player_position
+		)
+	)
+
+	hide_position_zones()
+
+	if not player_safe:
+
+		atlas_hp = max(
+			0,
+			atlas_hp - 1
+		)
+
+		if combat_log != null:
+			combat_log.text = (
+				"PLAYER fora da zona segura // Vida -1"
+			)
+
+		update_ui()
+
+		if atlas_hp <= 0:
+			shared_life_defeat()
+
+			return
+
+	if atlas_ready:
+
+		if sonic_damage >= 10:
+
+			if combat_log != null:
+				combat_log.text = (
+					"DESCARGA SONORA: "
+					+ str(
+						sonic_damage
+					)
+					+ " // A CRIATURA RECUA"
+				)
+
+			await get_tree().create_timer(
+				0.8,
+				true
+			).timeout
+
+			finish_fight_victory()
+
+			return
+
+		else:
+
+			if combat_log != null:
+				combat_log.text = (
+					"Atlas emite uma onda sonora de "
+					+ str(
+						sonic_damage
+					)
+					+ ". Ainda não é suficiente."
+				)
+
+	else:
+
+		if combat_log != null:
+			combat_log.text = (
+				"Atlas não alcançou a zona de emissão. "
+				+ "A onda sonora não foi disparada."
+			)
+
+	await get_tree().create_timer(
+		0.85,
+		true
+	).timeout
+
+	if not fight_active:
+		return
+
+	turn_number += 1
+
+	start_choice_phase()
+
+
+func update_actor_movement(
+	delta: float
+):
+	var direction := Vector2.ZERO
+
+	if Input.is_key_pressed(
+		KEY_W
+	):
+		direction.y -= 1.0
+
+	if Input.is_key_pressed(
+		KEY_S
+	):
+		direction.y += 1.0
+
+	if Input.is_key_pressed(
+		KEY_A
+	):
+		direction.x -= 1.0
+
+	if Input.is_key_pressed(
+		KEY_D
+	):
+		direction.x += 1.0
+
+	if direction.length() > 1.0:
+		direction = direction.normalized()
+
+	if selected_actor == 1:
+
+		player_position += (
+			direction
+			* actor_move_speed
+			* delta
+		)
+
+		player_position = clamp_actor_position(
+			player_position
+		)
+
+	else:
+
+		atlas_position += (
+			direction
+			* actor_move_speed
+			* delta
+		)
+
+		atlas_position = clamp_actor_position(
+			atlas_position
+		)
+
+	update_actor_visuals()
+
+
+func clamp_actor_position(
+	position: Vector2
+) -> Vector2:
+	var half = actor_size / 2.0
+
+	position.x = clamp(
+		position.x,
+		half.x,
+		arena_size.x - half.x
+	)
+
+	position.y = clamp(
+		position.y,
+		half.y,
+		arena_size.y - half.y
+	)
+
+	return position
+
+
+func get_actor_rect(
+	position: Vector2
+) -> Rect2:
+	return Rect2(
+		position - actor_size / 2.0,
+		actor_size
+	)
+
+
+func reset_actor_positions():
+	player_position = Vector2(
+		arena_size.x * 0.30,
+		arena_size.y * 0.50
+	)
+
+	atlas_position = Vector2(
+		arena_size.x * 0.70,
+		arena_size.y * 0.50
+	)
+
+	selected_actor = 1
+
+	update_actor_visuals()
+	update_actor_selection()
+
+
+func update_actor_visuals():
+	if player_token != null:
+		player_token.position = (
+			player_position
+			- actor_size / 2.0
+		)
+
+	if atlas_token != null:
+		atlas_token.position = (
+			atlas_position
+			- actor_size / 2.0
+		)
+
+
+func update_actor_selection():
+	if player_token != null:
+
+		if selected_actor == 1:
+			player_token.scale = Vector2(
+				1.35,
+				1.35
+			)
+
+		else:
+			player_token.scale = Vector2.ONE
+
+	if atlas_token != null:
+
+		if selected_actor == 2:
+			atlas_token.scale = Vector2(
+				1.35,
+				1.35
+			)
+
+		else:
+			atlas_token.scale = Vector2.ONE
+
+	if control_label != null:
+
+		if selected_actor == 1:
+			control_label.text = (
+				"CONTROLO: PLAYER [1]   //   [2] ATLAS"
+			)
+
+		else:
+			control_label.text = (
+				"CONTROLO: ATLAS [2]   //   [1] PLAYER"
+			)
+
+
+func finish_fight_victory():
+	if not fight_active:
+		return
+
+	fight_active = false
+	fight_phase = FightPhase.ENDING
+
+	clear_hazards()
+
+	if combat_log != null:
+		combat_log.text = (
+			"A criatura afasta-se da frequência sonora."
+		)
+
+	update_ui()
 
 	await get_tree().create_timer(
 		0.7,
 		true
 	).timeout
 
-
-	if not fight_active:
-		return
-
-
-	# =====================================================
-	# PRÓXIMO TURNO
-	# =====================================================
-
-	turn_number += 1
-
-
-	start_player_turn()
-
-
-# =========================================================
-# VITÓRIA
-# =========================================================
-
-func finish_fight_victory():
-
-	if not fight_active:
-		return
-
-
-	fight_active = false
-
-	turn_locked = true
-
-
-	if combat_log != null:
-
-		combat_log.text = (
-			"AMEAÇA TEMPORARIAMENTE NEUTRALIZADA"
-		)
-
-
-	update_ui()
-
-
-	set_cards_disabled(
-		true
-	)
-
-
-	if end_turn_button != null:
-
-		end_turn_button.disabled = true
-
-
-	await get_tree().create_timer(
-		0.9,
-		true
-	).timeout
-
-
 	destroy_fight_ui()
 
-
 	get_tree().paused = false
-
 
 	fight_won.emit(
 		atlas_hp
 	)
 
-
 	print("")
-	print(
-		"======================================"
-	)
-
-	print(
-		"FIGHT WON"
-	)
-
-	print(
-		"ATLAS HP REMAINING: ",
-		atlas_hp,
-		" / ",
-		atlas_max_hp
-	)
-
-	print(
-		"======================================"
-	)
+	print("======================================")
+	print("SONIC FIGHT WON")
+	print("SHARED LIFE REMAINING: ", atlas_hp)
+	print("FINAL SONIC DAMAGE: ", sonic_damage)
+	print("======================================")
 
 
-# =========================================================
-# MORTE DO ATLAS
-# =========================================================
-
-func atlas_death():
-
+func shared_life_defeat():
 	if not fight_active:
 		return
 
-
 	fight_active = false
-
-	turn_locked = true
-
+	fight_phase = FightPhase.ENDING
 
 	atlas_hp = 0
 
+	clear_hazards()
 
 	destroy_fight_ui()
 
-
 	atlas_destroyed.emit()
 
+	show_shared_defeat()
 
-	show_atlas_death_ending()
 
-
-# =========================================================
-# FINAL — ATLAS DESTRUÍDO
-# =========================================================
-
-func show_atlas_death_ending():
-
+func show_shared_defeat():
 	get_tree().paused = true
 
+	if (
+		defeat_layer != null
+		and is_instance_valid(
+			defeat_layer
+		)
+	):
+		defeat_layer.queue_free()
 
-	var layer = CanvasLayer.new()
+	defeat_layer = CanvasLayer.new()
 
+	defeat_layer.name = "FightDefeat"
 
-	layer.name = (
-		"AtlasDeathEnding"
-	)
+	defeat_layer.layer = 1000
 
-
-	layer.layer = 1000
-
-
-	layer.process_mode = (
+	defeat_layer.process_mode = (
 		Node.PROCESS_MODE_ALWAYS
 	)
 
-
 	add_child(
-		layer
+		defeat_layer
 	)
 
-
 	var background = ColorRect.new()
-
 
 	background.set_anchors_and_offsets_preset(
 		Control.PRESET_FULL_RECT
 	)
 
-
 	background.color = Color.BLACK
 
-
-	layer.add_child(
+	defeat_layer.add_child(
 		background
 	)
 
-
 	var center = CenterContainer.new()
-
 
 	center.set_anchors_and_offsets_preset(
 		Control.PRESET_FULL_RECT
 	)
 
-
 	background.add_child(
 		center
 	)
 
-
 	var container = VBoxContainer.new()
 
-
 	container.custom_minimum_size = Vector2(
-		700,
-		400
+		650,
+		350
 	)
-
 
 	container.add_theme_constant_override(
 		"separation",
-		25
+		24
 	)
-
 
 	center.add_child(
 		container
 	)
 
-
-	var final_label = Label.new()
-
-
-	final_label.text = "FINAL"
-
-
-	final_label.horizontal_alignment = (
-		HORIZONTAL_ALIGNMENT_CENTER
-	)
-
-
-	final_label.add_theme_font_size_override(
-		"font_size",
-		28
-	)
-
-
-	container.add_child(
-		final_label
-	)
-
-
 	var title = Label.new()
 
-
-	title.text = "ÚLTIMA DEFESA"
-
+	title.text = "DERROTA"
 
 	title.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
-
 
 	title.add_theme_font_size_override(
 		"font_size",
 		46
 	)
 
-
 	container.add_child(
 		title
 	)
 
-
 	var description = Label.new()
 
-
 	description.text = (
-		"A integridade estrutural de Atlas "
-		+ "chegou a zero durante o confronto.\n\n"
-		+ "O Android deixou de responder."
+		"A Vida Compartilhada chegou a zero.\n\n"
+		+ "Player e Atlas não conseguiram resistir ao confronto."
 	)
-
 
 	description.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
 
-
 	description.autowrap_mode = (
 		TextServer.AUTOWRAP_WORD_SMART
 	)
 
-
 	description.add_theme_font_size_override(
 		"font_size",
-		21
+		20
 	)
-
 
 	container.add_child(
 		description
 	)
 
-
 	var restart_button = Button.new()
 
-
-	restart_button.text = (
-		"VOLTAR AO INÍCIO"
-	)
-
+	restart_button.text = "RECOMEÇAR"
 
 	restart_button.custom_minimum_size = Vector2(
 		0,
-		65
+		60
 	)
-
 
 	restart_button.pressed.connect(
 		restart_game
 	)
 
-
 	container.add_child(
 		restart_button
 	)
 
-
 	print("")
-	print(
-		"======================================"
-	)
+	print("======================================")
+	print("SONIC FIGHT DEFEAT")
+	print("SHARED LIFE: 0")
+	print("======================================")
 
-	print(
-		"ENDING: ULTIMA DEFESA"
-	)
-
-	print(
-		"ATLAS DESTROYED"
-	)
-
-	print(
-		"======================================"
-	)
-
-
-# =========================================================
-# RESTART
-# =========================================================
 
 func restart_game():
-
 	get_tree().paused = false
-
 
 	get_tree().reload_current_scene()
 
 
-# =========================================================
-# CRIAR UI DO COMBATE
-# =========================================================
-
 func create_fight_ui():
-
 	destroy_fight_ui()
-
 
 	fight_layer = CanvasLayer.new()
 
-
-	fight_layer.name = (
-		"FightUI"
-	)
-
+	fight_layer.name = "FightUI"
 
 	fight_layer.layer = 700
-
 
 	fight_layer.process_mode = (
 		Node.PROCESS_MODE_ALWAYS
 	)
 
-
 	add_child(
 		fight_layer
 	)
 
-
 	var background = ColorRect.new()
-
 
 	background.set_anchors_and_offsets_preset(
 		Control.PRESET_FULL_RECT
 	)
-
 
 	background.color = Color(
 		0.015,
@@ -1215,353 +1403,366 @@ func create_fight_ui():
 		1.0
 	)
 
+	background.mouse_filter = (
+		Control.MOUSE_FILTER_STOP
+	)
 
 	fight_layer.add_child(
 		background
 	)
 
-
 	var center = CenterContainer.new()
-
 
 	center.set_anchors_and_offsets_preset(
 		Control.PRESET_FULL_RECT
 	)
 
-
 	background.add_child(
 		center
 	)
 
-
 	var root = VBoxContainer.new()
 
-
 	root.custom_minimum_size = Vector2(
-		850,
-		650
+		820,
+		690
 	)
-
 
 	root.add_theme_constant_override(
 		"separation",
-		14
+		10
 	)
-
 
 	center.add_child(
 		root
 	)
 
-
-	# =====================================================
-	# TÍTULO
-	# =====================================================
-
 	var title = Label.new()
 
-
 	title.text = (
-		"ATLAS // COMBAT MODE"
+		"ATLAS // SISTEMA DE CONTENÇÃO SONORA"
 	)
-
 
 	title.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
 
-
 	title.add_theme_font_size_override(
 		"font_size",
-		30
+		27
 	)
-
 
 	root.add_child(
 		title
 	)
 
+	var stats = HBoxContainer.new()
 
-	# =====================================================
-	# TURNO
-	# =====================================================
-
-	turn_label = Label.new()
-
-
-	turn_label.horizontal_alignment = (
-		HORIZONTAL_ALIGNMENT_CENTER
+	stats.alignment = (
+		BoxContainer.ALIGNMENT_CENTER
 	)
 
+	stats.add_theme_constant_override(
+		"separation",
+		60
+	)
+
+	root.add_child(
+		stats
+	)
+
+	life_label = Label.new()
+
+	life_label.add_theme_font_size_override(
+		"font_size",
+		18
+	)
+
+	stats.add_child(
+		life_label
+	)
+
+	damage_label = Label.new()
+
+	damage_label.add_theme_font_size_override(
+		"font_size",
+		18
+	)
+
+	stats.add_child(
+		damage_label
+	)
+
+	turn_label = Label.new()
 
 	turn_label.add_theme_font_size_override(
 		"font_size",
 		18
 	)
 
-
-	root.add_child(
+	stats.add_child(
 		turn_label
 	)
 
+	phase_label = Label.new()
 
-	# =====================================================
-	# ATLAS
-	# =====================================================
-
-	atlas_hp_label = Label.new()
-
-
-	root.add_child(
-		atlas_hp_label
-	)
-
-
-	atlas_hp_bar = ProgressBar.new()
-
-
-	atlas_hp_bar.min_value = 0
-
-	atlas_hp_bar.max_value = (
-		atlas_max_hp
-	)
-
-
-	atlas_hp_bar.show_percentage = false
-
-
-	atlas_hp_bar.custom_minimum_size = Vector2(
-		0,
-		35
-	)
-
-
-	root.add_child(
-		atlas_hp_bar
-	)
-
-
-	# =====================================================
-	# CRIATURA
-	# =====================================================
-
-	creature_hp_label = Label.new()
-
-
-	root.add_child(
-		creature_hp_label
-	)
-
-
-	creature_hp_bar = ProgressBar.new()
-
-
-	creature_hp_bar.min_value = 0
-
-	creature_hp_bar.max_value = (
-		creature_max_hp
-	)
-
-
-	creature_hp_bar.show_percentage = false
-
-
-	creature_hp_bar.custom_minimum_size = Vector2(
-		0,
-		35
-	)
-
-
-	root.add_child(
-		creature_hp_bar
-	)
-
-
-	# =====================================================
-	# INTENÇÃO
-	# =====================================================
-
-	intent_label = Label.new()
-
-
-	intent_label.horizontal_alignment = (
+	phase_label.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
 
-
-	intent_label.add_theme_font_size_override(
+	phase_label.add_theme_font_size_override(
 		"font_size",
-		20
+		19
 	)
-
 
 	root.add_child(
-		intent_label
+		phase_label
 	)
 
+	timer_label = Label.new()
 
-	# =====================================================
-	# ENERGIA / DEFESA
-	# =====================================================
+	timer_label.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
 
-	var state_row = HBoxContainer.new()
+	timer_label.add_theme_font_size_override(
+		"font_size",
+		16
+	)
 
+	root.add_child(
+		timer_label
+	)
 
-	state_row.alignment = (
+	control_label = Label.new()
+
+	control_label.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+
+	control_label.add_theme_font_size_override(
+		"font_size",
+		15
+	)
+
+	root.add_child(
+		control_label
+	)
+
+	var arena_holder = CenterContainer.new()
+
+	arena_holder.custom_minimum_size = Vector2(
+		760,
+		440
+	)
+
+	root.add_child(
+		arena_holder
+	)
+
+	arena = Control.new()
+
+	arena.name = "Arena"
+
+	arena.custom_minimum_size = (
+		arena_size
+	)
+
+	arena.size = (
+		arena_size
+	)
+
+	arena.clip_contents = true
+
+	arena_holder.add_child(
+		arena
+	)
+
+	var arena_background = ColorRect.new()
+
+	arena_background.position = Vector2.ZERO
+	arena_background.size = arena_size
+
+	arena_background.color = Color(
+		0.055,
+		0.065,
+		0.075,
+		1.0
+	)
+
+	arena_background.mouse_filter = (
+		Control.MOUSE_FILTER_IGNORE
+	)
+
+	arena.add_child(
+		arena_background
+	)
+
+	red_zone = ColorRect.new()
+
+	red_zone.color = Color(
+		0.8,
+		0.08,
+		0.08,
+		0.50
+	)
+
+	red_zone.mouse_filter = (
+		Control.MOUSE_FILTER_IGNORE
+	)
+
+	red_zone.visible = false
+
+	arena.add_child(
+		red_zone
+	)
+
+	var red_label = Label.new()
+
+	red_label.text = "ATLAS"
+
+	red_label.set_anchors_and_offsets_preset(
+		Control.PRESET_FULL_RECT
+	)
+
+	red_label.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+
+	red_label.vertical_alignment = (
+		VERTICAL_ALIGNMENT_CENTER
+	)
+
+	red_zone.add_child(
+		red_label
+	)
+
+	blue_zone = ColorRect.new()
+
+	blue_zone.color = Color(
+		0.08,
+		0.28,
+		0.9,
+		0.50
+	)
+
+	blue_zone.mouse_filter = (
+		Control.MOUSE_FILTER_IGNORE
+	)
+
+	blue_zone.visible = false
+
+	arena.add_child(
+		blue_zone
+	)
+
+	var blue_label = Label.new()
+
+	blue_label.text = "PLAYER"
+
+	blue_label.set_anchors_and_offsets_preset(
+		Control.PRESET_FULL_RECT
+	)
+
+	blue_label.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+
+	blue_label.vertical_alignment = (
+		VERTICAL_ALIGNMENT_CENTER
+	)
+
+	blue_zone.add_child(
+		blue_label
+	)
+
+	player_token = ColorRect.new()
+
+	player_token.size = actor_size
+
+	player_token.color = Color(
+		0.12,
+		0.42,
+		1.0,
+		1.0
+	)
+
+	player_token.mouse_filter = (
+		Control.MOUSE_FILTER_IGNORE
+	)
+
+	player_token.pivot_offset = (
+		actor_size / 2.0
+	)
+
+	arena.add_child(
+		player_token
+	)
+
+	atlas_token = ColorRect.new()
+
+	atlas_token.size = actor_size
+
+	atlas_token.color = Color(
+		1.0,
+		0.80,
+		0.08,
+		1.0
+	)
+
+	atlas_token.mouse_filter = (
+		Control.MOUSE_FILTER_IGNORE
+	)
+
+	atlas_token.pivot_offset = (
+		actor_size / 2.0
+	)
+
+	arena.add_child(
+		atlas_token
+	)
+
+	cards_container = HBoxContainer.new()
+
+	cards_container.alignment = (
 		BoxContainer.ALIGNMENT_CENTER
 	)
 
-
-	state_row.add_theme_constant_override(
+	cards_container.add_theme_constant_override(
 		"separation",
-		80
-	)
-
-
-	root.add_child(
-		state_row
-	)
-
-
-	energy_label = Label.new()
-
-
-	energy_label.add_theme_font_size_override(
-		"font_size",
-		20
-	)
-
-
-	state_row.add_child(
-		energy_label
-	)
-
-
-	block_label = Label.new()
-
-
-	block_label.add_theme_font_size_override(
-		"font_size",
-		20
-	)
-
-
-	state_row.add_child(
-		block_label
-	)
-
-
-	# =====================================================
-	# CARTAS
-	# =====================================================
-
-	cards_container = GridContainer.new()
-
-
-	cards_container.columns = 2
-
-
-	cards_container.add_theme_constant_override(
-		"h_separation",
 		12
 	)
-
-
-	cards_container.add_theme_constant_override(
-		"v_separation",
-		12
-	)
-
 
 	root.add_child(
 		cards_container
 	)
 
-
-	# =====================================================
-	# LOG
-	# =====================================================
-
 	combat_log = Label.new()
-
 
 	combat_log.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
 
-
 	combat_log.autowrap_mode = (
 		TextServer.AUTOWRAP_WORD_SMART
 	)
 
-
 	combat_log.add_theme_font_size_override(
 		"font_size",
-		17
+		16
 	)
-
 
 	root.add_child(
 		combat_log
 	)
 
+	update_ui()
 
-	# =====================================================
-	# TERMINAR TURNO
-	# =====================================================
-
-	end_turn_button = Button.new()
-
-
-	end_turn_button.text = (
-		"TERMINAR TURNO"
-	)
-
-
-	end_turn_button.custom_minimum_size = Vector2(
-		0,
-		55
-	)
-
-
-	end_turn_button.pressed.connect(
-		end_player_turn
-	)
-
-
-	root.add_child(
-		end_turn_button
-	)
-
-
-# =========================================================
-# ATUALIZAR UI
-# =========================================================
 
 func update_ui():
-
-	if not fight_active:
-		return
-
-
-	if atlas_hp_bar != null:
-
-		atlas_hp_bar.value = (
-			atlas_hp
-		)
-
-
-	if creature_hp_bar != null:
-
-		creature_hp_bar.value = (
-			creature_hp
-		)
-
-
-	if atlas_hp_label != null:
-
-		atlas_hp_label.text = (
-			"ATLAS // HP "
+	if life_label != null:
+		life_label.text = (
+			"VIDA: "
 			+ str(
 				atlas_hp
 			)
@@ -1571,124 +1772,48 @@ func update_ui():
 			)
 		)
 
-
-	if creature_hp_label != null:
-
-		creature_hp_label.text = (
-			"CRIATURA // HP "
+	if damage_label != null:
+		damage_label.text = (
+			"DANO SONORO: "
 			+ str(
-				creature_hp
-			)
-			+ " / "
-			+ str(
-				creature_max_hp
+				sonic_damage
 			)
 		)
-
-
-	if energy_label != null:
-
-		energy_label.text = (
-			"ENERGIA: "
-			+ str(
-				current_energy
-			)
-			+ " / "
-			+ str(
-				energy_per_turn
-			)
-		)
-
-
-	if block_label != null:
-
-		block_label.text = (
-			"DEFESA: "
-			+ str(
-				current_block
-			)
-		)
-
 
 	if turn_label != null:
-
 		turn_label.text = (
-			"TURNO "
+			"TURNO: "
 			+ str(
 				turn_number
 			)
 		)
 
 
-	if intent_label != null:
-
-		if enemy_intent_damage > 0:
-
-			intent_label.text = (
-				"PRÓXIMA AÇÃO DA CRIATURA: "
-				+ enemy_intent_name
-				+ " // "
-				+ str(
-					enemy_intent_damage
-				)
-				+ " DANO"
-			)
-
-
-		else:
-
-			intent_label.text = (
-				"PRÓXIMA AÇÃO DA CRIATURA: "
-				+ enemy_intent_name
-				+ " // SEM ATAQUE"
-			)
-
-
-# =========================================================
-# DESATIVAR CARTAS
-# =========================================================
-
 func set_cards_disabled(
 	disabled: bool
 ):
-
 	if cards_container == null:
 		return
-
 
 	for child in (
 		cards_container.get_children()
 	):
-
 		if child is Button:
-
 			child.disabled = disabled
 
 
-# =========================================================
-# LIMPAR CARTAS
-# =========================================================
-
 func clear_cards():
-
 	if cards_container == null:
 		return
-
 
 	for child in (
 		cards_container.get_children()
 	):
-
-		child.hide()
-
 		child.queue_free()
 
 
-# =========================================================
-# DESTRUIR UI
-# =========================================================
-
 func destroy_fight_ui():
+	clear_hazards()
 
 	if (
 		fight_layer != null
@@ -1696,35 +1821,54 @@ func destroy_fight_ui():
 			fight_layer
 		)
 	):
-
 		fight_layer.queue_free()
 
-
 	fight_layer = null
+	fight_root = null
 
-
-	atlas_hp_bar = null
-
-	creature_hp_bar = null
-
-
-	atlas_hp_label = null
-
-	creature_hp_label = null
-
-
-	energy_label = null
-
-	block_label = null
-
-
-	intent_label = null
-
+	life_label = null
+	damage_label = null
 	turn_label = null
 
+	phase_label = null
+	timer_label = null
+	control_label = null
 	combat_log = null
-
 
 	cards_container = null
 
-	end_turn_button = null
+	arena = null
+
+	player_token = null
+	atlas_token = null
+
+	red_zone = null
+	blue_zone = null
+
+
+func get_shared_life() -> int:
+	return atlas_hp
+
+
+func heal_shared_life(
+	amount: int
+):
+	atlas_hp = min(
+		atlas_max_hp,
+		atlas_hp + max(
+			0,
+			amount
+		)
+	)
+
+
+func unlock_combat():
+	combat_unlocked = true
+
+	print(
+		"SONIC COMBAT UNLOCKED"
+	)
+
+
+func is_combat_unlocked() -> bool:
+	return combat_unlocked
