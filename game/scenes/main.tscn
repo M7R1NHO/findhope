@@ -1,10 +1,10 @@
 [gd_scene format=3 uid="uid://buloxm112bh8t"]
 
-[ext_resource type="Script" uid="uid://cux50ew1xh51n" path="res://scenes/player.gd" id="1_o5qli"]
+[ext_resource type="Script" uid="uid://cux50ew1xh51n" path="res://scripts/player.gd" id="1_o5qli"]
 [ext_resource type="Script" uid="uid://cg4bewh02hmm2" path="res://scripts/main.gd" id="1_sugp2"]
-[ext_resource type="Script" uid="uid://be3papg8vqa8w" path="res://scenes/atlas.gd" id="2_0wfyh"]
+[ext_resource type="Script" uid="uid://be3papg8vqa8w" path="res://scripts/atlas.gd" id="2_0wfyh"]
 [ext_resource type="Script" uid="uid://c83u4ei72o6yb" path="res://scripts/ship.gd" id="2_o6xl0"]
-[ext_resource type="Script" uid="uid://dpe8dva3ghx4m" path="res://scenes/protocol_door.gd" id="4_jyhfs"]
+[ext_resource type="Script" uid="uid://dpe8dva3ghx4m" path="res://scripts/protocol_door.gd" id="4_jyhfs"]
 [ext_resource type="Script" uid="uid://5ytsp6uu4yiw" path="res://scripts/ship_part.gd" id="5_tbgi4"]
 [ext_resource type="Script" uid="uid://s5ukqw2wf76t" path="res://scripts/ship_parts_manager.gd" id="5_tefeu"]
 [ext_resource type="Script" uid="uid://d0vnv56ny4mf4" path="res://scripts/generated_layout.gd" id="8_tipki"]
@@ -19,9 +19,12 @@
 [ext_resource type="Script" uid="uid://cyplkmvrwgerx" path="res://scripts/sonic_equipment.gd" id="15_dp3eg"]
 [ext_resource type="Script" uid="uid://bkkk4wvy8wbsx" path="res://scripts/technical_energy_system.gd" id="16_0ld40"]
 [ext_resource type="Script" uid="uid://61m3fyk3eapb" path="res://scripts/maintenance_station.gd" id="17_gqmmt"]
-[ext_resource type="Script" uid="uid://uht0yk84qxiu" path="res://scripts/laboratory_terminal.gd" id="19_lab"]
 [ext_resource type="Script" uid="uid://5p08d08iaggn" path="res://scripts/pause_menu.gd" id="17_muem4"]
 [ext_resource type="Script" uid="uid://bfalalc7e4y2n" path="res://scripts/support_terminal.gd" id="18_yc10j"]
+[ext_resource type="Script" uid="uid://uht0yk84qxiu" path="res://scripts/laboratory_terminal.gd" id="19_lab"]
+[ext_resource type="Script" uid="uid://dkednngwih8dt" path="res://scripts/archives_terminal.gd" id="20_pm3ni"]
+[ext_resource type="Script" uid="uid://ckmnqkc4pbrgp" path="res://scripts/sanctuary_terminal.gd" id="21_y6deb"]
+[ext_resource type="Script" uid="uid://cin6qbovlqlo2" path="res://scripts/main_core_terminal.gd" id="22_og1vs"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
 size = Vector2(180, 60)
@@ -2405,6 +2408,18 @@ script = ExtResource("18_yc10j")
 [node name="LaboratoryTerminal" type="Area2D" parent="UndergroundRoot" unique_id=1994190156]
 position = Vector2(900, -2900)
 script = ExtResource("19_lab")
+
+[node name="ArchivesTerminal" type="Area2D" parent="UndergroundRoot" unique_id=1627766631]
+position = Vector2(-800, -2880)
+script = ExtResource("20_pm3ni")
+
+[node name="SanctuaryTerminal" type="Area2D" parent="UndergroundRoot" unique_id=2059317687]
+position = Vector2(-2600, -4000)
+script = ExtResource("21_y6deb")
+
+[node name="MainCoreTerminal" type="Area2D" parent="UndergroundRoot" unique_id=46138205]
+position = Vector2(2600, -4000)
+script = ExtResource("22_og1vs")
 
 [node name="HackManager" type="Node" parent="." unique_id=830842068]
 script = ExtResource("9_85g3d")
