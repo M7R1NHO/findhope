@@ -19,6 +19,7 @@
 [ext_resource type="Script" uid="uid://cyplkmvrwgerx" path="res://scripts/sonic_equipment.gd" id="15_dp3eg"]
 [ext_resource type="Script" uid="uid://bkkk4wvy8wbsx" path="res://scripts/technical_energy_system.gd" id="16_0ld40"]
 [ext_resource type="Script" uid="uid://61m3fyk3eapb" path="res://scripts/maintenance_station.gd" id="17_gqmmt"]
+[ext_resource type="Script" uid="uid://uht0yk84qxiu" path="res://scripts/laboratory_terminal.gd" id="19_lab"]
 [ext_resource type="Script" uid="uid://5p08d08iaggn" path="res://scripts/pause_menu.gd" id="17_muem4"]
 [ext_resource type="Script" uid="uid://bfalalc7e4y2n" path="res://scripts/support_terminal.gd" id="18_yc10j"]
 
@@ -2400,6 +2401,10 @@ script = ExtResource("17_gqmmt")
 [node name="SupportTerminal" type="Area2D" parent="UndergroundRoot" unique_id=2041856902]
 position = Vector2(-2500, -1500)
 script = ExtResource("18_yc10j")
+
+[node name="LaboratoryTerminal" type="Area2D" parent="UndergroundRoot" unique_id=1994190156]
+position = Vector2(900, -2900)
+script = ExtResource("19_lab")
 
 [node name="HackManager" type="Node" parent="." unique_id=830842068]
 script = ExtResource("9_85g3d")
