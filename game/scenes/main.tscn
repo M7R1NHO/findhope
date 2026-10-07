@@ -18,7 +18,9 @@
 [ext_resource type="Script" uid="uid://cknev37ufeh83" path="res://scripts/facility_room_tracker.gd" id="14_jbj1t"]
 [ext_resource type="Script" uid="uid://cyplkmvrwgerx" path="res://scripts/sonic_equipment.gd" id="15_dp3eg"]
 [ext_resource type="Script" uid="uid://bkkk4wvy8wbsx" path="res://scripts/technical_energy_system.gd" id="16_0ld40"]
+[ext_resource type="Script" uid="uid://61m3fyk3eapb" path="res://scripts/maintenance_station.gd" id="17_gqmmt"]
 [ext_resource type="Script" uid="uid://5p08d08iaggn" path="res://scripts/pause_menu.gd" id="17_muem4"]
+[ext_resource type="Script" uid="uid://bfalalc7e4y2n" path="res://scripts/support_terminal.gd" id="18_yc10j"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
 size = Vector2(180, 60)
@@ -2390,6 +2392,14 @@ script = ExtResource("15_dp3eg")
 
 [node name="TechnicalEnergySystem" type="Node2D" parent="UndergroundRoot" unique_id=442326681]
 script = ExtResource("16_0ld40")
+
+[node name="MaintenanceStation" type="Area2D" parent="UndergroundRoot" unique_id=182265018]
+position = Vector2(-2200, -2900)
+script = ExtResource("17_gqmmt")
+
+[node name="SupportTerminal" type="Area2D" parent="UndergroundRoot" unique_id=2041856902]
+position = Vector2(-2500, -1500)
+script = ExtResource("18_yc10j")
 
 [node name="HackManager" type="Node" parent="." unique_id=830842068]
 script = ExtResource("9_85g3d")
