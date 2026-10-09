@@ -13,6 +13,10 @@ config_version=5
 config/name="Find Hope"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
+[autoload]
+
+SaveManager="*uid://bj6xo4e2jsw7s"
+
 [display]
 
 window/size/viewport_width=1280

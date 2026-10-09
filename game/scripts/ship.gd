@@ -8,6 +8,7 @@ extends StaticBody2D
 var main: Node
 var player: CharacterBody2D
 var parts_manager: Node
+var pause_menu: Node
 
 var interaction_label: Label
 
@@ -20,9 +21,12 @@ var info_label: Label
 var buttons_container: HBoxContainer
 var leave_button: Button
 var stay_button: Button
+var main_menu_button: Button
 
 var choice_open: bool = false
 var ending_started: bool = false
+
+var stay_selected_once: bool = false
 
 
 func _ready():
@@ -36,14 +40,34 @@ func _ready():
 		"ShipPartsManager"
 	)
 
+	pause_menu = main.get_node_or_null(
+		"PauseMenu"
+	)
+
+	load_run_state()
+
 	create_interaction_label()
 
 	create_departure_ui()
 
 
-# =========================================================
-# PROCESS
-# =========================================================
+func load_run_state():
+	stay_selected_once = bool(
+		SaveManager.get_run_value(
+			"story",
+			"surface_stay_selected",
+			false
+		)
+	)
+
+	ending_started = bool(
+		SaveManager.get_run_value(
+			"story",
+			"early_exit_ending",
+			false
+		)
+	)
+
 
 func _process(_delta):
 	if player == null:
@@ -77,10 +101,6 @@ func _process(_delta):
 		and all_parts
 	)
 
-
-# =========================================================
-# INTERACTION
-# =========================================================
 
 func examine():
 	if ending_started:
@@ -130,10 +150,6 @@ func examine():
 	show_departure_choice()
 
 
-# =========================================================
-# INTERACTION LABEL
-# =========================================================
-
 func create_interaction_label():
 	interaction_label = Label.new()
 
@@ -157,14 +173,14 @@ func create_interaction_label():
 	)
 
 
-# =========================================================
-# DEPARTURE UI
-# =========================================================
-
 func create_departure_ui():
 	choice_layer = CanvasLayer.new()
 
 	choice_layer.layer = 100
+
+	choice_layer.process_mode = (
+		Node.PROCESS_MODE_ALWAYS
+	)
 
 	add_child(
 		choice_layer
@@ -182,14 +198,13 @@ func create_departure_ui():
 
 	choice_root.visible = false
 
+	choice_root.process_mode = (
+		Node.PROCESS_MODE_ALWAYS
+	)
+
 	choice_layer.add_child(
 		choice_root
 	)
-
-
-	# -----------------------------------------------------
-	# FUNDO ESCURO
-	# -----------------------------------------------------
 
 	var background = ColorRect.new()
 
@@ -204,14 +219,13 @@ func create_departure_ui():
 		Control.PRESET_FULL_RECT
 	)
 
+	background.mouse_filter = (
+		Control.MOUSE_FILTER_STOP
+	)
+
 	choice_root.add_child(
 		background
 	)
-
-
-	# -----------------------------------------------------
-	# CENTRO
-	# -----------------------------------------------------
 
 	var center = CenterContainer.new()
 
@@ -223,11 +237,6 @@ func create_departure_ui():
 		center
 	)
 
-
-	# -----------------------------------------------------
-	# PAINEL
-	# -----------------------------------------------------
-
 	var panel = PanelContainer.new()
 
 	panel.custom_minimum_size = Vector2(
@@ -238,11 +247,6 @@ func create_departure_ui():
 	center.add_child(
 		panel
 	)
-
-
-	# -----------------------------------------------------
-	# MARGENS
-	# -----------------------------------------------------
 
 	var margin = MarginContainer.new()
 
@@ -270,11 +274,6 @@ func create_departure_ui():
 		margin
 	)
 
-
-	# -----------------------------------------------------
-	# CONTEÚDO
-	# -----------------------------------------------------
-
 	var vbox = VBoxContainer.new()
 
 	vbox.add_theme_constant_override(
@@ -285,11 +284,6 @@ func create_departure_ui():
 	margin.add_child(
 		vbox
 	)
-
-
-	# -----------------------------------------------------
-	# TÍTULO
-	# -----------------------------------------------------
 
 	title_label = Label.new()
 
@@ -307,11 +301,6 @@ func create_departure_ui():
 	vbox.add_child(
 		title_label
 	)
-
-
-	# -----------------------------------------------------
-	# TEXTO
-	# -----------------------------------------------------
 
 	info_label = Label.new()
 
@@ -338,11 +327,6 @@ func create_departure_ui():
 		info_label
 	)
 
-
-	# -----------------------------------------------------
-	# BOTÕES
-	# -----------------------------------------------------
-
 	buttons_container = HBoxContainer.new()
 
 	buttons_container.alignment = (
@@ -358,7 +342,6 @@ func create_departure_ui():
 		buttons_container
 	)
 
-
 	leave_button = Button.new()
 
 	leave_button.text = (
@@ -370,6 +353,10 @@ func create_departure_ui():
 		50
 	)
 
+	leave_button.process_mode = (
+		Node.PROCESS_MODE_ALWAYS
+	)
+
 	leave_button.pressed.connect(
 		_on_leave_planet_pressed
 	)
@@ -377,7 +364,6 @@ func create_departure_ui():
 	buttons_container.add_child(
 		leave_button
 	)
-
 
 	stay_button = Button.new()
 
@@ -390,6 +376,10 @@ func create_departure_ui():
 		50
 	)
 
+	stay_button.process_mode = (
+		Node.PROCESS_MODE_ALWAYS
+	)
+
 	stay_button.pressed.connect(
 		_on_stay_pressed
 	)
@@ -398,10 +388,31 @@ func create_departure_ui():
 		stay_button
 	)
 
+	main_menu_button = Button.new()
 
-# =========================================================
-# SHOW CHOICE
-# =========================================================
+	main_menu_button.text = (
+		"MENU PRINCIPAL"
+	)
+
+	main_menu_button.custom_minimum_size = Vector2(
+		220,
+		52
+	)
+
+	main_menu_button.process_mode = (
+		Node.PROCESS_MODE_ALWAYS
+	)
+
+	main_menu_button.visible = false
+
+	main_menu_button.pressed.connect(
+		_on_main_menu_pressed
+	)
+
+	buttons_container.add_child(
+		main_menu_button
+	)
+
 
 func show_departure_choice():
 	if choice_open:
@@ -424,10 +435,6 @@ func show_departure_choice():
 			false
 		)
 
-
-# =========================================================
-# PERMANECER
-# =========================================================
 
 func _on_stay_pressed():
 	choice_open = false
@@ -452,10 +459,44 @@ func _on_stay_pressed():
 			+ "por enquanto."
 		)
 
+	if not stay_selected_once:
+		register_stay_decision()
 
-# =========================================================
-# SAIR DO PLANETA
-# =========================================================
+
+func register_stay_decision():
+	stay_selected_once = true
+
+	SaveManager.set_run_value(
+		"story",
+		"surface_stay_selected",
+		true
+	)
+
+	SaveManager.set_run_value(
+		"story",
+		"ship_repaired",
+		true
+	)
+
+	SaveManager.set_run_value(
+		"story",
+		"early_exit_ending",
+		false
+	)
+
+	var success = SaveManager.autosave(
+		"surface_stay_selected"
+	)
+
+	print("")
+	print("======================================")
+	print("SURFACE DECISION: STAY")
+	print(
+		"AUTOSAVE #2: ",
+		success
+	)
+	print("======================================")
+
 
 func _on_leave_planet_pressed():
 	if ending_started:
@@ -463,6 +504,10 @@ func _on_leave_planet_pressed():
 
 	ending_started = true
 	choice_open = false
+
+	register_early_exit_ending()
+
+	block_game_after_ending()
 
 	title_label.text = (
 		"FIND HOPE"
@@ -476,7 +521,10 @@ func _on_leave_planet_pressed():
 		+ "ficaram para trás."
 	)
 
-	buttons_container.visible = false
+	leave_button.visible = false
+	stay_button.visible = false
+
+	main_menu_button.visible = true
 
 	if main.has_method(
 		"add_chat_message"
@@ -487,3 +535,94 @@ func _on_leave_planet_pressed():
 		)
 
 	get_tree().paused = true
+
+
+func block_game_after_ending():
+	SaveManager.set_manual_save_block(
+		"ending",
+		true
+	)
+
+	if player != null:
+		player.velocity = Vector2.ZERO
+
+		player.set_physics_process(
+			false
+		)
+
+		player.set_process_unhandled_input(
+			false
+		)
+
+	if pause_menu != null:
+		pause_menu.set_process_unhandled_input(
+			false
+		)
+
+
+func _on_main_menu_pressed():
+	var main_menu_scene_path := ""
+
+	if pause_menu != null:
+		var value = pause_menu.get(
+			"main_menu_scene_path"
+		)
+
+		if value != null:
+			main_menu_scene_path = str(
+				value
+			).strip_edges()
+
+	if main_menu_scene_path.is_empty():
+		push_warning(
+			"Não foi possível encontrar "
+			+ "main_menu_scene_path no PauseMenu."
+		)
+
+		return
+
+	SaveManager.set_manual_save_block(
+		"ending",
+		false
+	)
+
+	get_tree().paused = false
+
+	get_tree().change_scene_to_file(
+		main_menu_scene_path
+	)
+
+
+func register_early_exit_ending():
+	SaveManager.set_run_value(
+		"story",
+		"early_exit_ending",
+		true
+	)
+
+	SaveManager.set_run_value(
+		"story",
+		"run_ended",
+		true
+	)
+
+	SaveManager.set_run_value(
+		"story",
+		"ending_id",
+		"leave_planet_early"
+	)
+
+	SaveManager.set_run_value(
+		"story",
+		"full_completion",
+		false
+	)
+
+	print("")
+	print("======================================")
+	print("EARLY ENDING")
+	print("ENDING ID: leave_planet_early")
+	print("FULL COMPLETION: FALSE")
+	print("ACHIEVEMENTS UNLOCKED: FALSE")
+	print("ANDROID DIARY UNLOCKED: FALSE")
+	print("======================================")

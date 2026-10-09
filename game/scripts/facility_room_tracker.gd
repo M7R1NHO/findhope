@@ -119,17 +119,28 @@ func _ready():
 		)
 		return
 
-	create_room_triggers()
-
-	print("")
-	print("======================================")
-	print("FACILITY ROOM TRACKER READY")
-	print("ROOM TRIGGERS: ", rooms.size())
-	print("======================================")
+	call_deferred(
+		"create_room_triggers"
+	)
 
 
 func create_room_triggers():
+	if underground_root == null:
+		return
+
+	var created_count: int = 0
+
 	for room_id in rooms.keys():
+		var trigger_name = (
+			"RoomTrigger_"
+			+ room_id
+		)
+
+		if underground_root.has_node(
+			trigger_name
+		):
+			continue
+
 		var data: Dictionary = rooms[
 			room_id
 		]
@@ -138,6 +149,15 @@ func create_room_triggers():
 			room_id,
 			data
 		)
+
+		created_count += 1
+
+	print("")
+	print("======================================")
+	print("FACILITY ROOM TRACKER READY")
+	print("ROOM TRIGGERS CREATED: ", created_count)
+	print("ROOMS REGISTERED: ", rooms.size())
+	print("======================================")
 
 
 func create_room_trigger(
@@ -161,13 +181,11 @@ func create_room_trigger(
 	area.monitoring = true
 	area.monitorable = true
 
-	underground_root.add_child(
-		area
-	)
 
 	var collision = CollisionShape2D.new()
 
 	collision.name = "CollisionShape2D"
+
 
 	var shape = RectangleShape2D.new()
 
@@ -185,6 +203,7 @@ func create_room_trigger(
 		collision
 	)
 
+
 	area.body_entered.connect(
 		_on_room_body_entered.bind(
 			room_id
@@ -195,6 +214,11 @@ func create_room_trigger(
 		_on_room_body_exited.bind(
 			room_id
 		)
+	)
+
+
+	underground_root.add_child(
+		area
 	)
 
 
@@ -214,6 +238,8 @@ func _on_room_body_entered(
 		room_id
 	)
 
+	refresh_current_location_context()
+
 
 func _on_room_body_exited(
 	body: Node,
@@ -232,6 +258,8 @@ func _on_room_body_exited(
 	print(
 		"FACILITY CURRENT ROOM: CORRIDOR / NONE"
 	)
+
+	refresh_current_location_context()
 
 
 func is_player(
@@ -303,7 +331,15 @@ func get_current_room_map_info() -> String:
 
 
 func refresh_current_location_context():
+	var room_name = get_current_room_name()
+
+	if room_name.is_empty():
+		print(
+			"FACILITY LOCATION READY FOR CHAT: CORRIDOR / NONE"
+		)
+		return
+
 	print(
 		"FACILITY LOCATION READY FOR CHAT: ",
-		get_current_room_name()
+		room_name
 	)

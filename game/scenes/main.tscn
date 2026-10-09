@@ -25,6 +25,7 @@
 [ext_resource type="Script" uid="uid://dkednngwih8dt" path="res://scripts/archives_terminal.gd" id="20_pm3ni"]
 [ext_resource type="Script" uid="uid://ckmnqkc4pbrgp" path="res://scripts/sanctuary_terminal.gd" id="21_y6deb"]
 [ext_resource type="Script" uid="uid://cin6qbovlqlo2" path="res://scripts/main_core_terminal.gd" id="22_og1vs"]
+[ext_resource type="Script" uid="uid://cfh7aoywgfdci" path="res://scripts/run_state.gd" id="26_2wyq8"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
 size = Vector2(180, 60)
@@ -2430,3 +2431,6 @@ script = ExtResource("14_a8y0u")
 [node name="PauseMenu" type="Node" parent="." unique_id=2140934688]
 script = ExtResource("17_muem4")
 main_menu_scene_path = "uid://du4rktewgxl5l"
+
+[node name="RunState" type="Node" parent="." unique_id=347757290]
+script = ExtResource("26_2wyq8")

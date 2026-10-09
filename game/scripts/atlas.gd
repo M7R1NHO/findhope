@@ -11,6 +11,12 @@ signal sensor_message(message: String)
 @export var scan_cooldown: float = 1.0
 
 
+const SCAN_URL := "http://127.0.0.1:8000/world/scan"
+
+const DISCOVERY_UNKNOWN_DEBRIS := "unknown_debris"
+const DISCOVERY_ANCIENT_SCULPTURE := "ancient_sculpture"
+
+
 var player: CharacterBody2D
 var is_following: bool = false
 
@@ -19,22 +25,41 @@ var scan_request: HTTPRequest
 var scan_in_progress: bool = false
 var scan_cooldown_active: bool = false
 
+var pending_local_discoveries: Array[String] = []
 
-const SCAN_URL := "http://127.0.0.1:8000/world/scan"
+var unknown_debris_discovered: bool = false
+var ancient_sculpture_discovered: bool = false
 
 
 func _ready():
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
 
-	player = get_parent().get_node("Player")
+	player = get_parent().get_node(
+		"Player"
+	)
+
+	load_surface_discoveries()
 
 	scan_request = HTTPRequest.new()
 	scan_request.name = "ScanRequest"
 
-	add_child(scan_request)
+	add_child(
+		scan_request
+	)
 
 	scan_request.request_completed.connect(
 		_on_scan_request_completed
+	)
+
+	print("")
+	print("ATLAS SENSOR READY")
+	print(
+		"Unknown debris discovered: ",
+		unknown_debris_discovered
+	)
+	print(
+		"Ancient sculpture discovered: ",
+		ancient_sculpture_discovered
 	)
 
 
@@ -71,10 +96,6 @@ func _physics_process(_delta):
 	move_and_slide()
 
 
-# =========================================================
-# SENSOR
-# =========================================================
-
 func scan_environment():
 	if scan_in_progress:
 		sensor_message.emit(
@@ -97,30 +118,40 @@ func scan_environment():
 			"detectable"
 		)
 	)
-	
+
 	print(
-	"OBJETOS NO GRUPO DETECTABLE: ",
-	detectable_objects.size()
-)
+		"OBJETOS NO GRUPO DETECTABLE: ",
+		detectable_objects.size()
+	)
 
 	for obj in detectable_objects:
+		if not is_instance_valid(
+			obj
+		):
+			continue
+
 		print(
-		"DETECTABLE: ",
-		obj.name,
-		" | posição: ",
-		obj.global_position,
-		" | distância: ",
-		global_position.distance_to(
-			obj.global_position
+			"DETECTABLE: ",
+			obj.name,
+			" | posição: ",
+			obj.global_position,
+			" | distância: ",
+			global_position.distance_to(
+				obj.global_position
+			)
 		)
-	)
 
 	var detections: Array = []
 
 	print("")
-	print("========== ATLAS SENSOR SCAN ==========")
+	print("ATLAS SENSOR SCAN")
 
 	for obj in detectable_objects:
+		if not is_instance_valid(
+			obj
+		):
+			continue
+
 		var distance_px = (
 			global_position
 			.distance_to(
@@ -128,40 +159,52 @@ func scan_environment():
 			)
 		)
 
-		if distance_px <= sensor_range:
-			var object_type = get_object_type(
-				str(obj.name)
-			)
+		if distance_px > sensor_range:
+			continue
 
-			var detection = {
-				"id": str(obj.name).to_lower(),
-				"name": get_object_display_name(
-					str(obj.name)
-				),
-				"type": object_type,
-				"distance_px": distance_px
-			}
-
-			detections.append(
-				detection
+		var object_type = get_object_type(
+			str(
+				obj.name
 			)
+		)
 
-			print(
-				obj.name,
-				" | tipo: ",
-				object_type,
-				" | distância interna: ",
-				round(distance_px),
-				" px"
-			)
+		var detection = {
+			"id": str(
+				obj.name
+			).to_lower(),
+			"name": get_object_display_name(
+				str(
+					obj.name
+				)
+			),
+			"type": object_type,
+			"distance_px": distance_px
+		}
+
+		detections.append(
+			detection
+		)
+
+		print(
+			obj.name,
+			" | tipo: ",
+			object_type,
+			" | distância interna: ",
+			round(
+				distance_px
+			),
+			" px"
+		)
 
 	if detections.is_empty():
 		print(
 			"Nenhum objeto detectado."
 		)
 
-	print(
-		"======================================="
+	pending_local_discoveries = (
+		register_local_discoveries(
+			detections
+		)
 	)
 
 	send_scan_to_backend(
@@ -177,44 +220,21 @@ func start_scan_cooldown():
 	scan_cooldown_active = false
 
 
-# =========================================================
-# OBJECT METADATA
-# =========================================================
-
 func get_object_type(
 	object_name: String
 ) -> String:
-
-	# -----------------------------------------------------
-	# NAVE 47
-	# -----------------------------------------------------
-
 	if object_name == "Ship":
 		return "ship"
-
-	# -----------------------------------------------------
-	# DESTROÇOS DESCONHECIDOS
-	# IMPORTANTE:
-	# verificar antes dos destroços normais.
-	# -----------------------------------------------------
 
 	if object_name.begins_with(
 		"UnknownDebris"
 	):
-		return "unknown_debris"
-
-	# -----------------------------------------------------
-	# ESCULTURA ANTIGA
-	# -----------------------------------------------------
+		return DISCOVERY_UNKNOWN_DEBRIS
 
 	if object_name.begins_with(
 		"AncientSculpture"
 	):
-		return "ancient_sculpture"
-
-	# -----------------------------------------------------
-	# DESTROÇOS NORMAIS DA NAVE 47
-	# -----------------------------------------------------
+		return DISCOVERY_ANCIENT_SCULPTURE
 
 	if object_name.begins_with(
 		"Debris"
@@ -227,7 +247,6 @@ func get_object_type(
 func get_object_display_name(
 	object_name: String
 ) -> String:
-
 	if object_name == "Ship":
 		return "Nave 47"
 
@@ -249,9 +268,112 @@ func get_object_display_name(
 	return object_name
 
 
-# =========================================================
-# BACKEND
-# =========================================================
+func register_local_discoveries(
+	detections: Array
+) -> Array[String]:
+	var new_discoveries: Array[String] = []
+
+	for detection in detections:
+		if not (
+			detection is Dictionary
+		):
+			continue
+
+		var object_type = str(
+			detection.get(
+				"type",
+				""
+			)
+		)
+
+		if (
+			object_type
+			== DISCOVERY_UNKNOWN_DEBRIS
+			and not unknown_debris_discovered
+		):
+			unknown_debris_discovered = true
+
+			new_discoveries.append(
+				DISCOVERY_UNKNOWN_DEBRIS
+			)
+
+			SaveManager.set_run_value(
+				"story",
+				"unknown_debris_discovered",
+				true
+			)
+
+			print(
+				"SURFACE DISCOVERY: UNKNOWN DEBRIS"
+			)
+
+		elif (
+			object_type
+			== DISCOVERY_ANCIENT_SCULPTURE
+			and not ancient_sculpture_discovered
+		):
+			ancient_sculpture_discovered = true
+
+			new_discoveries.append(
+				DISCOVERY_ANCIENT_SCULPTURE
+			)
+
+			SaveManager.set_run_value(
+				"story",
+				"ancient_sculpture_discovered",
+				true
+			)
+
+			print(
+				"SURFACE DISCOVERY: ANCIENT SCULPTURE"
+			)
+
+	return new_discoveries
+
+
+func load_surface_discoveries():
+	unknown_debris_discovered = bool(
+		SaveManager.get_run_value(
+			"story",
+			"unknown_debris_discovered",
+			false
+		)
+	)
+
+	ancient_sculpture_discovered = bool(
+		SaveManager.get_run_value(
+			"story",
+			"ancient_sculpture_discovered",
+			false
+		)
+	)
+
+
+func has_unknown_debris_discovery() -> bool:
+	return unknown_debris_discovered
+
+
+func has_ancient_sculpture_discovery() -> bool:
+	return ancient_sculpture_discovered
+
+
+func has_surface_protocol_evidence() -> bool:
+	return (
+		unknown_debris_discovered
+		and ancient_sculpture_discovered
+	)
+
+
+func get_surface_discovery_state() -> Dictionary:
+	return {
+		"unknown_debris":
+			unknown_debris_discovered,
+		"ancient_sculpture":
+			ancient_sculpture_discovered,
+		"protocol_evidence_ready":
+			has_surface_protocol_evidence()
+	}
+
 
 func send_scan_to_backend(
 	detections: Array
@@ -287,8 +409,14 @@ func send_scan_to_backend(
 			error
 		)
 
+		show_new_discoveries(
+			pending_local_discoveries
+		)
+
+		pending_local_discoveries.clear()
+
 		sensor_message.emit(
-			"Não consegui processar o scan."
+			"Não consegui processar completamente o scan."
 		)
 
 
@@ -301,16 +429,18 @@ func _on_scan_request_completed(
 	scan_in_progress = false
 
 	print("")
-	print("========== BACKEND SENSOR ==========")
+	print("BACKEND SENSOR")
 	print(
 		"HTTP: ",
 		response_code
 	)
 
 	if response_code != 200:
-		print(
-			"Erro ao processar scan."
+		show_new_discoveries(
+			pending_local_discoveries
 		)
+
+		pending_local_discoveries.clear()
 
 		sensor_message.emit(
 			"O sistema de sensores encontrou um erro."
@@ -327,9 +457,11 @@ func _on_scan_request_completed(
 	)
 
 	if data == null:
-		print(
-			"Resposta inválida do backend."
+		show_new_discoveries(
+			pending_local_discoveries
 		)
+
+		pending_local_discoveries.clear()
 
 		sensor_message.emit(
 			"Recebi dados inválidos dos sensores."
@@ -346,14 +478,9 @@ func _on_scan_request_completed(
 		[]
 	)
 
-	var new_discoveries = data.get(
-		"new_discoveries",
-		[]
-	)
-
 	print(
-		"Novas descobertas: ",
-		new_discoveries
+		"Novas descobertas da run: ",
+		pending_local_discoveries
 	)
 
 	show_scan_result(
@@ -361,17 +488,11 @@ func _on_scan_request_completed(
 	)
 
 	show_new_discoveries(
-		new_discoveries
+		pending_local_discoveries
 	)
 
-	print(
-		"===================================="
-	)
+	pending_local_discoveries.clear()
 
-
-# =========================================================
-# NEW DISCOVERIES
-# =========================================================
 
 func show_new_discoveries(
 	new_discoveries: Array
@@ -384,24 +505,20 @@ func show_new_discoveries(
 			discovery
 		)
 
-		if discovery_name == "unknown_debris":
+		if discovery_name == DISCOVERY_UNKNOWN_DEBRIS:
 			sensor_message.emit(
 				"Estes destroços não correspondem "
 				+ "a nenhuma parte identificada da Nave 47. "
 				+ "A origem permanece desconhecida."
 			)
 
-		elif discovery_name == "ancient_sculpture":
+		elif discovery_name == DISCOVERY_ANCIENT_SCULPTURE:
 			sensor_message.emit(
 				"A estrutura parece ser uma escultura antiga. "
 				+ "Não tenho dados suficientes para determinar "
 				+ "a sua origem ou quem a construiu."
 			)
 
-
-# =========================================================
-# SCAN RESULT
-# =========================================================
 
 func show_scan_result(
 	detected_objects: Array
@@ -452,7 +569,6 @@ func show_scan_result(
 func get_article_and_name(
 	obj: Dictionary
 ) -> String:
-
 	var object_type = obj.get(
 		"type",
 		"unknown"
@@ -475,13 +591,13 @@ func get_article_and_name(
 			+ object_name.to_lower()
 		)
 
-	if object_type == "unknown_debris":
+	if object_type == DISCOVERY_UNKNOWN_DEBRIS:
 		return (
 			"os "
 			+ object_name.to_lower()
 		)
 
-	if object_type == "ancient_sculpture":
+	if object_type == DISCOVERY_ANCIENT_SCULPTURE:
 		return (
 			"uma "
 			+ object_name.to_lower()

@@ -2,6 +2,7 @@ extends Node
 
 
 const REQUIRED_PARTS: int = 6
+const SAVE_ID := "ship_parts_manager"
 
 const GAMEPLAY_CONTEXT_EVENT_URL := \
 	"http://127.0.0.1:8000/gameplay/context/event"
@@ -14,6 +15,10 @@ var context_request_in_progress: bool = false
 
 
 func _ready():
+	add_to_group(
+		"saveable"
+	)
+
 	context_request = HTTPRequest.new()
 	context_request.name = "ShipPartsContextRequest"
 
@@ -25,16 +30,15 @@ func _ready():
 		_on_context_request_completed
 	)
 
+	call_deferred(
+		"sync_all_parts"
+	)
 
-# =========================================================
-# COLLECT
-# =========================================================
 
 func collect_part(
 	part_id: String,
 	display_name: String
 ) -> bool:
-
 	part_id = part_id.strip_edges()
 
 	if part_id.is_empty():
@@ -61,7 +65,7 @@ func collect_part(
 	)
 
 	print("")
-	print("========== SHIP PART COLLECTED ==========")
+	print("SHIP PART COLLECTED")
 	print("ID: ", part_id)
 	print("Nome: ", display_name)
 	print(
@@ -70,7 +74,6 @@ func collect_part(
 		"/",
 		REQUIRED_PARTS
 	)
-	print("=========================================")
 
 	show_collection_message(
 		display_name
@@ -80,10 +83,6 @@ func collect_part(
 
 	return true
 
-
-# =========================================================
-# PROGRESS
-# =========================================================
 
 func get_collected_count() -> int:
 	return collected_part_ids.size()
@@ -108,9 +107,14 @@ func get_progress_text() -> String:
 	)
 
 
-# =========================================================
-# PLAYER FEEDBACK
-# =========================================================
+func is_part_collected(
+	part_id: String
+) -> bool:
+	return (
+		part_id.strip_edges()
+		in collected_part_ids
+	)
+
 
 func show_collection_message(
 	display_name: String
@@ -144,10 +148,6 @@ func show_collection_message(
 			+ "e avaliar a reparação."
 		)
 
-
-# =========================================================
-# BACKEND CONTEXT
-# =========================================================
 
 func send_progress_to_backend():
 	if context_request_in_progress:
@@ -226,4 +226,83 @@ func _on_context_request_completed(
 	print(
 		"SHIP PART PROGRESS CONTEXT OK: ",
 		get_progress_text()
+	)
+
+
+func sync_all_parts():
+	var parts = get_tree().get_nodes_in_group(
+		"ship_part"
+	)
+
+	for part in parts:
+		if not is_instance_valid(
+			part
+		):
+			continue
+
+		if part.has_method(
+			"sync_with_parts_manager"
+		):
+			part.sync_with_parts_manager()
+
+
+func get_save_id() -> String:
+	return SAVE_ID
+
+
+func get_save_data() -> Dictionary:
+	var ids: Array = []
+
+	for part_id in collected_part_ids:
+		ids.append(
+			part_id
+		)
+
+	print(
+		"SHIP PARTS SAVED: ",
+		ids.size(),
+		"/",
+		REQUIRED_PARTS
+	)
+
+	return {
+		"collected_part_ids": ids
+	}
+
+
+func load_save_data(
+	data: Dictionary
+):
+	collected_part_ids.clear()
+
+	var saved_ids = data.get(
+		"collected_part_ids",
+		[]
+	)
+
+	if saved_ids is Array:
+		for saved_id in saved_ids:
+			var part_id = str(
+				saved_id
+			).strip_edges()
+
+			if part_id.is_empty():
+				continue
+
+			if part_id in collected_part_ids:
+				continue
+
+			collected_part_ids.append(
+				part_id
+			)
+
+	print(
+		"SHIP PARTS RESTORED: ",
+		get_collected_count(),
+		"/",
+		REQUIRED_PARTS
+	)
+
+	call_deferred(
+		"sync_all_parts"
 	)
