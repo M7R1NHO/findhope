@@ -1,29 +1,12 @@
 extends Node2D
 
 
-# =========================================================
-# SCRIPT DA PORTA
-# =========================================================
-
 const DOOR_SCRIPT_PATH := (
 	"res://scripts/underground_door.gd"
 )
 
 
-# =========================================================
-# CORREDORES INTERNOS
-#
-# Cada corredor agora possui:
-#
-# A = porta no início do corredor
-# B = porta no fim do corredor
-#
-# Entrance_Hall não entra aqui porque a entrada principal
-# já possui o ProtocolDoor.
-# =========================================================
-
 var corridor_paths := {
-
 	"Hall_Storage": [
 		Vector2(-300, -1200),
 		Vector2(-300, -1650),
@@ -87,52 +70,38 @@ var corridor_paths := {
 }
 
 
-# =========================================================
-# READY
-# =========================================================
+var security_locked_corridors: Dictionary = {}
+
+var main_core_locked_corridors: Dictionary = {}
+
 
 func _ready():
-
 	create_all_doors()
 
+	call_deferred(
+		"reapply_all_corridor_locks"
+	)
 
 	print("")
-	print(
-		"======================================"
-	)
-
-	print(
-		"DOUBLE DOOR SYSTEM READY"
-	)
-
+	print("======================================")
+	print("DOUBLE DOOR SYSTEM READY")
 	print(
 		"CORRIDORS: ",
 		corridor_paths.size()
 	)
-
 	print(
 		"EXPECTED DOORS: ",
 		corridor_paths.size() * 2
 	)
+	print("======================================")
 
-	print(
-		"======================================"
-	)
-
-
-# =========================================================
-# CRIAR TODAS AS PORTAS
-# =========================================================
 
 func create_all_doors():
-
 	var door_script = load(
 		DOOR_SCRIPT_PATH
 	)
 
-
 	if door_script == null:
-
 		push_error(
 			"Não foi possível carregar "
 			+ "underground_door.gd"
@@ -140,34 +109,24 @@ func create_all_doors():
 
 		return
 
-
 	for corridor_id in corridor_paths.keys():
-
 		var path: Array = (
 			corridor_paths[
 				corridor_id
 			]
 		)
 
-
 		if path.size() < 2:
 			continue
-
-
-		# =================================================
-		# PORTA A
-		# =================================================
 
 		var start_position: Vector2 = (
 			path[0]
 		)
 
-
 		var start_direction: Vector2 = (
 			path[1]
 			- path[0]
 		)
-
 
 		create_corridor_door(
 			corridor_id,
@@ -177,26 +136,18 @@ func create_all_doors():
 			door_script
 		)
 
-
-		# =================================================
-		# PORTA B
-		# =================================================
-
 		var last_index = (
 			path.size() - 1
 		)
-
 
 		var end_position: Vector2 = (
 			path[last_index]
 		)
 
-
 		var end_direction: Vector2 = (
 			path[last_index]
 			- path[last_index - 1]
 		)
-
 
 		create_corridor_door(
 			corridor_id,
@@ -207,10 +158,6 @@ func create_all_doors():
 		)
 
 
-# =========================================================
-# CRIAR PORTA DE UM DOS LADOS
-# =========================================================
-
 func create_corridor_door(
 	corridor_id: String,
 	side: String,
@@ -218,7 +165,6 @@ func create_corridor_door(
 	corridor_direction: Vector2,
 	door_script
 ):
-
 	var door_name = (
 		get_door_name(
 			corridor_id,
@@ -226,18 +172,11 @@ func create_corridor_door(
 		)
 	)
 
-
-	# =====================================================
-	# PORTA JÁ EXISTE
-	# =====================================================
-
 	var existing_door = get_node_or_null(
 		door_name
 	)
 
-
 	if existing_door != null:
-
 		existing_door.set_meta(
 			"corridor_id",
 			corridor_id
@@ -248,19 +187,17 @@ func create_corridor_door(
 			side
 		)
 
+		apply_pending_locks_to_door(
+			existing_door,
+			corridor_id
+		)
 
 		print(
 			"DOOR EXISTS: ",
 			door_name
 		)
 
-
 		return
-
-
-	# =====================================================
-	# TAMANHO DA PORTA
-	# =====================================================
 
 	var door_size = (
 		get_door_size(
@@ -268,21 +205,13 @@ func create_corridor_door(
 		)
 	)
 
-
-	# =====================================================
-	# CRIAR
-	# =====================================================
-
 	var door = Area2D.new()
 
-
 	door.name = door_name
-
 
 	door.set_script(
 		door_script
 	)
-
 
 	door.set(
 		"door_id",
@@ -292,34 +221,33 @@ func create_corridor_door(
 		+ side.to_lower()
 	)
 
-
 	door.set(
 		"door_size",
 		door_size
 	)
 
-
 	door.position = (
 		door_position
 	)
-
 
 	door.set_meta(
 		"corridor_id",
 		corridor_id
 	)
 
-
 	door.set_meta(
 		"corridor_side",
 		side
 	)
 
-
 	add_child(
 		door
 	)
 
+	apply_pending_locks_to_door(
+		door,
+		corridor_id
+	)
 
 	print(
 		"DOOR CREATED: ",
@@ -333,35 +261,16 @@ func create_corridor_door(
 	)
 
 
-# =========================================================
-# TAMANHO / ORIENTAÇÃO
-# =========================================================
-
 func get_door_size(
 	direction: Vector2
 ) -> Vector2:
-
-	# -----------------------------------------------------
-	# CORREDOR HORIZONTAL
-	#
-	# Porta vertical
-	# -----------------------------------------------------
-
 	if abs(direction.x) >= abs(
 		direction.y
 	):
-
 		return Vector2(
 			30,
 			160
 		)
-
-
-	# -----------------------------------------------------
-	# CORREDOR VERTICAL
-	#
-	# Porta horizontal
-	# -----------------------------------------------------
 
 	return Vector2(
 		160,
@@ -369,27 +278,15 @@ func get_door_size(
 	)
 
 
-# =========================================================
-# NOME DA PORTA
-# =========================================================
-
 func get_door_name(
 	corridor_id: String,
 	side: String
 ) -> String:
-
-	# -----------------------------------------------------
-	# A nossa Door_01 antiga já ocupa exatamente
-	# o lado B de Hall_Technical.
-	# -----------------------------------------------------
-
 	if (
 		corridor_id == "Hall_Technical"
 		and side == "B"
 	):
-
 		return "Door_01"
-
 
 	return (
 		"Door_"
@@ -399,18 +296,10 @@ func get_door_name(
 	)
 
 
-# =========================================================
-# API PARA OUTROS SISTEMAS
-#
-# AlienEncounterManager usa isto para descobrir
-# qual é a porta da frente.
-# =========================================================
-
 func get_door_for_corridor(
 	corridor_id: String,
 	side: String
 ) -> Node:
-
 	var door_name = (
 		get_door_name(
 			corridor_id,
@@ -418,7 +307,106 @@ func get_door_for_corridor(
 		)
 	)
 
-
 	return get_node_or_null(
 		door_name
 	)
+
+
+func set_corridor_security_locked(
+	corridor_id: String,
+	locked: bool
+):
+	if locked:
+		security_locked_corridors[
+			corridor_id
+		] = true
+
+	else:
+		security_locked_corridors.erase(
+			corridor_id
+		)
+
+	apply_locks_to_corridor(
+		corridor_id
+	)
+
+
+func set_corridor_main_core_locked(
+	corridor_id: String,
+	locked: bool
+):
+	if locked:
+		main_core_locked_corridors[
+			corridor_id
+		] = true
+
+	else:
+		main_core_locked_corridors.erase(
+			corridor_id
+		)
+
+	apply_locks_to_corridor(
+		corridor_id
+	)
+
+
+func apply_locks_to_corridor(
+	corridor_id: String
+):
+	for side in [
+		"A",
+		"B"
+	]:
+		var door = get_door_for_corridor(
+			corridor_id,
+			side
+		)
+
+		if door == null:
+			continue
+
+		apply_pending_locks_to_door(
+			door,
+			corridor_id
+		)
+
+
+func apply_pending_locks_to_door(
+	door: Node,
+	corridor_id: String
+):
+	if door == null:
+		return
+
+	var security_locked = (
+		security_locked_corridors.has(
+			corridor_id
+		)
+	)
+
+	var main_core_locked = (
+		main_core_locked_corridors.has(
+			corridor_id
+		)
+	)
+
+	if door.has_method(
+		"set_security_locked"
+	):
+		door.set_security_locked(
+			security_locked
+		)
+
+	if door.has_method(
+		"set_main_core_locked"
+	):
+		door.set_main_core_locked(
+			main_core_locked
+		)
+
+
+func reapply_all_corridor_locks():
+	for corridor_id in corridor_paths.keys():
+		apply_locks_to_corridor(
+			corridor_id
+		)

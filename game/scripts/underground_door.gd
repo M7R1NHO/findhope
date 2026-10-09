@@ -1,10 +1,6 @@
 extends Area2D
 
 
-# =========================================================
-# CONFIGURAÇÃO
-# =========================================================
-
 @export var door_id: String = "underground_door_01"
 
 @export var door_size: Vector2 = Vector2(
@@ -14,10 +10,6 @@ extends Area2D
 
 @export var interaction_padding: float = 100.0
 
-
-# =========================================================
-# ESTADO
-# =========================================================
 
 enum HackAction {
 	OPEN,
@@ -33,10 +25,10 @@ var hack_in_progress: bool = false
 
 var pending_action: HackAction = HackAction.OPEN
 
+var power_locked: bool = false
+var security_locked: bool = false
+var main_core_locked: bool = false
 
-# =========================================================
-# REFERÊNCIAS
-# =========================================================
 
 var hack_manager: Node = null
 
@@ -50,10 +42,6 @@ var interaction_collision: CollisionShape2D = null
 
 var interaction_label: Label = null
 
-
-# =========================================================
-# READY
-# =========================================================
 
 func _ready():
 	create_door_nodes()
@@ -76,16 +64,7 @@ func _ready():
 	)
 
 
-# =========================================================
-# CRIAR NÓS DA PORTA AUTOMATICAMENTE
-# =========================================================
-
 func create_door_nodes():
-
-	# -----------------------------------------------------
-	# VISUAL
-	# -----------------------------------------------------
-
 	door_visual = Polygon2D.new()
 
 	door_visual.name = "DoorVisual"
@@ -108,10 +87,6 @@ func create_door_nodes():
 	)
 
 
-	# -----------------------------------------------------
-	# CORPO FÍSICO
-	# -----------------------------------------------------
-
 	door_body = StaticBody2D.new()
 
 	door_body.name = "DoorBody"
@@ -120,10 +95,6 @@ func create_door_nodes():
 		door_body
 	)
 
-
-	# -----------------------------------------------------
-	# COLISÃO DA PORTA
-	# -----------------------------------------------------
 
 	door_collision = CollisionShape2D.new()
 
@@ -139,10 +110,6 @@ func create_door_nodes():
 		door_collision
 	)
 
-
-	# -----------------------------------------------------
-	# ÁREA DE INTERAÇÃO
-	# -----------------------------------------------------
 
 	interaction_collision = CollisionShape2D.new()
 
@@ -162,23 +129,17 @@ func create_door_nodes():
 	)
 
 
-	# -----------------------------------------------------
-	# LABEL
-	# -----------------------------------------------------
-
 	interaction_label = Label.new()
 
 	interaction_label.name = "InteractionLabel"
 
-	interaction_label.text = "[E] INTERAGIR"
-
 	interaction_label.position = Vector2(
-		-120,
+		-140,
 		-door_size.y / 2.0 - 65
 	)
 
 	interaction_label.size = Vector2(
-		240,
+		280,
 		40
 	)
 
@@ -200,10 +161,6 @@ func create_door_nodes():
 	)
 
 
-# =========================================================
-# ENCONTRAR HACK MANAGER
-# =========================================================
-
 func find_hack_manager():
 	var current_scene = (
 		get_tree().current_scene
@@ -212,23 +169,17 @@ func find_hack_manager():
 	if current_scene == null:
 		return
 
-
 	hack_manager = (
 		current_scene.get_node_or_null(
 			"HackManager"
 		)
 	)
 
-
 	if hack_manager == null:
 		push_error(
 			"UndergroundDoor não encontrou HackManager."
 		)
 
-
-# =========================================================
-# PLAYER ENTROU NA ÁREA
-# =========================================================
 
 func on_body_entered(
 	body: Node
@@ -238,17 +189,10 @@ func on_body_entered(
 	):
 		return
 
-
 	player_nearby = true
 
+	refresh_interaction_label()
 
-	if not is_open:
-		interaction_label.show()
-
-
-# =========================================================
-# PLAYER SAIU
-# =========================================================
 
 func on_body_exited(
 	body: Node
@@ -258,36 +202,25 @@ func on_body_exited(
 	):
 		return
 
-
 	player_nearby = false
 
-	interaction_label.hide()
+	if interaction_label != null:
+		interaction_label.hide()
 
-
-# =========================================================
-# IDENTIFICAR PLAYER
-# =========================================================
 
 func is_player(
 	body: Node
 ) -> bool:
-
 	if body.name == "Player":
 		return true
-
 
 	if body.is_in_group(
 		"player"
 	):
 		return true
 
-
 	return false
 
-
-# =========================================================
-# INPUT
-# =========================================================
 
 func _unhandled_input(
 	event
@@ -295,145 +228,114 @@ func _unhandled_input(
 	if not player_nearby:
 		return
 
-
 	if hack_in_progress:
 		return
-
 
 	if is_open:
 		return
 
+	if is_progression_locked():
+		return
 
-	if event is InputEventKey:
-		if (
-			event.pressed
-			and not event.echo
-			and event.keycode == KEY_E
-		):
-			get_viewport().set_input_as_handled()
+	if not (
+		event is InputEventKey
+	):
+		return
 
-			request_open_hack()
+	if not event.pressed:
+		return
 
+	if event.echo:
+		return
 
-# =========================================================
-# PEDIR HACK PARA ABRIR
-# =========================================================
+	if event.keycode != KEY_E:
+		return
+
+	get_viewport().set_input_as_handled()
+
+	request_open_hack()
+
 
 func request_open_hack():
 	if is_open:
 		return
 
+	if is_progression_locked():
+		return
 
 	if hack_manager == null:
 		find_hack_manager()
 
-
 	if hack_manager == null:
 		return
-
 
 	hack_in_progress = true
 
 	pending_action = HackAction.OPEN
 
-
-	interaction_label.hide()
-
+	if interaction_label != null:
+		interaction_label.hide()
 
 	print(
 		"DOOR HACK REQUEST: ",
 		door_id
 	)
 
-
 	hack_manager.start_hack(
 		self
 	)
 
-
-# =========================================================
-# FUTURO:
-# RUN / HIDE PODEM CHAMAR ISTO
-# PARA O JOGADOR FECHAR A PORTA
-# =========================================================
 
 func request_close_hack():
 	if not is_open:
 		return
 
+	if is_progression_locked():
+		return
 
 	if hack_manager == null:
 		find_hack_manager()
 
-
 	if hack_manager == null:
 		return
-
 
 	hack_in_progress = true
 
 	pending_action = HackAction.CLOSE
-
 
 	hack_manager.start_hack(
 		self
 	)
 
 
-# =========================================================
-# HACK MANAGER CHAMA ISTO NO SUCESSO
-# =========================================================
-
 func on_hack_success():
 	hack_in_progress = false
 
+	if is_progression_locked():
+		update_door_state()
+		return
 
 	match pending_action:
-
 		HackAction.OPEN:
 			open_door()
 
 		HackAction.CLOSE:
 			close_door()
 
-# =========================================================
-# HACK CANCELADO
-# =========================================================
 
 func on_hack_cancelled():
 	hack_in_progress = false
 
-	if (
-		player_nearby
-		and not is_open
-		and interaction_label != null
-	):
-		interaction_label.show()
+	refresh_interaction_label()
 
-
-
-# =========================================================
-# ABRIR
-# =========================================================
 
 func open_door():
+	if is_progression_locked():
+		return
+
 	is_open = true
 
-
-	if door_visual != null:
-		door_visual.hide()
-
-
-	if door_collision != null:
-		door_collision.set_deferred(
-			"disabled",
-			true
-		)
-
-
-	if interaction_label != null:
-		interaction_label.hide()
-
+	update_door_state()
 
 	print(
 		"ACCESS GRANTED: ",
@@ -441,24 +343,10 @@ func open_door():
 	)
 
 
-# =========================================================
-# FECHAR
-# =========================================================
-
 func close_door():
 	is_open = false
 
-
-	if door_visual != null:
-		door_visual.show()
-
-
-	if door_collision != null:
-		door_collision.set_deferred(
-			"disabled",
-			false
-		)
-
+	update_door_state()
 
 	print(
 		"DOOR CLOSED: ",
@@ -466,41 +354,194 @@ func close_door():
 	)
 
 
-# =========================================================
-# ATUALIZAR ESTADO
-# =========================================================
+func set_power_locked(
+	locked: bool
+):
+	power_locked = locked
 
-func update_door_state():
+	if locked:
+		hack_in_progress = false
+		is_open = false
+
+	update_door_state()
+
+	print(
+		"DOOR POWER LOCK: ",
+		door_id,
+		" = ",
+		power_locked
+	)
+
+
+func set_security_locked(
+	locked: bool
+):
+	security_locked = locked
+
+	if locked:
+		hack_in_progress = false
+		is_open = false
+
+	update_door_state()
+
+	print(
+		"DOOR SECURITY LOCK: ",
+		door_id,
+		" = ",
+		security_locked
+	)
+
+
+func set_main_core_locked(
+	locked: bool
+):
+	main_core_locked = locked
+
+	if locked:
+		hack_in_progress = false
+		is_open = false
+
+	update_door_state()
+
+	print(
+		"DOOR MAIN CORE LOCK: ",
+		door_id,
+		" = ",
+		main_core_locked
+	)
+
+
+func is_power_locked() -> bool:
+	return power_locked
+
+
+func is_security_locked() -> bool:
+	return security_locked
+
+
+func is_main_core_locked() -> bool:
+	return main_core_locked
+
+
+func is_progression_locked() -> bool:
+	return (
+		power_locked
+		or security_locked
+		or main_core_locked
+	)
+
+
+func refresh_interaction_label():
+	if interaction_label == null:
+		return
+
+	if not player_nearby:
+		interaction_label.hide()
+		return
 
 	if is_open:
+		interaction_label.hide()
+		return
 
+	if power_locked:
+		interaction_label.text = (
+			"SETOR SEM ENERGIA"
+		)
+
+		interaction_label.show()
+
+		return
+
+	if security_locked:
+		interaction_label.text = (
+			"BLOQUEIO DE SEGURANÇA"
+		)
+
+		interaction_label.show()
+
+		return
+
+	if main_core_locked:
+		interaction_label.text = (
+			"AUTORIZAÇÃO NECESSÁRIA"
+		)
+
+		interaction_label.show()
+
+		return
+
+	interaction_label.text = (
+		"[E] INTERAGIR"
+	)
+
+	interaction_label.show()
+
+
+func update_door_state():
+	if is_progression_locked():
+		is_open = false
+
+	if is_open:
 		if door_visual != null:
 			door_visual.hide()
 
 		if door_collision != null:
-			door_collision.disabled = true
+			door_collision.set_deferred(
+				"disabled",
+				true
+			)
 
 	else:
-
 		if door_visual != null:
 			door_visual.show()
 
+			if power_locked:
+				door_visual.color = Color(
+					0.80,
+					0.10,
+					0.10,
+					1.0
+				)
+
+			elif security_locked:
+				door_visual.color = Color(
+					0.65,
+					0.12,
+					0.12,
+					1.0
+				)
+
+			elif main_core_locked:
+				door_visual.color = Color(
+					0.45,
+					0.20,
+					0.55,
+					1.0
+				)
+
+			else:
+				door_visual.color = Color(
+					0.25,
+					0.32,
+					0.36,
+					1.0
+				)
+
 		if door_collision != null:
-			door_collision.disabled = false
+			door_collision.set_deferred(
+				"disabled",
+				false
+			)
 
+	refresh_interaction_label()
 
-# =========================================================
-# RETÂNGULO
-# =========================================================
 
 func rectangle_polygon(
 	size: Vector2
 ) -> PackedVector2Array:
-
 	var half = (
 		size / 2.0
 	)
-
 
 	return PackedVector2Array([
 		Vector2(

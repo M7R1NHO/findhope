@@ -11,6 +11,9 @@ extends Area2D
 @export var interaction_label_y_offset: float = -60.0
 
 
+const SAVE_ID := "protocol_door"
+
+
 @onready var interaction_label: Label = $InteractionLabel
 @onready var status_label: Label = $StatusLabel
 @onready var door_visual: Node2D = $DoorVisual
@@ -28,15 +31,16 @@ var hack_manager: Node = null
 
 
 var is_open: bool = false
-
 var entered_underground: bool = false
-
 var hack_authorized: bool = false
-
 var hack_in_progress: bool = false
 
 
 func _ready():
+	add_to_group(
+		"saveable"
+	)
+
 	var main = get_parent()
 
 	player = main.get_node(
@@ -62,12 +66,8 @@ func _ready():
 
 	setup_interaction_label()
 
-	set_status_restricted()
+	restore_story_state()
 
-
-# =========================================================
-# INTERACTION LABEL
-# =========================================================
 
 func setup_interaction_label():
 	interaction_label.visible = false
@@ -99,10 +99,6 @@ func update_interaction_label_position():
 		+ interaction_label_y_offset
 	)
 
-
-# =========================================================
-# PROCESS
-# =========================================================
 
 func _process(_delta):
 	if player == null:
@@ -145,10 +141,6 @@ func _process(_delta):
 		interaction_label.text = "[E] INTERAGIR"
 
 
-# =========================================================
-# INTERACTION
-# =========================================================
-
 func examine():
 	if entered_underground:
 		return
@@ -157,8 +149,6 @@ func examine():
 		enter_underground()
 		return
 
-	# Atlas já aceitou quebrar o protocolo.
-	# Não precisamos consultar o backend novamente.
 	if hack_authorized:
 		start_protocol_hack()
 		return
@@ -170,10 +160,6 @@ func examine():
 	):
 		main.on_protocol_door_interacted()
 
-
-# =========================================================
-# DOOR STATUS
-# =========================================================
 
 func set_status_restricted():
 	status_label.text = "ACESSO RESTRITO"
@@ -205,15 +191,25 @@ func set_status_granted():
 	terminal_state.text = "GRANTED"
 
 
-# =========================================================
-# AUTORIZAR HACK
-# =========================================================
+func set_status_sealed():
+	status_label.text = "ACESSO BLOQUEADO"
+	terminal_state.text = "SEALED"
+
 
 func authorize_hack():
 	if is_open:
 		return
 
+	if entered_underground:
+		return
+
 	hack_authorized = true
+
+	SaveManager.set_run_value(
+		"story",
+		"protocol_hack_authorized",
+		true
+	)
 
 	set_status_hack_ready()
 
@@ -223,10 +219,6 @@ func authorize_hack():
 		"PROTOCOL DOOR HACK AUTHORIZED"
 	)
 
-
-# =========================================================
-# COMEÇAR HACK
-# =========================================================
 
 func start_protocol_hack():
 	if is_open:
@@ -238,14 +230,12 @@ func start_protocol_hack():
 	if hack_in_progress:
 		return
 
-
 	if hack_manager == null:
 		var main = get_parent()
 
 		hack_manager = main.get_node_or_null(
 			"HackManager"
 		)
-
 
 	if hack_manager == null:
 		push_warning(
@@ -257,30 +247,20 @@ func start_protocol_hack():
 
 		return
 
-
 	hack_in_progress = true
 
 	set_status_hacking()
 
 	interaction_label.visible = false
 
-
 	print(
 		"PROTOCOL DOOR HACK STARTED"
 	)
-
 
 	hack_manager.start_hack(
 		self
 	)
 
-
-# =========================================================
-# HACK CONCLUÍDO
-#
-# HackManager chama esta função quando o jogador
-# termina um dos 9 minigames.
-# =========================================================
 
 func on_hack_success():
 	hack_in_progress = false
@@ -292,15 +272,18 @@ func on_hack_success():
 	):
 		main.on_protocol_door_hack_success()
 
+	else:
+		open_door()
 
-# =========================================================
-# HACK CANCELADO
-# =========================================================
 
 func on_hack_cancelled():
 	hack_in_progress = false
 
 	if is_open:
+		return
+
+	if entered_underground:
+		set_status_sealed()
 		return
 
 	if hack_authorized:
@@ -309,30 +292,40 @@ func on_hack_cancelled():
 	else:
 		set_status_restricted()
 
-
 	print(
 		"PROTOCOL DOOR HACK CANCELLED"
 	)
 
 
-# =========================================================
-# OPEN DOOR
-# =========================================================
-
 func open_door():
 	if is_open:
+		return
+
+	if entered_underground:
 		return
 
 	is_open = true
 
 	hack_in_progress = false
 
+	SaveManager.set_run_value(
+		"story",
+		"protocol_door_opened",
+		true
+	)
+
 	set_status_granted()
 
 	interaction_label.text = "[E] ENTRAR"
 
-	update_interaction_label_position()
+	apply_open_visual_state()
 
+	print(
+		"PROTOCOL DOOR OPENED"
+	)
+
+
+func apply_open_visual_state():
 	var collision = get_node_or_null(
 		"CollisionShape2D"
 	)
@@ -346,14 +339,25 @@ func open_door():
 	if door_visual != null:
 		door_visual.visible = false
 
-	print(
-		"PROTOCOL DOOR OPENED"
+	update_interaction_label_position()
+
+
+func apply_closed_visual_state():
+	var collision = get_node_or_null(
+		"CollisionShape2D"
 	)
 
+	if collision != null:
+		collision.set_deferred(
+			"disabled",
+			false
+		)
 
-# =========================================================
-# ENTER UNDERGROUND
-# =========================================================
+	if door_visual != null:
+		door_visual.visible = true
+
+	update_interaction_label_position()
+
 
 func enter_underground():
 	if entered_underground:
@@ -367,6 +371,9 @@ func enter_underground():
 		return
 
 	entered_underground = true
+	is_open = false
+	hack_authorized = false
+	hack_in_progress = false
 
 	interaction_label.visible = false
 
@@ -374,12 +381,7 @@ func enter_underground():
 		underground_spawn.global_position
 	)
 
-	player.set_movement_bounds(
-		spawn_position.x - underground_half_width,
-		spawn_position.x + underground_half_width,
-		spawn_position.y - underground_half_height,
-		spawn_position.y + underground_half_height
-	)
+	apply_underground_bounds()
 
 	player.teleport_to(
 		spawn_position
@@ -396,6 +398,26 @@ func enter_underground():
 
 		atlas.velocity = Vector2.ZERO
 
+	seal_entrance()
+
+	SaveManager.set_run_value(
+		"story",
+		"protocol_door_crossed",
+		true
+	)
+
+	SaveManager.set_run_value(
+		"story",
+		"underground_entered",
+		true
+	)
+
+	SaveManager.set_run_value(
+		"story",
+		"protocol_door_sealed",
+		true
+	)
+
 	var main = get_parent()
 
 	if main.has_method(
@@ -403,7 +425,18 @@ func enter_underground():
 	):
 		main.add_chat_message(
 			"ANDROID",
-			"Entrámos na instalação subterrânea."
+			"A porta fechou atrás de nós."
+		)
+
+		main.add_chat_message(
+			"ANDROID",
+			"O mecanismo interno deixou de responder. "
+			+ "Não consigo reabrir o acesso deste lado."
+		)
+
+		main.add_chat_message(
+			"ANDROID",
+			"Teremos de avançar pela instalação."
 		)
 
 	if main.has_method(
@@ -413,10 +446,179 @@ func enter_underground():
 			"underground_01_entered",
 			"underground_entered",
 			"O jogador e Atlas entraram "
-			+ "na instalação subterrânea.",
+			+ "na instalação subterrânea. "
+			+ "A entrada fechou atrás deles "
+			+ "e não pode ser reaberta pelo interior.",
 			true
 		)
 
-	print(
-		"ENTERED UNDERGROUND"
+	var autosave_success = SaveManager.autosave(
+		"protocol_door_crossed"
 	)
+
+	print("")
+	print("ENTERED UNDERGROUND")
+	print(
+		"AUTOSAVE #3: ",
+		autosave_success
+	)
+
+
+func seal_entrance():
+	is_open = false
+	hack_authorized = false
+	hack_in_progress = false
+
+	set_status_sealed()
+
+	apply_closed_visual_state()
+
+
+func apply_underground_bounds():
+	if (
+		player == null
+		or underground_spawn == null
+	):
+		return
+
+	var spawn_position = (
+		underground_spawn.global_position
+	)
+
+	player.set_movement_bounds(
+		spawn_position.x - underground_half_width,
+		spawn_position.x + underground_half_width,
+		spawn_position.y - underground_half_height,
+		spawn_position.y + underground_half_height
+	)
+
+
+func restore_story_state():
+	entered_underground = bool(
+		SaveManager.get_run_value(
+			"story",
+			"protocol_door_crossed",
+			false
+		)
+	)
+
+	var was_opened = bool(
+		SaveManager.get_run_value(
+			"story",
+			"protocol_door_opened",
+			false
+		)
+	)
+
+	hack_authorized = bool(
+		SaveManager.get_run_value(
+			"story",
+			"protocol_hack_authorized",
+			false
+		)
+	)
+
+	if entered_underground:
+		is_open = false
+		hack_authorized = false
+
+		set_status_sealed()
+
+		apply_closed_visual_state()
+
+		apply_underground_bounds()
+
+		return
+
+	if was_opened:
+		is_open = true
+
+		set_status_granted()
+
+		apply_open_visual_state()
+
+		return
+
+	if hack_authorized:
+		is_open = false
+
+		set_status_hack_ready()
+
+		apply_closed_visual_state()
+
+		return
+
+	is_open = false
+
+	set_status_restricted()
+
+	apply_closed_visual_state()
+
+
+func get_save_id() -> String:
+	return SAVE_ID
+
+
+func get_save_data() -> Dictionary:
+	return {
+		"is_open": is_open,
+		"entered_underground": entered_underground,
+		"hack_authorized": hack_authorized
+	}
+
+
+func load_save_data(
+	data: Dictionary
+):
+	is_open = bool(
+		data.get(
+			"is_open",
+			false
+		)
+	)
+
+	entered_underground = bool(
+		data.get(
+			"entered_underground",
+			false
+		)
+	)
+
+	hack_authorized = bool(
+		data.get(
+			"hack_authorized",
+			false
+		)
+	)
+
+	hack_in_progress = false
+
+	if entered_underground:
+		is_open = false
+		hack_authorized = false
+
+		set_status_sealed()
+
+		apply_closed_visual_state()
+
+		apply_underground_bounds()
+
+		return
+
+	if is_open:
+		set_status_granted()
+
+		apply_open_visual_state()
+
+		return
+
+	if hack_authorized:
+		set_status_hack_ready()
+
+		apply_closed_visual_state()
+
+		return
+
+	set_status_restricted()
+
+	apply_closed_visual_state()

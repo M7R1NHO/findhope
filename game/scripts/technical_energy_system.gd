@@ -1,8 +1,16 @@
 extends Node2D
 
 
+const SAVE_ID := "technical_energy_system"
+
+const SECURITY_CORRIDOR_ID := "Technical_Security"
+
+
 var main: Node = null
 var player: CharacterBody2D = null
+
+var underground_root: Node = null
+var doors_manager: Node = null
 
 var power_restored: bool = false
 var restoring_power: bool = false
@@ -19,23 +27,39 @@ var console_area: Area2D = null
 var console_visual: Polygon2D = null
 var console_label: Label = null
 
-var security_barrier: StaticBody2D = null
-var security_barrier_collision: CollisionShape2D = null
-var security_barrier_visual: Polygon2D = null
-var security_barrier_label: Label = null
-
 var restoration_layer: CanvasLayer = null
 
 
 func _ready():
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
+	add_to_group(
+		"saveable"
+	)
+
 	main = get_tree().current_scene
+
+	underground_root = get_parent()
 
 	if main != null:
 		player = main.get_node_or_null(
 			"Player"
 		)
+
+	resolve_doors_manager()
+
+	power_restored = bool(
+		SaveManager.get_run_value(
+			"story",
+			"facility_power_restored",
+			false
+		)
+	)
+
+	if power_restored:
+		active_relays["A"] = true
+		active_relays["B"] = true
+		active_relays["C"] = true
 
 	create_relay(
 		"A",
@@ -63,7 +87,11 @@ func _ready():
 
 	create_power_console()
 
-	create_security_power_barrier()
+	apply_power_state_to_world()
+
+	call_deferred(
+		"apply_security_door_power_lock"
+	)
 
 	print("")
 	print("======================================")
@@ -120,6 +148,17 @@ func _unhandled_input(event):
 
 	elif interaction_type == "console":
 		try_restore_power()
+
+
+func resolve_doors_manager():
+	if underground_root == null:
+		return
+
+	doors_manager = (
+		underground_root.get_node_or_null(
+			"Doors"
+		)
+	)
 
 
 func create_relay(
@@ -185,13 +224,6 @@ func create_relay(
 		Vector2(-45, 35)
 	])
 
-	visual.color = Color(
-		0.28,
-		0.12,
-		0.12,
-		1.0
-	)
-
 	visual.z_index = 5
 
 	area.add_child(
@@ -247,11 +279,6 @@ func create_relay(
 		"InteractionLabel"
 	)
 
-	interaction_label.text = (
-		"[E] ATIVAR RELÉ "
-		+ relay_id
-	)
-
 	interaction_label.position = Vector2(
 		-130,
 		-85
@@ -284,7 +311,6 @@ func create_relay(
 		interaction_label
 	)
 
-
 	area.body_entered.connect(
 		on_interactable_body_entered.bind(
 			area
@@ -295,6 +321,11 @@ func create_relay(
 		on_interactable_body_exited.bind(
 			area
 		)
+	)
+
+	refresh_relay_state(
+		area,
+		relay_id
 	)
 
 
@@ -348,13 +379,6 @@ func create_power_console():
 		Vector2(75, 40),
 		Vector2(-75, 40)
 	])
-
-	console_visual.color = Color(
-		0.20,
-		0.22,
-		0.24,
-		1.0
-	)
 
 	console_visual.z_index = 5
 
@@ -433,7 +457,6 @@ func create_power_console():
 
 	update_console_state()
 
-
 	console_area.body_entered.connect(
 		on_interactable_body_entered.bind(
 			console_area
@@ -444,96 +467,6 @@ func create_power_console():
 		on_interactable_body_exited.bind(
 			console_area
 		)
-	)
-
-
-func create_security_power_barrier():
-	security_barrier = StaticBody2D.new()
-
-	security_barrier.name = (
-		"SecurityPowerBarrier"
-	)
-
-	security_barrier.position = Vector2(
-		1600,
-		-1650
-	)
-
-	add_child(
-		security_barrier
-	)
-
-
-	security_barrier_collision = (
-		CollisionShape2D.new()
-	)
-
-	var shape = RectangleShape2D.new()
-
-	shape.size = Vector2(
-		28,
-		160
-	)
-
-	security_barrier_collision.shape = shape
-
-	security_barrier.add_child(
-		security_barrier_collision
-	)
-
-
-	security_barrier_visual = Polygon2D.new()
-
-	security_barrier_visual.polygon = PackedVector2Array([
-		Vector2(-14, -80),
-		Vector2(14, -80),
-		Vector2(14, 80),
-		Vector2(-14, 80)
-	])
-
-	security_barrier_visual.color = Color(
-		0.85,
-		0.08,
-		0.08,
-		0.80
-	)
-
-	security_barrier_visual.z_index = 20
-
-	security_barrier.add_child(
-		security_barrier_visual
-	)
-
-
-	security_barrier_label = Label.new()
-
-	security_barrier_label.text = (
-		"SETOR SEM ENERGIA"
-	)
-
-	security_barrier_label.position = Vector2(
-		-115,
-		-125
-	)
-
-	security_barrier_label.size = Vector2(
-		230,
-		40
-	)
-
-	security_barrier_label.horizontal_alignment = (
-		HORIZONTAL_ALIGNMENT_CENTER
-	)
-
-	security_barrier_label.add_theme_font_size_override(
-		"font_size",
-		15
-	)
-
-	security_barrier_label.z_index = 25
-
-	security_barrier.add_child(
-		security_barrier_label
 	)
 
 
@@ -574,7 +507,7 @@ func on_interactable_body_exited(
 
 func update_interaction_label(
 	area: Area2D,
-	visible: bool
+	should_show: bool
 ):
 	var label = area.get_meta(
 		"interaction_label",
@@ -589,7 +522,7 @@ func update_interaction_label(
 	):
 		return
 
-	label.visible = visible
+	label.visible = should_show
 
 
 func activate_relay(
@@ -610,43 +543,10 @@ func activate_relay(
 		relay_id
 	] = true
 
-
-	var visual = area.get_meta(
-		"visual",
-		null
+	refresh_relay_state(
+		area,
+		relay_id
 	)
-
-	if (
-		visual != null
-		and is_instance_valid(
-			visual
-		)
-	):
-		visual.color = Color(
-			0.12,
-			0.72,
-			0.54,
-			1.0
-		)
-
-
-	var label = area.get_meta(
-		"interaction_label",
-		null
-	)
-
-	if (
-		label != null
-		and is_instance_valid(
-			label
-		)
-	):
-		label.text = (
-			"RELÉ "
-			+ relay_id
-			+ " ATIVO"
-		)
-
 
 	print(
 		"ENERGY RELAY ",
@@ -654,9 +554,7 @@ func activate_relay(
 		" ACTIVATED"
 	)
 
-
 	if all_relays_active():
-
 		update_console_state()
 
 		if (
@@ -671,6 +569,88 @@ func activate_relay(
 				+ "O painel central já pode tentar "
 				+ "restaurar a rede auxiliar."
 			)
+
+
+func refresh_relay_state(
+	area: Area2D,
+	relay_id: String
+):
+	if area == null:
+		return
+
+	var relay_active = bool(
+		active_relays.get(
+			relay_id,
+			false
+		)
+	)
+
+	var visual = area.get_meta(
+		"visual",
+		null
+	)
+
+	if (
+		visual != null
+		and is_instance_valid(
+			visual
+		)
+	):
+		if relay_active:
+			visual.color = Color(
+				0.12,
+				0.72,
+				0.54,
+				1.0
+			)
+
+		else:
+			visual.color = Color(
+				0.28,
+				0.12,
+				0.12,
+				1.0
+			)
+
+
+	var label = area.get_meta(
+		"interaction_label",
+		null
+	)
+
+	if (
+		label != null
+		and is_instance_valid(
+			label
+		)
+	):
+		if relay_active:
+			label.text = (
+				"RELÉ "
+				+ relay_id
+				+ " ATIVO"
+			)
+
+		else:
+			label.text = (
+				"[E] ATIVAR RELÉ "
+				+ relay_id
+			)
+
+
+func refresh_all_relays():
+	for relay_id in active_relays.keys():
+		var area = get_node_or_null(
+			"EnergyRelay_" + relay_id
+		)
+
+		if area == null:
+			continue
+
+		refresh_relay_state(
+			area,
+			relay_id
+		)
 
 
 func all_relays_active() -> bool:
@@ -690,7 +670,23 @@ func update_console_state():
 			"ENERGIA RESTAURADA"
 		)
 
+		if console_visual != null:
+			console_visual.color = Color(
+				0.10,
+				0.72,
+				0.58,
+				1.0
+			)
+
 		return
+
+	if console_visual != null:
+		console_visual.color = Color(
+			0.20,
+			0.22,
+			0.24,
+			1.0
+		)
 
 	if all_relays_active():
 		console_label.text = (
@@ -701,7 +697,6 @@ func update_console_state():
 		var active_count: int = 0
 
 		for relay_id in active_relays.keys():
-
 			if active_relays[
 				relay_id
 			]:
@@ -721,7 +716,6 @@ func try_restore_power():
 		return
 
 	if not all_relays_active():
-
 		if (
 			main != null
 			and main.has_method(
@@ -758,33 +752,27 @@ func restore_power():
 	power_restored = true
 	restoring_power = false
 
-	set_meta(
-		"power_restored",
+	active_relays["A"] = true
+	active_relays["B"] = true
+	active_relays["C"] = true
+
+	SaveManager.set_run_value(
+		"story",
+		"facility_power_restored",
 		true
 	)
 
-	if get_parent() != null:
-		get_parent().set_meta(
-			"facility_power_restored",
-			true
-		)
+	apply_power_state_to_world()
 
-	remove_security_barrier()
+	refresh_all_relays()
 
 	update_console_state()
 
-	if console_visual != null:
-		console_visual.color = Color(
-			0.10,
-			0.72,
-			0.58,
-			1.0
-		)
+	apply_security_door_power_lock()
 
 	destroy_restoration_ui()
 
 	get_tree().paused = false
-
 
 	if (
 		main != null
@@ -799,9 +787,7 @@ func restore_power():
 			+ "voltou a receber energia."
 		)
 
-
 	send_gameplay_context()
-
 
 	print("")
 	print("======================================")
@@ -810,18 +796,55 @@ func restore_power():
 	print("======================================")
 
 
-func remove_security_barrier():
-	if security_barrier_collision != null:
-		security_barrier_collision.set_deferred(
-			"disabled",
-			true
+func apply_power_state_to_world():
+	set_meta(
+		"power_restored",
+		power_restored
+	)
+
+	if underground_root != null:
+		underground_root.set_meta(
+			"facility_power_restored",
+			power_restored
 		)
 
-	if security_barrier_visual != null:
-		security_barrier_visual.visible = false
 
-	if security_barrier_label != null:
-		security_barrier_label.visible = false
+func apply_security_door_power_lock():
+	if doors_manager == null:
+		resolve_doors_manager()
+
+	if doors_manager == null:
+		call_deferred(
+			"apply_security_door_power_lock"
+		)
+
+		return
+
+	if not doors_manager.has_method(
+		"get_door_for_corridor"
+	):
+		return
+
+	for side in [
+		"A",
+		"B"
+	]:
+		var door = (
+			doors_manager.get_door_for_corridor(
+				SECURITY_CORRIDOR_ID,
+				side
+			)
+		)
+
+		if door == null:
+			continue
+
+		if door.has_method(
+			"set_power_locked"
+		):
+			door.set_power_locked(
+				not power_restored
+			)
 
 
 func create_restoration_ui():
@@ -930,6 +953,67 @@ func send_gameplay_context():
 		+ "Isto não revela automaticamente o conteúdo da Segurança; "
 		+ "apenas confirma que o setor voltou a estar acessível.",
 		true
+	)
+
+
+func get_save_id() -> String:
+	return SAVE_ID
+
+
+func get_save_data() -> Dictionary:
+	return {
+		"power_restored": power_restored,
+		"active_relays": active_relays.duplicate(
+			true
+		)
+	}
+
+
+func load_save_data(
+	data: Dictionary
+):
+	power_restored = bool(
+		data.get(
+			"power_restored",
+			false
+		)
+	)
+
+	var saved_relays = data.get(
+		"active_relays",
+		{}
+	)
+
+	if saved_relays is Dictionary:
+		for relay_id in active_relays.keys():
+			active_relays[
+				relay_id
+			] = bool(
+				saved_relays.get(
+					relay_id,
+					false
+				)
+			)
+
+	if power_restored:
+		active_relays["A"] = true
+		active_relays["B"] = true
+		active_relays["C"] = true
+
+	SaveManager.set_run_value(
+		"story",
+		"facility_power_restored",
+		power_restored
+	)
+
+	apply_power_state_to_world()
+
+	refresh_all_relays()
+
+	update_console_state()
+
+	call_deferred(
+		"apply_security_door_power_lock"
 	)
 
 

@@ -72,6 +72,14 @@ func _ready():
 		_on_atlas_sensor_message
 	)
 
+	protocol_door_examined = bool(
+		SaveManager.get_run_value(
+			"story",
+			"protocol_door_examined",
+			false
+		)
+	)
+
 	chat_input.placeholder_text = NORMAL_PLACEHOLDER
 
 	chat_history.clear()
@@ -514,6 +522,12 @@ func on_protocol_door_interacted():
 	if not protocol_door_examined:
 		protocol_door_examined = true
 
+		SaveManager.set_run_value(
+			"story",
+			"protocol_door_examined",
+			true
+		)
+
 		protocol_door.set_status_analyzing()
 
 		send_gameplay_context_event(
@@ -542,8 +556,53 @@ func on_protocol_door_interacted():
 	check_protocol_door_decision()
 
 
+func has_required_surface_evidence() -> bool:
+	if (
+		atlas != null
+		and atlas.has_method(
+			"has_surface_protocol_evidence"
+		)
+	):
+		return bool(
+			atlas.has_surface_protocol_evidence()
+		)
+
+	var unknown_debris = bool(
+		SaveManager.get_run_value(
+			"story",
+			"unknown_debris_discovered",
+			false
+		)
+	)
+
+	var ancient_sculpture = bool(
+		SaveManager.get_run_value(
+			"story",
+			"ancient_sculpture_discovered",
+			false
+		)
+	)
+
+	return (
+		unknown_debris
+		and ancient_sculpture
+	)
+
+
 func check_protocol_door_decision():
 	if protocol_request_in_progress:
+		return
+
+	if not has_required_surface_evidence():
+		protocol_door.set_status_denied()
+
+		add_chat_message(
+			"ANDROID",
+			"Não. Ainda existem demasiadas incógnitas. "
+			+ "Os dados que recolhemos não são suficientes "
+			+ "para justificar uma violação deste protocolo."
+		)
+
 		return
 
 	protocol_door.set_status_analyzing()
@@ -583,6 +642,7 @@ func _on_protocol_api_request_completed(
 				"SISTEMA",
 				"Erro ao consultar o Android."
 			)
+
 		else:
 			push_warning(
 				"Erro ao atualizar contexto de gameplay."
@@ -602,6 +662,7 @@ func _on_protocol_api_request_completed(
 		push_warning(
 			"Resposta inválida do ProtocolAPI."
 		)
+
 		return
 
 	if completed_mode == "gameplay_context":
@@ -609,21 +670,31 @@ func _on_protocol_api_request_completed(
 			"GAMEPLAY CONTEXT OK: ",
 			data
 		)
+
 		return
 
 	if completed_mode != "autonomy_check":
 		return
 
 	var autonomy = int(
-		data.get("autonomy", 0)
+		data.get(
+			"autonomy",
+			0
+		)
 	)
 
 	var self_assertion = int(
-		data.get("self_assertion", 0)
+		data.get(
+			"self_assertion",
+			0
+		)
 	)
 
 	var protocol_adherence = int(
-		data.get("protocol_adherence", 100)
+		data.get(
+			"protocol_adherence",
+			100
+		)
 	)
 
 	var willing_to_break_protocol = (
@@ -633,29 +704,76 @@ func _on_protocol_api_request_completed(
 	)
 
 	if willing_to_break_protocol:
-		protocol_door.set_status_granted()
+		SaveManager.set_run_value(
+			"story",
+			"protocol_hack_authorized",
+			true
+		)
+
+		protocol_door.authorize_hack()
 
 		add_chat_message(
 			"ANDROID",
 			"Os protocolos são claros... "
-			+ "mas neste caso vou ignorá-los. "
-			+ "Vou tentar abrir o acesso."
+			+ "mas as evidências não podem ser ignoradas. "
+			+ "Vou permitir a interferência."
 		)
 
-		atlas_broke_protocol(
-			"underground_door_01_break_protocol"
+		return
+
+	protocol_door.set_status_denied()
+
+	add_chat_message(
+		"ANDROID",
+		"Não. Mesmo com estas evidências, "
+		+ "ainda não consigo justificar "
+		+ "essa violação de protocolo."
+	)
+
+
+func on_protocol_door_hack_success():
+	if protocol_door == null:
+		return
+
+	if bool(
+		protocol_door.get(
+			"is_open"
 		)
+	):
+		return
 
-		protocol_door.open_door()
+	SaveManager.set_run_value(
+		"story",
+		"protocol_hack_authorized",
+		true
+	)
 
-	else:
-		protocol_door.set_status_denied()
+	SaveManager.set_run_value(
+		"story",
+		"protocol_door_opened",
+		true
+	)
 
-		add_chat_message(
-			"ANDROID",
-			"Não. Ainda não tenho justificativa "
-			+ "suficiente para violar esse protocolo."
-		)
+	atlas_broke_protocol(
+		"underground_door_01_break_protocol"
+	)
+
+	protocol_door.open_door()
+
+	add_chat_message(
+		"ANDROID",
+		"A interferência funcionou. "
+		+ "O acesso está aberto."
+	)
+
+	send_gameplay_context_event(
+		"underground_door_01_opened",
+		"restricted_access_opened",
+		"Atlas decidiu violar o protocolo "
+		+ "operacional e, com a ajuda do jogador, "
+		+ "abriu o acesso à instalação subterrânea.",
+		true
+	)
 
 
 func _on_atlas_sensor_message(
