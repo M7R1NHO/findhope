@@ -19,6 +19,8 @@ const DISCOVERY_ANCIENT_SCULPTURE := "ancient_sculpture"
 
 var player: CharacterBody2D
 var is_following: bool = false
+var scripted_move_active: bool = false
+var scripted_move_target: Vector2 = Vector2.ZERO
 
 var scan_request: HTTPRequest
 
@@ -63,10 +65,33 @@ func _ready():
 	)
 
 
+
 func _physics_process(_delta):
 	if player == null:
 		return
 
+	# Movimento controlado por um evento narrativo.
+	if scripted_move_active:
+		var target_distance = global_position.distance_to(
+			scripted_move_target
+		)
+
+		# Quando chega ao destino, fica à espera de novas instruções.
+		if target_distance <= 18.0:
+			velocity = Vector2.ZERO
+			move_and_slide()
+			return
+
+		var scripted_direction = global_position.direction_to(
+			scripted_move_target
+		)
+
+		# Durante o evento, move-se mais depressa do que normalmente.
+		velocity = scripted_direction * speed * 1.5
+		move_and_slide()
+		return
+
+	# Comportamento normal: acompanhar o jogador.
 	var distance_to_player = global_position.distance_to(
 		player.global_position
 	)
@@ -89,12 +114,23 @@ func _physics_process(_delta):
 		)
 
 		velocity = direction * speed
-
 	else:
 		velocity = Vector2.ZERO
 
 	move_and_slide()
 
+
+func start_scripted_move_to(target: Vector2) -> void:
+	scripted_move_target = target
+	scripted_move_active = true
+	is_following = false
+
+
+func stop_scripted_move_to() -> void:
+	scripted_move_active = false
+	velocity = Vector2.ZERO
+
+	move_and_slide()
 
 func scan_environment():
 	if scan_in_progress:

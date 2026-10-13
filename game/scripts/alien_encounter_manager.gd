@@ -209,6 +209,38 @@ var hide_time_remaining: float = 0.0
 var active_hide_spot: Area2D = null
 
 
+# =========================================================
+# HIDEINICIAL — primeiro encontro roteirizado
+# =========================================================
+
+@export var hide_initial_alert_time: float = 3.0
+@export var hide_initial_reach_time: float = 8.0
+@export var hide_initial_survive_time: float = 5.0
+
+
+enum HideInitialPhase {
+	NONE,
+	ALERT,
+	FOLLOW_ATLAS,
+	STAY_HIDDEN
+}
+
+
+var hide_initial_started: bool = false
+var hide_initial_active: bool = false
+var hide_initial_completed: bool = false
+var hide_initial_waiting_for_run: bool = false
+
+var hide_initial_phase: HideInitialPhase = HideInitialPhase.NONE
+var hide_initial_time_remaining: float = 0.0
+
+var hide_initial_spot: Area2D = null
+var hide_initial_atlas_parked: bool = false
+var hide_initial_creature_visual: Polygon2D = null
+
+
+var hide_initial_started: bool = false
+
 var hide_layer: CanvasLayer = null
 
 var hide_title_label: Label = null
@@ -1406,6 +1438,9 @@ func on_room_entered(
 		"PLAYER ENTERED ROOM: ",
 		current_room_id
 	)
+	
+	if current_room_id == "TechnicalRoom":
+		call_deferred("try_start_hide_initial")
 
 
 # =========================================================
@@ -4051,3 +4086,71 @@ func destroy_hide_ui():
 	hide_timer_label = null
 
 	hide_instruction_label = null
+
+
+func try_start_hide_initial() -> void:
+	# O evento só pode começar uma vez nesta sessão.
+	if hide_initial_started:
+		return
+
+	# A Segurança tem de estar desbloqueada.
+	var security_unlocked := bool(
+		SaveManager.get_run_value(
+			"story",
+			"facility_security_unlocked",
+			false
+		)
+	)
+
+	if not security_unlocked:
+		return
+
+	# Precisamos de esconderijos na Sala Técnica.
+	if not room_safe_spots.has("TechnicalRoom"):
+		push_warning(
+			"HIDEINICIAL: não existem esconderijos na Sala Técnica."
+		)
+		return
+
+	var spots: Array = room_safe_spots["TechnicalRoom"]
+
+	if spots.is_empty():
+		push_warning(
+			"HIDEINICIAL: a lista de esconderijos está vazia."
+		)
+		return
+
+	# Escolhe um esconderijo sem o revelar visualmente.
+	var index := rng.randi_range(0, spots.size() - 1)
+	var selected_spot: Area2D = spots[index]
+
+	if atlas == null or not is_instance_valid(atlas):
+		push_warning(
+			"HIDEINICIAL: não foi possível encontrar o Atlas."
+		)
+		return
+
+	if not atlas.has_method("start_scripted_move_to"):
+		push_warning(
+			"HIDEINICIAL: falta o movimento roteirizado no Atlas."
+		)
+		return
+
+	hide_initial_started = true
+	active_hide_spot = selected_spot
+
+	atlas.start_scripted_move_to(
+		selected_spot.global_position
+	)
+
+	if main != null and main.has_method("add_chat_message"):
+		main.add_chat_message(
+			"ANDROID",
+			"Siga-me."
+		)
+
+	print("")
+	print("======================================")
+	print("HIDEINICIAL: ATLAS A CAMINHO DO ESCONDERIJO")
+	print("ESCONDERIJO: ", selected_spot.name)
+	print("======================================")
