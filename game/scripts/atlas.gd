@@ -76,7 +76,7 @@ func _physics_process(_delta):
 		)
 
 		# Quando chega ao destino, fica à espera de novas instruções.
-		if target_distance <= 18.0:
+		if target_distance <= 3.0:
 			velocity = Vector2.ZERO
 			move_and_slide()
 			return

@@ -3,10 +3,10 @@ extends CharacterBody2D
 
 @export var speed: float = 200.0
 
-@export var min_x: float = -950.0
-@export var max_x: float = 950.0
-@export var min_y: float = -650.0
-@export var max_y: float = 650.0
+@export var min_x: float = -2800.0
+@export var max_x: float = 1140.0
+@export var min_y: float = -1480.0
+@export var max_y: float = 1400.0
 
 @export var interaction_range: float = 150.0
 
