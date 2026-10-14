@@ -1,0 +1,2460 @@
+[gd_scene format=3 uid="uid://buloxm112bh8t"]
+
+[ext_resource type="Script" uid="uid://cux50ew1xh51n" path="res://scripts/player.gd" id="1_o5qli"]
+[ext_resource type="Script" uid="uid://cg4bewh02hmm2" path="res://scripts/main.gd" id="1_sugp2"]
+[ext_resource type="Script" uid="uid://be3papg8vqa8w" path="res://scripts/atlas.gd" id="2_0wfyh"]
+[ext_resource type="Script" uid="uid://c83u4ei72o6yb" path="res://scripts/ship.gd" id="2_o6xl0"]
+[ext_resource type="Script" uid="uid://dpe8dva3ghx4m" path="res://scripts/protocol_door.gd" id="4_jyhfs"]
+[ext_resource type="Script" uid="uid://5ytsp6uu4yiw" path="res://scripts/ship_part.gd" id="5_tbgi4"]
+[ext_resource type="Script" uid="uid://s5ukqw2wf76t" path="res://scripts/ship_parts_manager.gd" id="5_tefeu"]
+[ext_resource type="Script" uid="uid://d0vnv56ny4mf4" path="res://scripts/generated_layout.gd" id="8_tipki"]
+[ext_resource type="Script" uid="uid://bhit8crmy18r2" path="res://scripts/hack_manager.gd" id="9_85g3d"]
+[ext_resource type="Script" uid="uid://dr8cq0y082nvb" path="res://scripts/underground_door.gd" id="9_choun"]
+[ext_resource type="Script" uid="uid://dpt7vlhgx7i2r" path="res://scripts/underground_doors_manager.gd" id="9_ya4ey"]
+[ext_resource type="Script" uid="uid://bmkt2wpnde21k" path="res://scripts/alien_life_discovery.gd" id="11_eb6dy"]
+[ext_resource type="Script" uid="uid://chknd663bnmt5" path="res://scripts/alien_encounter_manager.gd" id="12_trceg"]
+[ext_resource type="Script" uid="uid://c3ljt0bhaiuaq" path="res://scripts/facility_map_terminal.gd" id="13_jkv2x"]
+[ext_resource type="Script" uid="uid://bjbmiamypmerq" path="res://scripts/fight_manager.gd" id="14_a8y0u"]
+[ext_resource type="Script" uid="uid://cknev37ufeh83" path="res://scripts/facility_room_tracker.gd" id="14_jbj1t"]
+[ext_resource type="Script" uid="uid://cyplkmvrwgerx" path="res://scripts/sonic_equipment.gd" id="15_dp3eg"]
+[ext_resource type="Script" uid="uid://bkkk4wvy8wbsx" path="res://scripts/technical_energy_system.gd" id="16_0ld40"]
+[ext_resource type="Script" uid="uid://61m3fyk3eapb" path="res://scripts/maintenance_station.gd" id="17_gqmmt"]
+[ext_resource type="Script" uid="uid://5p08d08iaggn" path="res://scripts/pause_menu.gd" id="17_muem4"]
+[ext_resource type="Script" uid="uid://bfalalc7e4y2n" path="res://scripts/support_terminal.gd" id="18_yc10j"]
+[ext_resource type="Script" uid="uid://uht0yk84qxiu" path="res://scripts/laboratory_terminal.gd" id="19_lab"]
+[ext_resource type="Script" uid="uid://dkednngwih8dt" path="res://scripts/archives_terminal.gd" id="20_pm3ni"]
+[ext_resource type="Script" uid="uid://ckmnqkc4pbrgp" path="res://scripts/sanctuary_terminal.gd" id="21_y6deb"]
+[ext_resource type="Script" uid="uid://cin6qbovlqlo2" path="res://scripts/main_core_terminal.gd" id="22_og1vs"]
+[ext_resource type="Script" uid="uid://bb4eqrrbhkvug" path="res://scripts/facility_progression_manager.gd" id="23_vxglm"]
+[ext_resource type="Script" uid="uid://cds65rw5i74tv" path="res://scripts/security_access_terminal.gd" id="24_2f3dj"]
+[ext_resource type="Script" uid="uid://cfh7aoywgfdci" path="res://scripts/run_state.gd" id="26_2wyq8"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
+size = Vector2(180, 60)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_l8mnm"]
+radius = 18.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_sugp2"]
+radius = 14.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_jyhfs"]
+radius = 14.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_5ui7g"]
+size = Vector2(49.899994, 46)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_s5phl"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ec1ib"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_asrk8"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_3cdu1"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1wrmv"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_0hu5e"]
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_a8y0u"]
+a = Vector2(-1650, -3487)
+b = Vector2(-1570, -3487)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_jkv2x"]
+a = Vector2(-1570, -3487)
+b = Vector2(-1570, -3380)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_jbj1t"]
+a = Vector2(-1570, -3380)
+b = Vector2(-1088, -3380)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_muem4"]
+a = Vector2(-1088, -3380)
+b = Vector2(-1088, -3312)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_dp3eg"]
+a = Vector2(-1088, -3312)
+b = Vector2(-1020, -3312)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_0ld40"]
+a = Vector2(-1020, -3312)
+b = Vector2(-1020, -2975)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_gqmmt"]
+a = Vector2(-1020, -2975)
+b = Vector2(-700, -2975)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_yc10j"]
+a = Vector2(-700, -2975)
+b = Vector2(-700, -2798)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_jscy8"]
+a = Vector2(-700, -2602)
+b = Vector2(-700, -2425)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_pm3ni"]
+a = Vector2(-1020, -2425)
+b = Vector2(-700, -2425)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_y6deb"]
+a = Vector2(-1020, -2425)
+b = Vector2(-1020, -1900)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_og1vs"]
+a = Vector2(-1020, -1900)
+b = Vector2(-750, -1900)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_2wyq8"]
+a = Vector2(-750, -1900)
+b = Vector2(-750, -1730)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_vxglm"]
+a = Vector2(-750, -1730)
+b = Vector2(-288, -1730)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_2f3dj"]
+a = Vector2(-288, -1730)
+b = Vector2(-288, -1662)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_yq6so"]
+a = Vector2(-288, -1662)
+b = Vector2(-220, -1662)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_fv21b"]
+a = Vector2(-220, -1662)
+b = Vector2(-220, -1200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_tel4y"]
+a = Vector2(-220, -1200)
+b = Vector2(220, -1200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_qkpxi"]
+a = Vector2(220, -1662)
+b = Vector2(220, -1200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_5q0nq"]
+a = Vector2(220, -1662)
+b = Vector2(288, -1662)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_dgi5k"]
+a = Vector2(288, -1730)
+b = Vector2(288, -1662)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_j8jky"]
+a = Vector2(288, -1730)
+b = Vector2(700, -1730)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_kmb1v"]
+a = Vector2(700, -1925)
+b = Vector2(700, -1730)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_fuf3a"]
+a = Vector2(700, -1925)
+b = Vector2(1020, -1925)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_pibwh"]
+a = Vector2(1020, -2425)
+b = Vector2(1020, -1925)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_c6pm6"]
+a = Vector2(700, -2425)
+b = Vector2(1020, -2425)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_5he1u"]
+a = Vector2(700, -2975)
+b = Vector2(700, -2798)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_5poiv"]
+a = Vector2(700, -2602)
+b = Vector2(700, -2425)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_2cjbq"]
+a = Vector2(700, -2975)
+b = Vector2(1020, -2975)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_chjal"]
+a = Vector2(1020, -3312)
+b = Vector2(1020, -2975)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_cjqg0"]
+a = Vector2(1020, -3312)
+b = Vector2(1088, -3312)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_vchkt"]
+a = Vector2(1088, -3380)
+b = Vector2(1088, -3312)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_txyw0"]
+a = Vector2(1088, -3380)
+b = Vector2(1570, -3380)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_vc5cj"]
+a = Vector2(1570, -3487)
+b = Vector2(1570, -3380)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_nvyfr"]
+a = Vector2(1570, -3487)
+b = Vector2(1650, -3487)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_ty1g6"]
+a = Vector2(1650, -4125)
+b = Vector2(1650, -3898)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_j2jfr"]
+a = Vector2(1650, -3702)
+b = Vector2(1650, -3487)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_bjg73"]
+a = Vector2(1650, -4125)
+b = Vector2(2750, -4125)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_bu4jf"]
+a = Vector2(2750, -4125)
+b = Vector2(2750, -3475)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_o7ddy"]
+a = Vector2(1730, -3475)
+b = Vector2(2750, -3475)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_0loja"]
+a = Vector2(1730, -3475)
+b = Vector2(1730, -3288)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_ids8r"]
+a = Vector2(1662, -3288)
+b = Vector2(1730, -3288)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_dnhof"]
+a = Vector2(1662, -3288)
+b = Vector2(1662, -3220)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_1v6qk"]
+a = Vector2(1180, -3220)
+b = Vector2(1662, -3220)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_augu2"]
+a = Vector2(1180, -3220)
+b = Vector2(1180, -2975)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_tm6hj"]
+a = Vector2(1180, -2975)
+b = Vector2(1500, -2975)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_kf5aa"]
+a = Vector2(1500, -2975)
+b = Vector2(1500, -2425)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_t5ykj"]
+a = Vector2(1180, -2425)
+b = Vector2(1500, -2425)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_e755i"]
+a = Vector2(1180, -2425)
+b = Vector2(1180, -1925)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_ro3en"]
+a = Vector2(1180, -1925)
+b = Vector2(1500, -1925)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_od4ux"]
+a = Vector2(1500, -1925)
+b = Vector2(1500, -1730)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_xhfw6"]
+a = Vector2(1500, -1730)
+b = Vector2(1850, -1730)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_1epgm"]
+a = Vector2(1850, -1900)
+b = Vector2(1850, -1730)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_152kg"]
+a = Vector2(1850, -1900)
+b = Vector2(2550, -1900)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_r4e17"]
+a = Vector2(2550, -1900)
+b = Vector2(2550, -1400)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_y57op"]
+a = Vector2(1850, -1400)
+b = Vector2(2550, -1400)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_mlv25"]
+a = Vector2(1850, -1570)
+b = Vector2(1850, -1400)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_a82wo"]
+a = Vector2(1500, -1570)
+b = Vector2(1850, -1570)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_gdvew"]
+a = Vector2(1500, -1570)
+b = Vector2(1500, -1375)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_kjtvk"]
+a = Vector2(700, -1375)
+b = Vector2(1500, -1375)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_xrs0c"]
+a = Vector2(700, -1570)
+b = Vector2(700, -1375)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_xljpf"]
+a = Vector2(380, -1570)
+b = Vector2(700, -1570)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_j4bwh"]
+a = Vector2(380, -1570)
+b = Vector2(380, -1200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_ksmap"]
+a = Vector2(380, -1200)
+b = Vector2(500, -1200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_ygd8o"]
+a = Vector2(500, -1200)
+b = Vector2(500, -600)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_2s0kr"]
+a = Vector2(80, -600)
+b = Vector2(500, -600)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_xaipn"]
+a = Vector2(80, -600)
+b = Vector2(80, -200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_ndrjj"]
+a = Vector2(80, -200)
+b = Vector2(350, -200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_ih3m7"]
+a = Vector2(350, -200)
+b = Vector2(350, 200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_11yus"]
+a = Vector2(-350, 200)
+b = Vector2(350, 200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_b6ruc"]
+a = Vector2(-350, -200)
+b = Vector2(-350, 200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_155or"]
+a = Vector2(-350, -200)
+b = Vector2(-80, -200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_vtx2l"]
+a = Vector2(-80, -600)
+b = Vector2(-80, -200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_63lxy"]
+a = Vector2(-500, -600)
+b = Vector2(-80, -600)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_fjhjs"]
+a = Vector2(-500, -1200)
+b = Vector2(-500, -600)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_bfu41"]
+a = Vector2(-500, -1200)
+b = Vector2(-380, -1200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_r4ag1"]
+a = Vector2(-380, -1570)
+b = Vector2(-380, -1200)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_v0wtd"]
+a = Vector2(-750, -1570)
+b = Vector2(-380, -1570)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_sgvw8"]
+a = Vector2(-750, -1570)
+b = Vector2(-750, -1400)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_6nfnn"]
+a = Vector2(-1450, -1400)
+b = Vector2(-750, -1400)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_4ue30"]
+a = Vector2(-1450, -1570)
+b = Vector2(-1450, -1400)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_k42av"]
+a = Vector2(-1850, -1570)
+b = Vector2(-1450, -1570)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_gr8w0"]
+a = Vector2(-1850, -1570)
+b = Vector2(-1850, -1400)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_673bd"]
+a = Vector2(-2550, -1400)
+b = Vector2(-1850, -1400)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_akjxb"]
+a = Vector2(-2550, -1900)
+b = Vector2(-2550, -1400)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_vrx01"]
+a = Vector2(-2550, -1900)
+b = Vector2(-2280, -1900)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_1uevf"]
+a = Vector2(-2280, -2450)
+b = Vector2(-2280, -1900)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_tc087"]
+a = Vector2(-2550, -2450)
+b = Vector2(-2280, -2450)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_73205"]
+a = Vector2(-2550, -2950)
+b = Vector2(-2550, -2450)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_0tljd"]
+a = Vector2(-2550, -2950)
+b = Vector2(-1850, -2950)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_mgpkq"]
+a = Vector2(-1850, -2950)
+b = Vector2(-1850, -2450)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_xmrkg"]
+a = Vector2(-2120, -2450)
+b = Vector2(-1850, -2450)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_wvlrk"]
+a = Vector2(-2120, -2450)
+b = Vector2(-2120, -1900)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_engxj"]
+a = Vector2(-2120, -1900)
+b = Vector2(-1850, -1900)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_raiwf"]
+a = Vector2(-1850, -1900)
+b = Vector2(-1850, -1730)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_roort"]
+a = Vector2(-1850, -1730)
+b = Vector2(-1450, -1730)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_gm02q"]
+a = Vector2(-1450, -1900)
+b = Vector2(-1450, -1730)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_07pt3"]
+a = Vector2(-1450, -1900)
+b = Vector2(-1180, -1900)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_37xlc"]
+a = Vector2(-1180, -2425)
+b = Vector2(-1180, -1900)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_83607"]
+a = Vector2(-1500, -2425)
+b = Vector2(-1180, -2425)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_vny5k"]
+a = Vector2(-1500, -2975)
+b = Vector2(-1500, -2425)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_8lcmr"]
+a = Vector2(-1500, -2975)
+b = Vector2(-1180, -2975)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_ga3rw"]
+a = Vector2(-1180, -3220)
+b = Vector2(-1180, -2975)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_f5chs"]
+a = Vector2(-1662, -3220)
+b = Vector2(-1180, -3220)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_eh25q"]
+a = Vector2(-1662, -3288)
+b = Vector2(-1662, -3220)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_joh2r"]
+a = Vector2(-1730, -3288)
+b = Vector2(-1662, -3288)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_yton5"]
+a = Vector2(-1730, -3475)
+b = Vector2(-1730, -3288)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_4ahvx"]
+a = Vector2(-2750, -3475)
+b = Vector2(-1730, -3475)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_2cr71"]
+a = Vector2(-2750, -4125)
+b = Vector2(-2750, -3475)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_1hbcg"]
+a = Vector2(-2750, -4125)
+b = Vector2(-1650, -4125)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_m4o51"]
+a = Vector2(-1650, -4125)
+b = Vector2(-1650, -3898)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_jp61a"]
+a = Vector2(-1650, -3702)
+b = Vector2(-1650, -3487)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_esrwe"]
+a = Vector2(-1662, -3880)
+b = Vector2(1662, -3880)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_4b36k"]
+a = Vector2(-1662, -3720)
+b = Vector2(1662, -3720)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_1v8b0"]
+a = Vector2(-712, -2780)
+b = Vector2(712, -2780)
+
+[sub_resource type="SegmentShape2D" id="SegmentShape2D_683hg"]
+a = Vector2(-712, -2620)
+b = Vector2(712, -2620)
+
+[node name="Main" type="Node2D" unique_id=1872859629]
+script = ExtResource("1_sugp2")
+
+[node name="Ground" type="Polygon2D" parent="." unique_id=1191058292]
+position = Vector2(495.06366, -346.33853)
+scale = Vector2(1.5029359, 1.5523736)
+color = Color(0.89568764, 0.84647185, 0.56997126, 1)
+polygon = PackedVector2Array(-1972.8656, -691.531, 1000, -700, 1032.6031, 1266.0216, -1976.1746, 1257.0033)
+
+[node name="Ship" type="StaticBody2D" parent="." unique_id=202784240 groups=["detectable", "interactable"]]
+position = Vector2(250, -150)
+script = ExtResource("2_o6xl0")
+
+[node name="Ship" type="Polygon2D" parent="Ship" unique_id=1636235921]
+color = Color(0.21206132, 0.00033903302, 0.56683713, 1)
+polygon = PackedVector2Array(-80, -35, 80, -35, 100, 0, 80, 35, -80, 35, -100, 0)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Ship" unique_id=1169714705]
+shape = SubResource("RectangleShape2D_l8mnm")
+
+[node name="Debris1" type="StaticBody2D" parent="." unique_id=925556185 groups=["detectable"]]
+position = Vector2(-350, 200)
+
+[node name="Debris1" type="Polygon2D" parent="Debris1" unique_id=2138797368]
+color = Color(0.13879198, 0.11522191, 0.48618102, 1)
+polygon = PackedVector2Array(-20, -10, 15, -15, 25, 5, 5, 20, -18, 12)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Debris1" unique_id=1874871130]
+shape = SubResource("CircleShape2D_l8mnm")
+
+[node name="Debris2" type="StaticBody2D" parent="." unique_id=2126926193 groups=["detectable"]]
+position = Vector2(350, 120)
+
+[node name="Debris1" type="Polygon2D" parent="Debris2" unique_id=1494008913]
+color = Color(0.13879198, 0.11522191, 0.48618102, 1)
+polygon = PackedVector2Array(-20, -10, 15, -15, 25, 5, 5, 20, -18, 12)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Debris2" unique_id=954898764]
+shape = SubResource("CircleShape2D_l8mnm")
+
+[node name="Debris3" type="StaticBody2D" parent="." unique_id=254546626 groups=["detectable"]]
+position = Vector2(-500, -400)
+
+[node name="Debris1" type="Polygon2D" parent="Debris3" unique_id=1855301745]
+color = Color(0.13879198, 0.11522191, 0.48618102, 1)
+polygon = PackedVector2Array(-20, -10, 15, -15, 25, 5, 5, 20, -18, 12)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Debris3" unique_id=120900381]
+shape = SubResource("CircleShape2D_l8mnm")
+
+[node name="Player" type="CharacterBody2D" parent="." unique_id=1093214856]
+position = Vector2(1, 1)
+script = ExtResource("1_o5qli")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player" unique_id=1352344189]
+shape = SubResource("CircleShape2D_sugp2")
+debug_color = Color(0.93191767, 0.84052914, 0.9688814, 0.41960785)
+
+[node name="Polygon2D" type="Polygon2D" parent="Player" unique_id=1895788500]
+color = Color(0.28235295, 0.9764706, 0.8862745, 1)
+polygon = PackedVector2Array(-20, -20, 20, -20, 20, 20, -20, 20)
+
+[node name="Camera2D" type="Camera2D" parent="Player" unique_id=234476532]
+zoom = Vector2(1.6, 1.6)
+
+[node name="Atlas" type="CharacterBody2D" parent="." unique_id=1792037986]
+position = Vector2(120, 0)
+script = ExtResource("2_0wfyh")
+scan_cooldown = 5.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Atlas" unique_id=1310704851]
+shape = SubResource("CircleShape2D_jyhfs")
+debug_color = Color(0.39186978, 0.5934412, 0.41877908, 0.41960785)
+
+[node name="Polygon2D" type="Polygon2D" parent="Atlas" unique_id=1301814110]
+color = Color(1, 1, 0.3019608, 1)
+polygon = PackedVector2Array(-20, -20, 20, -20, 20, 20, -20, 20)
+
+[node name="AtlasAPI" type="HTTPRequest" parent="." unique_id=2038477603]
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=255633486]
+
+[node name="ChatPanel" type="Panel" parent="UI" unique_id=1854313408]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 272.0
+offset_top = -109.0
+offset_right = -241.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 0
+offset_transform_enabled = true
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/ChatPanel" unique_id=269828397]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="ChatHistory" type="RichTextLabel" parent="UI/ChatPanel/VBoxContainer" unique_id=692380516]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ChatInput" type="LineEdit" parent="UI/ChatPanel/VBoxContainer" unique_id=983911713]
+layout_mode = 2
+placeholder_text = "Escreva uma mensagem..."
+
+[node name="AutonomyAPI" type="HTTPRequest" parent="." unique_id=1143749440]
+
+[node name="ProtocolDoor" type="Area2D" parent="." unique_id=67136818 groups=["interactable"]]
+position = Vector2(-76.1, 4)
+script = ExtResource("4_jyhfs")
+
+[node name="DoorVisual" type="Polygon2D" parent="ProtocolDoor" unique_id=1091522801]
+position = Vector2(260, -547)
+polygon = PackedVector2Array(-0.38, -1.71, 28.62, -19.71, 45.62, 6.29, 40.62, 21.29)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ProtocolDoor" unique_id=1233854701]
+position = Vector2(284.05, -548)
+shape = SubResource("RectangleShape2D_5ui7g")
+
+[node name="InteractionLabel" type="Label" parent="ProtocolDoor" unique_id=1627563366]
+offset_left = 268.1
+offset_top = -602.0
+offset_right = 375.1
+offset_bottom = -579.0
+text = "[E] INTERAGIR"
+
+[node name="StatusLabel" type="Label" parent="ProtocolDoor" unique_id=181230168]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 198.0
+offset_top = -525.0
+offset_right = 378.0
+offset_bottom = -511.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 10
+text = "ACESSO RESTRITO"
+horizontal_alignment = 1
+
+[node name="TerminalPanel" type="Panel" parent="ProtocolDoor" unique_id=224436374]
+offset_left = 342.1
+offset_top = -563.0
+offset_right = 419.1
+offset_bottom = -538.0
+
+[node name="TerminalTitle" type="Label" parent="ProtocolDoor/TerminalPanel" unique_id=1356303613]
+layout_mode = 0
+offset_left = 3.0
+offset_top = 2.0
+offset_right = 175.0
+offset_bottom = 25.0
+theme_override_font_sizes/font_size = 6
+text = "PYSSOA ACCESS NODE"
+
+[node name="TerminalState" type="Label" parent="ProtocolDoor/TerminalPanel" unique_id=87625557]
+layout_mode = 0
+offset_left = 3.0
+offset_top = 11.0
+offset_right = 175.0
+offset_bottom = 34.0
+theme_override_font_sizes/font_size = 9
+text = "LOCKED"
+
+[node name="ProtocolAPI" type="HTTPRequest" parent="." unique_id=1471413670]
+
+[node name="UnknownDebris" type="Node2D" parent="." unique_id=2128374097 groups=["detectable"]]
+position = Vector2(-872, 633)
+
+[node name="Polygon2D" type="Polygon2D" parent="UnknownDebris" unique_id=321733220]
+polygon = PackedVector2Array(-11, -8, -9, 8, 15, 8, 9, -13)
+
+[node name="AncientSculpture" type="Node2D" parent="." unique_id=225283512 groups=["detectable"]]
+position = Vector2(859, 304)
+
+[node name="Polygon2D" type="Polygon2D" parent="AncientSculpture" unique_id=1158999476]
+polygon = PackedVector2Array(-2, -2, -3, 4, 4, 4, 4, -2, -1, -2)
+
+[node name="ShipPartsManager" type="Node" parent="." unique_id=197550663]
+script = ExtResource("5_tefeu")
+
+[node name="ShipPart1" type="Area2D" parent="." unique_id=690151459 groups=["interactable"]]
+position = Vector2(-45, -266)
+script = ExtResource("5_tbgi4")
+display_name = "Componente de energia"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart1" unique_id=1759831287]
+polygon = PackedVector2Array(-10, -9, -10, 9, 10, 10, 10, -10, -10, -10)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart1" unique_id=287921192]
+shape = SubResource("RectangleShape2D_s5phl")
+
+[node name="ShipPart2" type="Area2D" parent="." unique_id=705623041 groups=["interactable"]]
+position = Vector2(-275, 259)
+script = ExtResource("5_tbgi4")
+part_id = "ship_part_02"
+display_name = "Regulador térmico"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart2" unique_id=839292236]
+polygon = PackedVector2Array(-12, -10, -11, 9, 7, 10, 6, -9)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart2" unique_id=418850793]
+position = Vector2(-1, 0)
+shape = SubResource("RectangleShape2D_ec1ib")
+
+[node name="ShipPart3" type="Area2D" parent="." unique_id=1691141482 groups=["interactable"]]
+position = Vector2(-63, 146)
+script = ExtResource("5_tbgi4")
+part_id = "ship_part_03"
+display_name = "Módulo de navegação"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart3" unique_id=473261794]
+polygon = PackedVector2Array(-10, -10, -10, 9, 10, 10, 9, -12)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart3" unique_id=1837562401]
+shape = SubResource("RectangleShape2D_asrk8")
+
+[node name="ShipPart4" type="Area2D" parent="." unique_id=708895249 groups=["interactable"]]
+position = Vector2(-412, -101)
+script = ExtResource("5_tbgi4")
+part_id = "ship_part_04"
+display_name = "Unidade de combustível"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart4" unique_id=1704752544]
+polygon = PackedVector2Array(-10, -10, -10, 9, 10, 10, 10, -10)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart4" unique_id=645943870]
+shape = SubResource("RectangleShape2D_3cdu1")
+
+[node name="ShipPart5" type="Area2D" parent="." unique_id=728927646 groups=["interactable"]]
+position = Vector2(452, -320)
+script = ExtResource("5_tbgi4")
+part_id = "ship_part_05"
+display_name = "Circuito de controlo"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart5" unique_id=1958459635]
+polygon = PackedVector2Array(-9, -8, -8, 6, 9, 7, 8, -8)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart5" unique_id=623736468]
+shape = SubResource("RectangleShape2D_1wrmv")
+
+[node name="ShipPart6" type="Area2D" parent="." unique_id=672010131 groups=["interactable"]]
+position = Vector2(-99, -412)
+script = ExtResource("5_tbgi4")
+part_id = "ship_part_06"
+display_name = "Núcleo de comunicação"
+
+[node name="Polygon2D" type="Polygon2D" parent="ShipPart6" unique_id=1428804204]
+polygon = PackedVector2Array(-9, -8, -10, 8, 10, 7, 7, -7)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ShipPart6" unique_id=1109456360]
+shape = SubResource("RectangleShape2D_0hu5e")
+
+[node name="UndergroundRoot" type="Node2D" parent="." unique_id=1394738691]
+z_index = -10
+position = Vector2(5000, 0)
+
+[node name="UndergroundSpawn" type="Marker2D" parent="UndergroundRoot" unique_id=936846538]
+
+[node name="Ground" type="Polygon2D" parent="UndergroundRoot" unique_id=1495629326]
+z_index = -10
+position = Vector2(-759.9999, -2290)
+scale = Vector2(1.0489886, 1.506633)
+color = Color(0, 0, 0, 1)
+polygon = PackedVector2Array(-1931, -2231, -1904, 1752, 3424, 1752, 3458, -2243)
+
+[node name="GeneratedLayout" type="Node2D" parent="UndergroundRoot" unique_id=1096465]
+script = ExtResource("8_tipki")
+
+[node name="Entrance" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1641800424]
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Entrance" unique_id=854218480]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-366, -216, 366, -216, 366, 216, -366, 216)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Entrance" unique_id=331088052]
+z_index = -7
+color = Color(0.18, 0.22, 0.25, 1)
+polygon = PackedVector2Array(-350, -200, 350, -200, 350, 200, -350, 200)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Entrance" unique_id=1112194450]
+offset_left = -350.0
+offset_top = -30.0
+offset_right = 350.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "ENTRADA"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Hall" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=980830815]
+position = Vector2(0, -900)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Hall" unique_id=205034711]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-516, -316, 516, -316, 516, 316, -516, 316)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Hall" unique_id=680295110]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-500, -300, 500, -300, 500, 300, -500, 300)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Hall" unique_id=1871360395]
+offset_left = -500.0
+offset_top = -30.0
+offset_right = 500.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "HALL DE ENTRADA"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Storage" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=485240610]
+position = Vector2(-1100, -1650)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Storage" unique_id=1414785482]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-366, -266, 366, -266, 366, 266, -366, 266)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Storage" unique_id=138428806]
+z_index = -7
+color = Color(0.18, 0.22, 0.25, 1)
+polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Storage" unique_id=1129669123]
+offset_left = -350.0
+offset_top = -30.0
+offset_right = 350.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "ARMAZÉM / PEÇAS"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="TechnicalRoom" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1178901522]
+position = Vector2(1100, -1650)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/TechnicalRoom" unique_id=1469537022]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-416, -291, 416, -291, 416, 291, -416, 291)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/TechnicalRoom" unique_id=842246783]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/TechnicalRoom" unique_id=1956020453]
+offset_left = -400.0
+offset_top = -30.0
+offset_right = 400.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "SALA TÉCNICA / ENERGIA"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SupportRoom" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=204620601]
+position = Vector2(-2200, -1650)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/SupportRoom" unique_id=996774821]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-366, -266, 366, -266, 366, 266, -366, 266)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/SupportRoom" unique_id=1563113556]
+z_index = -7
+color = Color(0.18, 0.22, 0.25, 1)
+polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/SupportRoom" unique_id=826562567]
+offset_left = -350.0
+offset_top = -30.0
+offset_right = 350.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "SALA DE SUPORTE"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Security" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=586158869]
+position = Vector2(2200, -1650)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Security" unique_id=1913628641]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-366, -266, 366, -266, 366, 266, -366, 266)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Security" unique_id=1427717393]
+z_index = -7
+color = Color(0.18, 0.22, 0.25, 1)
+polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Security" unique_id=1982701391]
+offset_left = -350.0
+offset_top = -30.0
+offset_right = 350.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "SEGURANÇA / CONTENÇÃO"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Archives" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=816182896]
+position = Vector2(-1100, -2700)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Archives" unique_id=1551857149]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-416, -291, 416, -291, 416, 291, -416, 291)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Archives" unique_id=1990961907]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Archives" unique_id=634376396]
+offset_left = -400.0
+offset_top = -30.0
+offset_right = 400.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "ARQUIVOS / REGISTOS"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Laboratory" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=727011191]
+position = Vector2(1100, -2700)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Laboratory" unique_id=1916804967]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-416, -291, 416, -291, 416, 291, -416, 291)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Laboratory" unique_id=1648878733]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Laboratory" unique_id=1250321027]
+offset_left = -400.0
+offset_top = -30.0
+offset_right = 400.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "LABORATÓRIO / ANÁLISE"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Maintenance" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=2050801817]
+position = Vector2(-2200, -2700)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Maintenance" unique_id=1025022196]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-366, -266, 366, -266, 366, 266, -366, 266)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Maintenance" unique_id=1649375156]
+z_index = -7
+color = Color(0.18, 0.22, 0.25, 1)
+polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Maintenance" unique_id=2146710604]
+offset_left = -350.0
+offset_top = -30.0
+offset_right = 350.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "OFICINA / MANUTENÇÃO"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Sanctuary" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=291775203]
+position = Vector2(-2200, -3800)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Sanctuary" unique_id=104438827]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-566, -341, 566, -341, 566, 341, -566, 341)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Sanctuary" unique_id=519807287]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-550, -325, 550, -325, 550, 325, -550, 325)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Sanctuary" unique_id=2047618888]
+offset_left = -550.0
+offset_top = -30.0
+offset_right = 550.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "SANTUÁRIO / ESCULTURAS"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MainCore" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=533092038]
+position = Vector2(2200, -3800)
+
+[node name="Border" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/MainCore" unique_id=1027870559]
+z_index = -8
+color = Color(0.65, 0.72, 0.75, 1)
+polygon = PackedVector2Array(-566, -341, 566, -341, 566, 341, -566, 341)
+
+[node name="Floor" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/MainCore" unique_id=1205841577]
+z_index = -7
+color = Color(0.22, 0.27, 0.31, 1)
+polygon = PackedVector2Array(-550, -325, 550, -325, 550, 325, -550, 325)
+
+[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/MainCore" unique_id=1991719042]
+offset_left = -550.0
+offset_top = -30.0
+offset_right = 550.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "NÚCLEO PRINCIPAL"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Corridor_Entrance_Hall" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1256491647]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Entrance_Hall" unique_id=151485189]
+z_index = -6
+position = Vector2(0, -400)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -212, 80, -212, 80, 212, -80, 212)
+
+[node name="Corridor_Hall_Storage" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=567846924]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Hall_Storage" unique_id=670939290]
+z_index = -6
+position = Vector2(-300, -1425)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -237, 80, -237, 80, 237, -80, 237)
+
+[node name="Segment_1" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Hall_Storage" unique_id=1217183699]
+z_index = -6
+position = Vector2(-525, -1650)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-237, -80, 237, -80, 237, 80, -237, 80)
+
+[node name="Corridor_Hall_Technical" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1147429425]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Hall_Technical" unique_id=1945675632]
+z_index = -6
+position = Vector2(300, -1425)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -237, 80, -237, 80, 237, -80, 237)
+
+[node name="Segment_1" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Hall_Technical" unique_id=645202789]
+z_index = -6
+position = Vector2(500, -1650)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-212, -80, 212, -80, 212, 80, -212, 80)
+
+[node name="Corridor_Storage_Support" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1819520089]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Storage_Support" unique_id=165943216]
+z_index = -6
+position = Vector2(-1650, -1650)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-212, -80, 212, -80, 212, 80, -212, 80)
+
+[node name="Corridor_Technical_Security" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=141905612]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Technical_Security" unique_id=1380500199]
+z_index = -6
+position = Vector2(1675, -1650)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-187, -80, 187, -80, 187, 80, -187, 80)
+
+[node name="Corridor_Storage_Archives" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=173450369]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Storage_Archives" unique_id=2123026052]
+z_index = -6
+position = Vector2(-1100, -2162.5)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -274.5, 80, -274.5, 80, 274.5, -80, 274.5)
+
+[node name="Corridor_Technical_Laboratory" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1307111084]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Technical_Laboratory" unique_id=1744001607]
+z_index = -6
+position = Vector2(1100, -2175)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -262, 80, -262, 80, 262, -80, 262)
+
+[node name="Corridor_Support_Maintenance" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=668951978]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Support_Maintenance" unique_id=1604397902]
+z_index = -6
+position = Vector2(-2200, -2175)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -287, 80, -287, 80, 287, -80, 287)
+
+[node name="Corridor_Archives_Sanctuary" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=807158547]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Archives_Sanctuary" unique_id=663816277]
+z_index = -6
+position = Vector2(-1100, -3137.5)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -174.5, 80, -174.5, 80, 174.5, -80, 174.5)
+
+[node name="Segment_1" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Archives_Sanctuary" unique_id=737533443]
+z_index = -6
+position = Vector2(-1375, -3300)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-287, -80, 287, -80, 287, 80, -287, 80)
+
+[node name="Segment_2" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Archives_Sanctuary" unique_id=605281859]
+z_index = -6
+position = Vector2(-1650, -3387.5)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -99.5, 80, -99.5, 80, 99.5, -80, 99.5)
+
+[node name="Corridor_Laboratory_MainCore" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1995073692]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Laboratory_MainCore" unique_id=1414135768]
+z_index = -6
+position = Vector2(1100, -3137.5)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -174.5, 80, -174.5, 80, 174.5, -80, 174.5)
+
+[node name="Segment_1" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Laboratory_MainCore" unique_id=1806173966]
+z_index = -6
+position = Vector2(1375, -3300)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-287, -80, 287, -80, 287, 80, -287, 80)
+
+[node name="Segment_2" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Laboratory_MainCore" unique_id=1580317408]
+z_index = -6
+position = Vector2(1650, -3387.5)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-80, -99.5, 80, -99.5, 80, 99.5, -80, 99.5)
+
+[node name="Corridor_Sanctuary_MainCore" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1750634301]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Sanctuary_MainCore" unique_id=2113076917]
+z_index = -6
+position = Vector2(0, -3800)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-1662, -80, 1662, -80, 1662, 80, -1662, 80)
+
+[node name="Corridor_Archives_Laboratory" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1987587864]
+
+[node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Archives_Laboratory" unique_id=1259825078]
+z_index = -6
+position = Vector2(0, -2700)
+color = Color(0.12, 0.16, 0.18, 1)
+polygon = PackedVector2Array(-712, -80, 712, -80, 712, 80, -712, 80)
+
+[node name="GeneratedWalls" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=554488321]
+
+[node name="WallCollision" type="StaticBody2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls" unique_id=837270712]
+
+[node name="WallCollision_0" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=231290518]
+shape = SubResource("SegmentShape2D_a8y0u")
+
+[node name="WallCollision_1" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=304761117]
+shape = SubResource("SegmentShape2D_jkv2x")
+
+[node name="WallCollision_2" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=186418505]
+shape = SubResource("SegmentShape2D_jbj1t")
+
+[node name="WallCollision_3" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1539586948]
+shape = SubResource("SegmentShape2D_muem4")
+
+[node name="WallCollision_4" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=194463498]
+shape = SubResource("SegmentShape2D_dp3eg")
+
+[node name="WallCollision_5" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1670883769]
+shape = SubResource("SegmentShape2D_0ld40")
+
+[node name="WallCollision_6" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1564543485]
+shape = SubResource("SegmentShape2D_gqmmt")
+
+[node name="WallCollision_7" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=572157794]
+shape = SubResource("SegmentShape2D_yc10j")
+
+[node name="WallCollision_8" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1356527923]
+shape = SubResource("SegmentShape2D_jscy8")
+
+[node name="WallCollision_9" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=31951141]
+shape = SubResource("SegmentShape2D_pm3ni")
+
+[node name="WallCollision_10" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=3267057]
+shape = SubResource("SegmentShape2D_y6deb")
+
+[node name="WallCollision_11" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=356189747]
+shape = SubResource("SegmentShape2D_og1vs")
+
+[node name="WallCollision_12" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=301181102]
+shape = SubResource("SegmentShape2D_2wyq8")
+
+[node name="WallCollision_13" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1535589298]
+shape = SubResource("SegmentShape2D_vxglm")
+
+[node name="WallCollision_14" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1701033216]
+shape = SubResource("SegmentShape2D_2f3dj")
+
+[node name="WallCollision_15" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1874674109]
+shape = SubResource("SegmentShape2D_yq6so")
+
+[node name="WallCollision_16" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=2116764060]
+shape = SubResource("SegmentShape2D_fv21b")
+
+[node name="WallCollision_17" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=346131805]
+shape = SubResource("SegmentShape2D_tel4y")
+
+[node name="WallCollision_18" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=2092678930]
+shape = SubResource("SegmentShape2D_qkpxi")
+
+[node name="WallCollision_19" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1081441636]
+shape = SubResource("SegmentShape2D_5q0nq")
+
+[node name="WallCollision_20" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=462424454]
+shape = SubResource("SegmentShape2D_dgi5k")
+
+[node name="WallCollision_21" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=655308882]
+shape = SubResource("SegmentShape2D_j8jky")
+
+[node name="WallCollision_22" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=2017820192]
+shape = SubResource("SegmentShape2D_kmb1v")
+
+[node name="WallCollision_23" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=734669666]
+shape = SubResource("SegmentShape2D_fuf3a")
+
+[node name="WallCollision_24" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=416766948]
+shape = SubResource("SegmentShape2D_pibwh")
+
+[node name="WallCollision_25" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1352176171]
+shape = SubResource("SegmentShape2D_c6pm6")
+
+[node name="WallCollision_26" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=788442040]
+shape = SubResource("SegmentShape2D_5he1u")
+
+[node name="WallCollision_27" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1493963990]
+shape = SubResource("SegmentShape2D_5poiv")
+
+[node name="WallCollision_28" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1205455070]
+shape = SubResource("SegmentShape2D_2cjbq")
+
+[node name="WallCollision_29" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=48755482]
+shape = SubResource("SegmentShape2D_chjal")
+
+[node name="WallCollision_30" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=2078953187]
+shape = SubResource("SegmentShape2D_cjqg0")
+
+[node name="WallCollision_31" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=66330689]
+shape = SubResource("SegmentShape2D_vchkt")
+
+[node name="WallCollision_32" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1174121858]
+shape = SubResource("SegmentShape2D_txyw0")
+
+[node name="WallCollision_33" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=632056449]
+shape = SubResource("SegmentShape2D_vc5cj")
+
+[node name="WallCollision_34" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1886257666]
+shape = SubResource("SegmentShape2D_nvyfr")
+
+[node name="WallCollision_35" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=404397971]
+shape = SubResource("SegmentShape2D_ty1g6")
+
+[node name="WallCollision_36" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=264145874]
+shape = SubResource("SegmentShape2D_j2jfr")
+
+[node name="WallCollision_37" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=2105617399]
+shape = SubResource("SegmentShape2D_bjg73")
+
+[node name="WallCollision_38" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=716130682]
+shape = SubResource("SegmentShape2D_bu4jf")
+
+[node name="WallCollision_39" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1502131835]
+shape = SubResource("SegmentShape2D_o7ddy")
+
+[node name="WallCollision_40" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1009016726]
+shape = SubResource("SegmentShape2D_0loja")
+
+[node name="WallCollision_41" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1721508968]
+shape = SubResource("SegmentShape2D_ids8r")
+
+[node name="WallCollision_42" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=41001783]
+shape = SubResource("SegmentShape2D_dnhof")
+
+[node name="WallCollision_43" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=599202623]
+shape = SubResource("SegmentShape2D_1v6qk")
+
+[node name="WallCollision_44" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1324686730]
+shape = SubResource("SegmentShape2D_augu2")
+
+[node name="WallCollision_45" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1898465982]
+shape = SubResource("SegmentShape2D_tm6hj")
+
+[node name="WallCollision_46" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1541903469]
+shape = SubResource("SegmentShape2D_kf5aa")
+
+[node name="WallCollision_47" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1559513437]
+shape = SubResource("SegmentShape2D_t5ykj")
+
+[node name="WallCollision_48" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1369994108]
+shape = SubResource("SegmentShape2D_e755i")
+
+[node name="WallCollision_49" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=17339968]
+shape = SubResource("SegmentShape2D_ro3en")
+
+[node name="WallCollision_50" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=637834476]
+shape = SubResource("SegmentShape2D_od4ux")
+
+[node name="WallCollision_51" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1736978508]
+shape = SubResource("SegmentShape2D_xhfw6")
+
+[node name="WallCollision_52" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1923224575]
+shape = SubResource("SegmentShape2D_1epgm")
+
+[node name="WallCollision_53" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1352253940]
+shape = SubResource("SegmentShape2D_152kg")
+
+[node name="WallCollision_54" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=377162357]
+shape = SubResource("SegmentShape2D_r4e17")
+
+[node name="WallCollision_55" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1977715648]
+shape = SubResource("SegmentShape2D_y57op")
+
+[node name="WallCollision_56" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=557096557]
+shape = SubResource("SegmentShape2D_mlv25")
+
+[node name="WallCollision_57" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1041745481]
+shape = SubResource("SegmentShape2D_a82wo")
+
+[node name="WallCollision_58" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=931161302]
+shape = SubResource("SegmentShape2D_gdvew")
+
+[node name="WallCollision_59" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=2028137751]
+shape = SubResource("SegmentShape2D_kjtvk")
+
+[node name="WallCollision_60" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=945557189]
+shape = SubResource("SegmentShape2D_xrs0c")
+
+[node name="WallCollision_61" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1157694956]
+shape = SubResource("SegmentShape2D_xljpf")
+
+[node name="WallCollision_62" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1415003559]
+shape = SubResource("SegmentShape2D_j4bwh")
+
+[node name="WallCollision_63" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=2139669239]
+shape = SubResource("SegmentShape2D_ksmap")
+
+[node name="WallCollision_64" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=684713793]
+shape = SubResource("SegmentShape2D_ygd8o")
+
+[node name="WallCollision_65" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1770949759]
+shape = SubResource("SegmentShape2D_2s0kr")
+
+[node name="WallCollision_66" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1205891336]
+shape = SubResource("SegmentShape2D_xaipn")
+
+[node name="WallCollision_67" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1406314038]
+shape = SubResource("SegmentShape2D_ndrjj")
+
+[node name="WallCollision_68" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=371448216]
+shape = SubResource("SegmentShape2D_ih3m7")
+
+[node name="WallCollision_69" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=990490251]
+shape = SubResource("SegmentShape2D_11yus")
+
+[node name="WallCollision_70" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1355299512]
+shape = SubResource("SegmentShape2D_b6ruc")
+
+[node name="WallCollision_71" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=263583272]
+shape = SubResource("SegmentShape2D_155or")
+
+[node name="WallCollision_72" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=898762482]
+shape = SubResource("SegmentShape2D_vtx2l")
+
+[node name="WallCollision_73" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1919116304]
+shape = SubResource("SegmentShape2D_63lxy")
+
+[node name="WallCollision_74" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1300067428]
+shape = SubResource("SegmentShape2D_fjhjs")
+
+[node name="WallCollision_75" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1255361821]
+shape = SubResource("SegmentShape2D_bfu41")
+
+[node name="WallCollision_76" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=922913913]
+shape = SubResource("SegmentShape2D_r4ag1")
+
+[node name="WallCollision_77" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1736946530]
+shape = SubResource("SegmentShape2D_v0wtd")
+
+[node name="WallCollision_78" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1523323228]
+shape = SubResource("SegmentShape2D_sgvw8")
+
+[node name="WallCollision_79" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1160296536]
+shape = SubResource("SegmentShape2D_6nfnn")
+
+[node name="WallCollision_80" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1952838138]
+shape = SubResource("SegmentShape2D_4ue30")
+
+[node name="WallCollision_81" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1319476067]
+shape = SubResource("SegmentShape2D_k42av")
+
+[node name="WallCollision_82" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=340836086]
+shape = SubResource("SegmentShape2D_gr8w0")
+
+[node name="WallCollision_83" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=536017313]
+shape = SubResource("SegmentShape2D_673bd")
+
+[node name="WallCollision_84" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1156970764]
+shape = SubResource("SegmentShape2D_akjxb")
+
+[node name="WallCollision_85" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=150240408]
+shape = SubResource("SegmentShape2D_vrx01")
+
+[node name="WallCollision_86" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1277579229]
+shape = SubResource("SegmentShape2D_1uevf")
+
+[node name="WallCollision_87" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=716250955]
+shape = SubResource("SegmentShape2D_tc087")
+
+[node name="WallCollision_88" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1917465884]
+shape = SubResource("SegmentShape2D_73205")
+
+[node name="WallCollision_89" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=968559067]
+shape = SubResource("SegmentShape2D_0tljd")
+
+[node name="WallCollision_90" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1911894310]
+shape = SubResource("SegmentShape2D_mgpkq")
+
+[node name="WallCollision_91" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1475735668]
+shape = SubResource("SegmentShape2D_xmrkg")
+
+[node name="WallCollision_92" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=539911577]
+shape = SubResource("SegmentShape2D_wvlrk")
+
+[node name="WallCollision_93" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=467589572]
+shape = SubResource("SegmentShape2D_engxj")
+
+[node name="WallCollision_94" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1395397100]
+shape = SubResource("SegmentShape2D_raiwf")
+
+[node name="WallCollision_95" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1384990087]
+shape = SubResource("SegmentShape2D_roort")
+
+[node name="WallCollision_96" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1058535065]
+shape = SubResource("SegmentShape2D_gm02q")
+
+[node name="WallCollision_97" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1459464830]
+shape = SubResource("SegmentShape2D_07pt3")
+
+[node name="WallCollision_98" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=561450822]
+shape = SubResource("SegmentShape2D_37xlc")
+
+[node name="WallCollision_99" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1933420600]
+shape = SubResource("SegmentShape2D_83607")
+
+[node name="WallCollision_100" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=571608490]
+shape = SubResource("SegmentShape2D_vny5k")
+
+[node name="WallCollision_101" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=406902029]
+shape = SubResource("SegmentShape2D_8lcmr")
+
+[node name="WallCollision_102" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=376887582]
+shape = SubResource("SegmentShape2D_ga3rw")
+
+[node name="WallCollision_103" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1981885533]
+shape = SubResource("SegmentShape2D_f5chs")
+
+[node name="WallCollision_104" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1964451965]
+shape = SubResource("SegmentShape2D_eh25q")
+
+[node name="WallCollision_105" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1157012094]
+shape = SubResource("SegmentShape2D_joh2r")
+
+[node name="WallCollision_106" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1582465639]
+shape = SubResource("SegmentShape2D_yton5")
+
+[node name="WallCollision_107" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1867270234]
+shape = SubResource("SegmentShape2D_4ahvx")
+
+[node name="WallCollision_108" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1294039982]
+shape = SubResource("SegmentShape2D_2cr71")
+
+[node name="WallCollision_109" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1398179331]
+shape = SubResource("SegmentShape2D_1hbcg")
+
+[node name="WallCollision_110" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=2051404491]
+shape = SubResource("SegmentShape2D_m4o51")
+
+[node name="WallCollision_111" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=551207547]
+shape = SubResource("SegmentShape2D_jp61a")
+
+[node name="WallCollision_112" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=1400775397]
+shape = SubResource("SegmentShape2D_esrwe")
+
+[node name="WallCollision_114" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=689634491]
+shape = SubResource("SegmentShape2D_4b36k")
+
+[node name="WallCollision_116" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=567085639]
+shape = SubResource("SegmentShape2D_1v8b0")
+
+[node name="WallCollision_118" type="CollisionShape2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallCollision" unique_id=215220938]
+shape = SubResource("SegmentShape2D_683hg")
+
+[node name="WallVisuals" type="Node2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls" unique_id=1364562834]
+
+[node name="WallLine_0" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=406656248]
+z_index = -4
+points = PackedVector2Array(-1650, -3487, -1570, -3487)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_1" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=2108946044]
+z_index = -4
+points = PackedVector2Array(-1570, -3487, -1570, -3380)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_2" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=673707268]
+z_index = -4
+points = PackedVector2Array(-1570, -3380, -1088, -3380)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_3" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=974494161]
+z_index = -4
+points = PackedVector2Array(-1088, -3380, -1088, -3312)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_4" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1287914640]
+z_index = -4
+points = PackedVector2Array(-1088, -3312, -1020, -3312)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_5" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=984726311]
+z_index = -4
+points = PackedVector2Array(-1020, -3312, -1020, -2975)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_6" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=907409929]
+z_index = -4
+points = PackedVector2Array(-1020, -2975, -700, -2975)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_7" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=441382667]
+z_index = -4
+position = Vector2(0, 133.28882)
+scale = Vector2(1, 1.0444444)
+points = PackedVector2Array(-700, -2975, -700, -2798)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_8" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=800458584]
+z_index = -4
+points = PackedVector2Array(-700, -2615, -700, -2425)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_9" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=89206643]
+z_index = -4
+points = PackedVector2Array(-1020, -2425, -700, -2425)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_10" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=563454417]
+z_index = -4
+points = PackedVector2Array(-1020, -2425, -1020, -1900)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_11" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=71819880]
+z_index = -4
+points = PackedVector2Array(-1020, -1900, -750, -1900)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_12" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1946017402]
+z_index = -4
+points = PackedVector2Array(-750, -1900, -750, -1730)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_13" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1909517340]
+z_index = -4
+points = PackedVector2Array(-750, -1730, -288, -1730)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_14" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=499369181]
+z_index = -4
+points = PackedVector2Array(-288, -1730, -288, -1662)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_15" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1673430823]
+z_index = -4
+points = PackedVector2Array(-288, -1662, -220, -1662)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_16" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1477779020]
+z_index = -4
+points = PackedVector2Array(-220, -1662, -220, -1200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_17" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=678340693]
+z_index = -4
+points = PackedVector2Array(-220, -1200, 220, -1200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_18" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=2091202272]
+z_index = -4
+points = PackedVector2Array(220, -1662, 220, -1200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_19" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=780353773]
+z_index = -4
+points = PackedVector2Array(220, -1662, 288, -1662)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_20" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=582421767]
+z_index = -4
+points = PackedVector2Array(288, -1730, 288, -1662)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_21" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=71864875]
+z_index = -4
+points = PackedVector2Array(288, -1730, 700, -1730)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_22" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1883947141]
+z_index = -4
+points = PackedVector2Array(700, -1925, 700, -1730)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_23" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=783346670]
+z_index = -4
+points = PackedVector2Array(700, -1925, 1020, -1925)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_24" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=496257373]
+z_index = -4
+points = PackedVector2Array(1020, -2425, 1020, -1925)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_25" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1216517385]
+z_index = -4
+points = PackedVector2Array(700, -2425, 1020, -2425)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_26" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1152224630]
+z_index = -4
+position = Vector2(0, 213.2622)
+scale = Vector2(1, 1.0711111)
+points = PackedVector2Array(700, -2975, 700, -2798)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_27" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=169546786]
+z_index = -4
+points = PackedVector2Array(700, -2617, 700, -2599.6526, 700, -2425)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_28" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1123744908]
+z_index = -4
+points = PackedVector2Array(700, -2975, 1020, -2975)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_29" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1723019130]
+z_index = -4
+points = PackedVector2Array(1020, -3312, 1020, -2975)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_30" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=2034589332]
+z_index = -4
+points = PackedVector2Array(1020, -3312, 1088, -3312)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_31" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=852938531]
+z_index = -4
+points = PackedVector2Array(1088, -3380, 1088, -3312)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_32" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1679679775]
+z_index = -4
+points = PackedVector2Array(1088, -3380, 1570, -3380)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_33" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=704822460]
+z_index = -4
+points = PackedVector2Array(1570, -3487, 1570, -3380)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_34" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=993930255]
+z_index = -4
+points = PackedVector2Array(1570, -3487, 1650, -3487)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_35" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1409408084]
+z_index = -4
+position = Vector2(0, 120.69824)
+scale = Vector2(1, 1.0290909)
+points = PackedVector2Array(1650, -4125, 1650, -3898)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_36" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=2126650416]
+z_index = -4
+position = Vector2(0, 131.67285)
+scale = Vector2(1, 1.0380228)
+points = PackedVector2Array(1650, -3702, 1650, -3487)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_37" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1377566277]
+z_index = -4
+points = PackedVector2Array(1650, -4125, 2750, -4125)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_38" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=979864900]
+z_index = -4
+points = PackedVector2Array(2750, -4125, 2750, -3475)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_39" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=689605787]
+z_index = -4
+points = PackedVector2Array(1730, -3475, 2750, -3475)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_40" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=736667174]
+z_index = -4
+points = PackedVector2Array(1730, -3475, 1730, -3288)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_41" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1103886847]
+z_index = -4
+points = PackedVector2Array(1662, -3288, 1730, -3288)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_42" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1157526467]
+z_index = -4
+points = PackedVector2Array(1662, -3288, 1662, -3220)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_43" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=922948276]
+z_index = -4
+points = PackedVector2Array(1180, -3220, 1662, -3220)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_44" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=282104791]
+z_index = -4
+points = PackedVector2Array(1180, -3220, 1180, -2975)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_45" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=741325971]
+z_index = -4
+points = PackedVector2Array(1180, -2975, 1500, -2975)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_46" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=679785788]
+z_index = -4
+points = PackedVector2Array(1500, -2975, 1500, -2425)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_47" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1664830862]
+z_index = -4
+points = PackedVector2Array(1180, -2425, 1500, -2425)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_48" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=999750069]
+z_index = -4
+points = PackedVector2Array(1180, -2425, 1180, -1925)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_49" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1688340602]
+z_index = -4
+points = PackedVector2Array(1180, -1925, 1500, -1925)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_50" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1703711283]
+z_index = -4
+points = PackedVector2Array(1500, -1925, 1500, -1730)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_51" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=2110275737]
+z_index = -4
+points = PackedVector2Array(1500, -1730, 1850, -1730)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_52" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=2059351118]
+z_index = -4
+points = PackedVector2Array(1850, -1900, 1850, -1730)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_53" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1943821686]
+z_index = -4
+points = PackedVector2Array(1850, -1900, 2550, -1900)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_54" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=988193119]
+z_index = -4
+points = PackedVector2Array(2550, -1900, 2550, -1400)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_55" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1079281265]
+z_index = -4
+points = PackedVector2Array(1850, -1400, 2550, -1400)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_56" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=607097929]
+z_index = -4
+points = PackedVector2Array(1850, -1570, 1850, -1400)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_57" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1375783554]
+z_index = -4
+points = PackedVector2Array(1500, -1570, 1850, -1570)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_58" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=507581395]
+z_index = -4
+points = PackedVector2Array(1500, -1570, 1500, -1375)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_59" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=365761712]
+z_index = -4
+points = PackedVector2Array(700, -1375, 1500, -1375)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_60" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1836515432]
+z_index = -4
+points = PackedVector2Array(700, -1570, 700, -1375)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_61" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=529563574]
+z_index = -4
+points = PackedVector2Array(380, -1570, 700, -1570)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_62" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1773794279]
+z_index = -4
+points = PackedVector2Array(380, -1570, 380, -1200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_63" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=302737192]
+z_index = -4
+points = PackedVector2Array(380, -1200, 500, -1200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_64" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=989663878]
+z_index = -4
+points = PackedVector2Array(500, -1200, 500, -600)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_65" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=200858931]
+z_index = -4
+points = PackedVector2Array(80, -600, 500, -600)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_66" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=657537530]
+z_index = -4
+points = PackedVector2Array(80, -600, 80, -200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_67" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1178566446]
+z_index = -4
+points = PackedVector2Array(80, -200, 350, -200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_68" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=946311115]
+z_index = -4
+points = PackedVector2Array(350, -200, 350, 200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_69" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1654321664]
+z_index = -4
+points = PackedVector2Array(-350, 200, 350, 200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_70" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1498316692]
+z_index = -4
+points = PackedVector2Array(-350, -200, -350, 200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_71" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=605307455]
+z_index = -4
+points = PackedVector2Array(-350, -200, -80, -200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_72" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=825119874]
+z_index = -4
+points = PackedVector2Array(-80, -600, -80, -200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_73" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1319596365]
+z_index = -4
+points = PackedVector2Array(-500, -600, -80, -600)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_74" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=845591539]
+z_index = -4
+points = PackedVector2Array(-500, -1200, -500, -600)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_75" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=384966295]
+z_index = -4
+points = PackedVector2Array(-500, -1200, -380, -1200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_76" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1632665490]
+z_index = -4
+points = PackedVector2Array(-380, -1570, -380, -1200)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_77" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=301287516]
+z_index = -4
+points = PackedVector2Array(-750, -1570, -380, -1570)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_78" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=707954340]
+z_index = -4
+points = PackedVector2Array(-750, -1570, -750, -1400)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_79" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=965771649]
+z_index = -4
+points = PackedVector2Array(-1450, -1400, -750, -1400)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_80" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1560452486]
+z_index = -4
+points = PackedVector2Array(-1450, -1570, -1450, -1400)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_81" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1349436238]
+z_index = -4
+points = PackedVector2Array(-1850, -1570, -1450, -1570)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_82" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=285640222]
+z_index = -4
+points = PackedVector2Array(-1850, -1570, -1850, -1400)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_83" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=366118918]
+z_index = -4
+points = PackedVector2Array(-2550, -1400, -1850, -1400)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_84" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1138706106]
+z_index = -4
+points = PackedVector2Array(-2550, -1900, -2550, -1400)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_85" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=3873397]
+z_index = -4
+points = PackedVector2Array(-2550, -1900, -2280, -1900)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_86" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1309954318]
+z_index = -4
+points = PackedVector2Array(-2280, -2450, -2280, -1900)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_87" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1524333211]
+z_index = -4
+points = PackedVector2Array(-2550, -2450, -2280, -2450)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_88" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1120651969]
+z_index = -4
+points = PackedVector2Array(-2550, -2950, -2550, -2450)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_89" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1268069491]
+z_index = -4
+points = PackedVector2Array(-2550, -2950, -1850, -2950)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_90" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=391124854]
+z_index = -4
+points = PackedVector2Array(-1850, -2950, -1850, -2450)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_91" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=358605680]
+z_index = -4
+points = PackedVector2Array(-2120, -2450, -1850, -2450)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_92" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1906174578]
+z_index = -4
+points = PackedVector2Array(-2120, -2450, -2120, -1900)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_93" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=426752012]
+z_index = -4
+points = PackedVector2Array(-2120, -1900, -1850, -1900)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_94" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1896874448]
+z_index = -4
+points = PackedVector2Array(-1850, -1900, -1850, -1730)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_95" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1131692711]
+z_index = -4
+points = PackedVector2Array(-1850, -1730, -1450, -1730)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_96" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=2054433046]
+z_index = -4
+points = PackedVector2Array(-1450, -1900, -1450, -1730)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_97" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1240931648]
+z_index = -4
+points = PackedVector2Array(-1450, -1900, -1180, -1900)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_98" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=554609035]
+z_index = -4
+points = PackedVector2Array(-1180, -2425, -1180, -1900)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_99" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1648281245]
+z_index = -4
+points = PackedVector2Array(-1500, -2425, -1180, -2425)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_100" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1204653584]
+z_index = -4
+points = PackedVector2Array(-1500, -2975, -1500, -2425)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_101" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=905508798]
+z_index = -4
+points = PackedVector2Array(-1500, -2975, -1180, -2975)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_102" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=555956553]
+z_index = -4
+points = PackedVector2Array(-1180, -3220, -1180, -2975)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_103" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=379735661]
+z_index = -4
+points = PackedVector2Array(-1662, -3220, -1180, -3220)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_104" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1813707355]
+z_index = -4
+points = PackedVector2Array(-1662, -3288, -1662, -3220)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_105" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=766326357]
+z_index = -4
+points = PackedVector2Array(-1730, -3288, -1662, -3288)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_106" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=2061771482]
+z_index = -4
+points = PackedVector2Array(-1730, -3475, -1730, -3288)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_107" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=646505474]
+z_index = -4
+points = PackedVector2Array(-2750, -3475, -1730, -3475)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_108" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1494222302]
+z_index = -4
+points = PackedVector2Array(-2750, -4125, -2750, -3475)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_109" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=801114585]
+z_index = -4
+points = PackedVector2Array(-2750, -4125, -1650, -4125)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_110" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1682654003]
+z_index = -4
+position = Vector2(0, 181.04736)
+scale = Vector2(1, 1.0436363)
+points = PackedVector2Array(-1650, -4125, -1650, -3898)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_111" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=501251236]
+z_index = -4
+position = Vector2(0, 144.84033)
+scale = Vector2(1, 1.041825)
+points = PackedVector2Array(-1650, -3702, -1650, -3487)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_112" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=505122291]
+z_index = -4
+points = PackedVector2Array(-1662, -3880, 1662, -3880)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_114" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1206520067]
+z_index = -4
+points = PackedVector2Array(-1662, -3720, 1662, -3720)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_116" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=1550897988]
+z_index = -4
+points = PackedVector2Array(-712, -2780, 712, -2780)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="WallLine_118" type="Line2D" parent="UndergroundRoot/GeneratedLayout/GeneratedWalls/WallVisuals" unique_id=332509964]
+z_index = -4
+points = PackedVector2Array(-712, -2620, 712, -2620)
+width = 24.0
+default_color = Color(0.75, 0.82, 0.85, 1)
+antialiased = true
+
+[node name="Doors" type="Node2D" parent="UndergroundRoot" unique_id=557246088]
+script = ExtResource("9_ya4ey")
+
+[node name="Door_01" type="Area2D" parent="UndergroundRoot/Doors" unique_id=1434545887]
+position = Vector2(700, -1650)
+script = ExtResource("9_choun")
+
+[node name="AlienLifeDiscovery" type="Area2D" parent="UndergroundRoot" unique_id=603693857]
+position = Vector2(2200, -1650)
+script = ExtResource("11_eb6dy")
+
+[node name="AlienEncounterManager" type="Node" parent="UndergroundRoot" unique_id=724079665]
+script = ExtResource("12_trceg")
+base_encounter_chance = 1.0
+max_encounter_chance = null
+run_chance_increase = null
+trigger_thickness = null
+run_required_presses = null
+run_close_door_time = null
+run_room_offset = null
+room_first_check_min = null
+room_first_check_max = null
+room_stalk_chance = null
+room_retry_min = null
+room_retry_max = null
+room_stalk_cooldown = null
+hide_reach_safe_spot_time = null
+hide_survive_time = null
+hide_spot_radius = null
+
+[node name="FacilityMapTerminal" type="Area2D" parent="UndergroundRoot" unique_id=795860082]
+position = Vector2(0, -1050)
+script = ExtResource("13_jkv2x")
+
+[node name="FacilityRoomTracker" type="Node" parent="UndergroundRoot" unique_id=184428949]
+script = ExtResource("14_jbj1t")
+
+[node name="SonicEquipament" type="Area2D" parent="UndergroundRoot" unique_id=234613210]
+position = Vector2(-1250, -1850)
+script = ExtResource("15_dp3eg")
+
+[node name="TechnicalEnergySystem" type="Node2D" parent="UndergroundRoot" unique_id=442326681]
+script = ExtResource("16_0ld40")
+
+[node name="MaintenanceStation" type="Area2D" parent="UndergroundRoot" unique_id=182265018]
+position = Vector2(-2200, -2900)
+script = ExtResource("17_gqmmt")
+
+[node name="SupportTerminal" type="Area2D" parent="UndergroundRoot" unique_id=2041856902]
+position = Vector2(-2500, -1500)
+script = ExtResource("18_yc10j")
+
+[node name="LaboratoryTerminal" type="Area2D" parent="UndergroundRoot" unique_id=1994190156]
+position = Vector2(900, -2900)
+script = ExtResource("19_lab")
+
+[node name="ArchivesTerminal" type="Area2D" parent="UndergroundRoot" unique_id=1627766631]
+position = Vector2(-800, -2880)
+script = ExtResource("20_pm3ni")
+
+[node name="SanctuaryTerminal" type="Area2D" parent="UndergroundRoot" unique_id=2059317687]
+position = Vector2(-2600, -4000)
+script = ExtResource("21_y6deb")
+
+[node name="MainCoreTerminal" type="Area2D" parent="UndergroundRoot" unique_id=46138205]
+position = Vector2(2600, -4000)
+script = ExtResource("22_og1vs")
+
+[node name="FacilityProgressionManager" type="Node2D" parent="UndergroundRoot" unique_id=1145842652]
+script = ExtResource("23_vxglm")
+
+[node name="SecurityAccessTerminal" type="Node2D" parent="UndergroundRoot" unique_id=506259881]
+position = Vector2(2400, -1850)
+script = ExtResource("24_2f3dj")
+
+[node name="HackManager" type="Node" parent="." unique_id=830842068]
+script = ExtResource("9_85g3d")
+
+[node name="FightManager" type="Node" parent="." unique_id=624016461]
+script = ExtResource("14_a8y0u")
+
+[node name="PauseMenu" type="Node" parent="." unique_id=2140934688]
+script = ExtResource("17_muem4")
+main_menu_scene_path = "uid://du4rktewgxl5l"
+
+[node name="RunState" type="Node" parent="." unique_id=347757290]
+script = ExtResource("26_2wyq8")

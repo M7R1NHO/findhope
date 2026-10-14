@@ -2385,6 +2385,21 @@ script = ExtResource("11_eb6dy")
 [node name="AlienEncounterManager" type="Node" parent="UndergroundRoot" unique_id=724079665]
 script = ExtResource("12_trceg")
 base_encounter_chance = 1.0
+max_encounter_chance = null
+run_chance_increase = null
+trigger_thickness = null
+run_required_presses = null
+run_close_door_time = null
+run_room_offset = null
+room_first_check_min = null
+room_first_check_max = null
+room_stalk_chance = null
+room_retry_min = null
+room_retry_max = null
+room_stalk_cooldown = null
+hide_reach_safe_spot_time = null
+hide_survive_time = null
+hide_spot_radius = null
 
 [node name="FacilityMapTerminal" type="Area2D" parent="UndergroundRoot" unique_id=795860082]
 position = Vector2(0, -1050)

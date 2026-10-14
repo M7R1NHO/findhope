@@ -208,6 +208,12 @@ var hide_time_remaining: float = 0.0
 
 var active_hide_spot: Area2D = null
 
+# Esconderijo escolhido para o Atlas e para o jogador no HIDE normal.
+var atlas_hide_target: Area2D = null
+
+# Guarda o último esconderijo usado em cada sala para evitar repetições seguidas.
+var last_hide_spot_index_by_room: Dictionary = {}
+
 
 # =========================================================
 # HIDEINICIAL — primeiro encontro roteirizado
@@ -1829,6 +1835,37 @@ func create_circle_polygon(
 
 
 # =========================================================
+# ESCOLHER ESCONDERIJO DO HIDE NORMAL
+# =========================================================
+
+func choose_hide_spot_for_room(room_id: String) -> Area2D:
+	if not room_safe_spots.has(room_id):
+		return null
+
+	var spots: Array = room_safe_spots[room_id]
+	if spots.is_empty():
+		return null
+
+	var possible_indices: Array[int] = []
+	var last_index := int(last_hide_spot_index_by_room.get(room_id, -1))
+
+	for index in range(spots.size()):
+		if spots.size() <= 1 or index != last_index:
+			possible_indices.append(index)
+
+	if possible_indices.is_empty():
+		for index in range(spots.size()):
+			possible_indices.append(index)
+
+	var chosen_index: int = possible_indices[
+		rng.randi_range(0, possible_indices.size() - 1)
+	]
+
+	last_hide_spot_index_by_room[room_id] = chosen_index
+	return spots[chosen_index] as Area2D
+
+
+# =========================================================
 # COMEÇAR HIDE
 # =========================================================
 
@@ -1859,14 +1896,37 @@ func start_hide_event():
 
 	active_hide_spot = null
 
+	atlas_hide_target = choose_hide_spot_for_room(current_room_id)
 
-	show_hide_spots(
+	if atlas_hide_target == null:
+		hide_event_active = false
+		hide_phase = HidePhase.NONE
+		encounter_active = false
+		push_warning(
+			"HIDE: não foi possível escolher um esconderijo para "
+			+ current_room_id
+		)
+		return
+
+	if atlas != null and is_instance_valid(atlas):
+		if atlas.has_method("start_scripted_move_to"):
+			atlas.start_scripted_move_to(
+				atlas_hide_target.global_position
+			)
+		else:
+			push_warning(
+				"HIDE: Atlas não tem o método start_scripted_move_to()."
+			)
+
+	show_selected_hide_spot(
 		current_room_id,
-		true
+		atlas_hide_target
 	)
 
-
 	create_hide_ui()
+
+	if hide_instruction_label != null:
+		hide_instruction_label.text = "SIGA ATLAS ATÉ AO ESCONDERIJO"
 
 
 	print("")
@@ -2069,7 +2129,6 @@ func update_hide_event(
 
 			hide_time_remaining -= delta
 
-
 			var spot = (
 				get_player_hide_spot()
 			)
@@ -2143,30 +2202,16 @@ func update_hide_event(
 
 func get_player_hide_spot() -> Area2D:
 
-	if not room_safe_spots.has(
-		current_room_id
-	):
+	if atlas_hide_target == null:
 		return null
 
+	if not is_instance_valid(atlas_hide_target):
+		return null
 
-	var spots: Array = (
-		room_safe_spots[
-			current_room_id
-		]
-	)
-
-
-	for spot in spots:
-
-		if player_inside_spot(
-			spot
-		):
-
-			return spot
-
+	if player_inside_spot(atlas_hide_target):
+		return atlas_hide_target
 
 	return null
-
 
 func player_inside_spot(
 	spot: Area2D
@@ -2234,6 +2279,16 @@ func show_hide_spots(
 			visual.visible = visible
 
 
+func show_selected_hide_spot(room_id: String, selected_spot: Area2D) -> void:
+	if not room_safe_spots.has(room_id):
+		return
+
+	for spot in room_safe_spots[room_id]:
+		var visual = spot.get_meta("visual", null)
+		if visual != null and is_instance_valid(visual):
+			visual.visible = spot == selected_spot
+
+
 # =========================================================
 # UI HIDE
 # =========================================================
@@ -2295,6 +2350,11 @@ func complete_hide_event():
 
 	active_hide_spot = null
 
+	if atlas != null and is_instance_valid(atlas):
+		if atlas.has_method("stop_scripted_move_to"):
+			atlas.stop_scripted_move_to()
+
+	atlas_hide_target = null
 
 	encounter_active = false
 
@@ -2339,6 +2399,11 @@ func fail_hide_event(
 
 	active_hide_spot = null
 
+	if atlas != null and is_instance_valid(atlas):
+		if atlas.has_method("stop_scripted_move_to"):
+			atlas.stop_scripted_move_to()
+
+	atlas_hide_target = null
 
 	room_failure_mode = true
 
@@ -4224,10 +4289,9 @@ func update_hide_initial(delta: float) -> void:
 
 		HideInitialPhase.FOLLOW_ATLAS:
 			if atlas != null and is_instance_valid(atlas):
-				if atlas.global_position.distance_to(hide_initial_spot.global_position) <= 18.0:
+				if atlas.global_position.distance_to(hide_initial_spot.global_position) <= 3.0:
 					if atlas.has_method("stop_scripted_move_to"):
-						atlas.stop_scripted_move_to()
-					hide_initial_atlas_parked = true
+						hide_initial_atlas_parked = true
 
 			if player_inside_spot(hide_initial_spot):
 				hide_initial_phase = HideInitialPhase.STAY_HIDDEN

@@ -29,6 +29,8 @@ var underground_spawn: Node2D
 
 var hack_manager: Node = null
 
+var hide_initial_started: bool = false
+var active_hide_spot: Area2D = null
 
 var is_open: bool = false
 var entered_underground: bool = false

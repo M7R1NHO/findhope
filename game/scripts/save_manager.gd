@@ -661,28 +661,38 @@ func get_all_manual_slots() -> Array:
 	return slots
 
 
+
 func set_run_value(
 	section: String,
 	key: String,
 	value
 ):
 	if active_run_data.is_empty():
+		push_warning(
+			"SaveManager: não foi possível guardar '"
+			+ key
+			+ "' porque não existe uma run ativa."
+		)
 		return
 
 	if not active_run_data.has(section):
 		active_run_data[section] = {}
 
-	if not (
-		active_run_data[section]
-		is Dictionary
-	):
+	if not (active_run_data[section] is Dictionary):
 		active_run_data[section] = {}
 
 	active_run_data[section][key] = value
+	active_run_data["updated_at"] = current_datetime()
 
-	active_run_data["updated_at"] = (
-		current_datetime()
+	print(
+		"[SAVE MANAGER] ",
+		section,
+		".",
+		key,
+		" = ",
+		value
 	)
+
 
 
 func get_run_value(

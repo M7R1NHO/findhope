@@ -304,16 +304,35 @@ func start_security_hack():
 		self
 	)
 
-
 func on_hack_success():
 	hack_in_progress = false
 
 	security_unlocked = true
 
+	
+	print("[SECURITY HACK] Run ativa: ", not SaveManager.active_run_data.is_empty())
+	print(
+		"[SECURITY HACK] Estado antes: ",
+		SaveManager.get_run_value(
+			"story",
+			"facility_security_unlocked",
+			false
+		)
+	)
+
 	SaveManager.set_run_value(
 		"story",
 		"facility_security_unlocked",
 		true
+	)
+
+	print(
+		"[SECURITY HACK] Estado depois: ",
+		SaveManager.get_run_value(
+			"story",
+			"facility_security_unlocked",
+			false
+		)
 	)
 
 	if progression_manager == null:
