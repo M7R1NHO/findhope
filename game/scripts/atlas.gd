@@ -65,7 +65,6 @@ func _ready():
 	)
 
 
-
 func _physics_process(_delta):
 	if player == null:
 		return
@@ -131,6 +130,7 @@ func stop_scripted_move_to() -> void:
 	velocity = Vector2.ZERO
 
 	move_and_slide()
+
 
 func scan_environment():
 	if scan_in_progress:

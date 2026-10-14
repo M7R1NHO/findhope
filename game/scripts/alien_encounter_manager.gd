@@ -239,7 +239,7 @@ var hide_initial_atlas_parked: bool = false
 var hide_initial_creature_visual: Polygon2D = null
 
 
-var hide_initial_started: bool = false
+
 
 var hide_layer: CanvasLayer = null
 
@@ -626,6 +626,16 @@ func _ready():
 
 	rng.randomize()
 
+	# Recupera o estado do HIDEINICIAL nesta run.
+	hide_initial_completed = bool(
+		SaveManager.get_run_value(
+			"story",
+			"hide_initial_complete",
+			false
+		)
+	)
+	hide_initial_started = hide_initial_completed
+
 
 	underground_root = (
 		get_parent() as Node2D
@@ -784,6 +794,15 @@ func _process(
 	if room_cooldown_remaining > 0.0:
 
 		room_cooldown_remaining -= delta
+
+
+	# -----------------------------------------------------
+	# HIDEINICIAL — evento roteirizado prioritário
+	# -----------------------------------------------------
+
+	if hide_initial_active:
+		update_hide_initial(delta)
+		return
 
 
 	# -----------------------------------------------------
@@ -1467,6 +1486,11 @@ func on_room_exited(
 
 
 	if room_id != current_room_id:
+		return
+
+
+	if hide_initial_active and room_id == "TechnicalRoom":
+		fail_hide_initial("Afastou-se do esconderijo antes de a criatura sair.")
 		return
 
 
@@ -2514,7 +2538,8 @@ func create_threat_choice_ui(
 	)
 
 	if (
-		fight_manager != null
+		not hide_initial_waiting_for_run
+		and fight_manager != null
 		and fight_manager.has_method(
 			"is_combat_unlocked"
 		)
@@ -2528,7 +2553,9 @@ func create_threat_choice_ui(
 
 	encounter_status = Label.new()
 
-	if (
+	if hide_initial_waiting_for_run:
+		encounter_status.text = "RUN é obrigatório para escapar."
+	elif (
 		fight_manager != null
 		and fight_manager.has_method(
 			"is_combat_unlocked"
@@ -2538,7 +2565,6 @@ func create_threat_choice_ui(
 		encounter_status.text = (
 			"Escolha uma ação."
 		)
-
 	else:
 		encounter_status.text = (
 			"Atlas ainda não possui um método "
@@ -2631,6 +2657,9 @@ func launch_encounter_choice(
 
 
 		"fight":
+
+			if hide_initial_waiting_for_run:
+				return
 
 			start_fight_encounter()
 
@@ -3746,6 +3775,10 @@ func complete_run_escape():
 
 	get_tree().paused = false
 
+	if hide_initial_waiting_for_run:
+		hide_initial_waiting_for_run = false
+		complete_hide_initial("HIDEINICIAL concluído após fuga RUN.")
+
 
 	print("")
 	print(
@@ -4089,11 +4122,13 @@ func destroy_hide_ui():
 
 
 func try_start_hide_initial() -> void:
-	# O evento só pode começar uma vez nesta sessão.
-	if hide_initial_started:
+	if hide_initial_started or hide_initial_completed:
 		return
 
-	# A Segurança tem de estar desbloqueada.
+	if hide_initial_active or hide_initial_waiting_for_run:
+		return
+
+	# O evento só começa depois de a Segurança ter sido desbloqueada.
 	var security_unlocked := bool(
 		SaveManager.get_run_value(
 			"story",
@@ -4105,52 +4140,301 @@ func try_start_hide_initial() -> void:
 	if not security_unlocked:
 		return
 
-	# Precisamos de esconderijos na Sala Técnica.
+	if current_room_id != "TechnicalRoom":
+		return
+
 	if not room_safe_spots.has("TechnicalRoom"):
-		push_warning(
-			"HIDEINICIAL: não existem esconderijos na Sala Técnica."
-		)
+		push_warning("HIDEINICIAL: não existem esconderijos na Sala Técnica.")
 		return
 
 	var spots: Array = room_safe_spots["TechnicalRoom"]
-
 	if spots.is_empty():
-		push_warning(
-			"HIDEINICIAL: a lista de esconderijos está vazia."
-		)
+		push_warning("HIDEINICIAL: a lista de esconderijos está vazia.")
 		return
 
-	# Escolhe um esconderijo sem o revelar visualmente.
-	var index := rng.randi_range(0, spots.size() - 1)
-	var selected_spot: Area2D = spots[index]
+	if player == null or not is_instance_valid(player):
+		push_warning("HIDEINICIAL: jogador não encontrado.")
+		return
 
 	if atlas == null or not is_instance_valid(atlas):
-		push_warning(
-			"HIDEINICIAL: não foi possível encontrar o Atlas."
-		)
+		push_warning("HIDEINICIAL: Atlas não encontrado.")
 		return
 
 	if not atlas.has_method("start_scripted_move_to"):
-		push_warning(
-			"HIDEINICIAL: falta o movimento roteirizado no Atlas."
-		)
+		push_warning("HIDEINICIAL: falta start_scripted_move_to() no Atlas.")
 		return
 
-	hide_initial_started = true
-	active_hide_spot = selected_spot
+	var index := rng.randi_range(0, spots.size() - 1)
+	hide_initial_spot = spots[index] as Area2D
 
-	atlas.start_scripted_move_to(
-		selected_spot.global_position
-	)
+	hide_initial_started = true
+	hide_initial_active = true
+	hide_initial_completed = false
+	hide_initial_waiting_for_run = false
+	hide_initial_atlas_parked = false
+	hide_initial_phase = HideInitialPhase.ALERT
+	hide_initial_time_remaining = hide_initial_alert_time
+	encounter_active = true
+	room_failure_mode = false
+	active_hide_spot = null
+
+	create_hide_initial_creature_visual()
+	create_hide_initial_ui()
+	update_hide_initial_ui()
 
 	if main != null and main.has_method("add_chat_message"):
 		main.add_chat_message(
 			"ANDROID",
-			"Siga-me."
+			"Movimento detetado. Fique perto de mim."
 		)
 
 	print("")
 	print("======================================")
-	print("HIDEINICIAL: ATLAS A CAMINHO DO ESCONDERIJO")
-	print("ESCONDERIJO: ", selected_spot.name)
+	print("HIDEINICIAL: ALERTA INICIADO")
+	print("SALA: TechnicalRoom")
+	print("FASE: ALERT")
 	print("======================================")
+
+
+func update_hide_initial(delta: float) -> void:
+	if not hide_initial_active:
+		return
+
+	if player == null or not is_instance_valid(player):
+		fail_hide_initial("Não foi possível localizar o jogador.")
+		return
+
+	if hide_initial_spot == null or not is_instance_valid(hide_initial_spot):
+		fail_hide_initial("O esconderijo deixou de estar disponível.")
+		return
+
+	hide_initial_time_remaining -= delta
+
+	match hide_initial_phase:
+		HideInitialPhase.ALERT:
+			if hide_initial_time_remaining <= 0.0:
+				hide_initial_phase = HideInitialPhase.FOLLOW_ATLAS
+				hide_initial_time_remaining = hide_initial_reach_time
+				atlas.start_scripted_move_to(hide_initial_spot.global_position)
+				set_hide_initial_text(
+					"ATLAS ESTÁ A PROCURAR ABRIGO",
+					"Siga Atlas até ao esconderijo."
+				)
+				print("HIDEINICIAL: Atlas começou a deslocar-se.")
+
+		HideInitialPhase.FOLLOW_ATLAS:
+			if atlas != null and is_instance_valid(atlas):
+				if atlas.global_position.distance_to(hide_initial_spot.global_position) <= 18.0:
+					if atlas.has_method("stop_scripted_move_to"):
+						atlas.stop_scripted_move_to()
+					hide_initial_atlas_parked = true
+
+			if player_inside_spot(hide_initial_spot):
+				hide_initial_phase = HideInitialPhase.STAY_HIDDEN
+				hide_initial_time_remaining = hide_initial_survive_time
+				active_hide_spot = hide_initial_spot
+				set_hide_initial_text(
+					"FIQUE ESCONDIDO",
+					"Não saia do esconderijo até o temporizador terminar."
+				)
+				if main != null and main.has_method("add_chat_message"):
+					main.add_chat_message(
+						"ANDROID",
+						"Não se mova. Aguarde até a ameaça se afastar."
+					)
+				print("HIDEINICIAL: jogador chegou ao esconderijo.")
+			elif hide_initial_time_remaining <= 0.0:
+				fail_hide_initial("Não chegou ao esconderijo a tempo.")
+				return
+
+		HideInitialPhase.STAY_HIDDEN:
+			if not player_inside_spot(hide_initial_spot):
+				fail_hide_initial("Saiu do esconderijo antes de a ameaça se afastar.")
+				return
+
+			if hide_initial_time_remaining <= 0.0:
+				complete_hide_initial("A ameaça afastou-se. Pode continuar.")
+				return
+
+	update_hide_initial_ui()
+
+
+func create_hide_initial_ui() -> void:
+	destroy_hide_ui()
+
+	hide_layer = CanvasLayer.new()
+	hide_layer.name = "HideInitialUI"
+	hide_layer.layer = 400
+	hide_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(hide_layer)
+
+	var panel := ColorRect.new()
+	panel.name = "Panel"
+	panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	panel.position = Vector2(-360.0, 20.0)
+	panel.size = Vector2(720.0, 175.0)
+	panel.color = Color(0.02, 0.02, 0.025, 0.88)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hide_layer.add_child(panel)
+
+	var container := VBoxContainer.new()
+	container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	container.add_theme_constant_override("separation", 7)
+	panel.add_child(container)
+
+	hide_title_label = Label.new()
+	hide_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hide_title_label.add_theme_font_size_override("font_size", 25)
+	hide_title_label.add_theme_color_override("font_color", Color(1.0, 0.22, 0.22, 1.0))
+	container.add_child(hide_title_label)
+
+	hide_instruction_label = Label.new()
+	hide_instruction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hide_instruction_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hide_instruction_label.add_theme_font_size_override("font_size", 18)
+	container.add_child(hide_instruction_label)
+
+	hide_timer_label = Label.new()
+	hide_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hide_timer_label.add_theme_font_size_override("font_size", 22)
+	container.add_child(hide_timer_label)
+
+
+func set_hide_initial_text(title_text: String, instruction_text: String) -> void:
+	if hide_title_label != null and is_instance_valid(hide_title_label):
+		hide_title_label.text = title_text
+
+	if hide_instruction_label != null and is_instance_valid(hide_instruction_label):
+		hide_instruction_label.text = instruction_text
+
+
+func update_hide_initial_ui() -> void:
+	if hide_timer_label == null or not is_instance_valid(hide_timer_label):
+		return
+
+	var phase_text := ""
+	match hide_initial_phase:
+		HideInitialPhase.ALERT:
+			phase_text = "ALERTA"
+		HideInitialPhase.FOLLOW_ATLAS:
+			phase_text = "SIGA ATLAS"
+		HideInitialPhase.STAY_HIDDEN:
+			phase_text = "MANTENHA-SE ESCONDIDO"
+		_:
+			phase_text = ""
+
+	hide_timer_label.text = "%s  |  %.1f s" % [
+		phase_text,
+		max(0.0, hide_initial_time_remaining)
+	]
+
+
+func create_hide_initial_creature_visual() -> void:
+	if hide_initial_creature_visual != null and is_instance_valid(hide_initial_creature_visual):
+		hide_initial_creature_visual.queue_free()
+		hide_initial_creature_visual = null
+
+	if underground_root == null or player == null:
+		return
+
+	# Silhueta temporária da ameaça; não possui colisão nem bloqueia o jogador.
+	hide_initial_creature_visual = Polygon2D.new()
+	hide_initial_creature_visual.name = "HideInitialCreatureSilhouette"
+	hide_initial_creature_visual.polygon = PackedVector2Array([
+		Vector2(-24.0, 20.0),
+		Vector2(-18.0, -12.0),
+		Vector2(-7.0, -25.0),
+		Vector2(0.0, -12.0),
+		Vector2(8.0, -26.0),
+		Vector2(20.0, -10.0),
+		Vector2(25.0, 20.0),
+		Vector2(10.0, 14.0),
+		Vector2(0.0, 25.0),
+		Vector2(-10.0, 14.0)
+	])
+	hide_initial_creature_visual.color = Color(0.65, 0.025, 0.035, 0.92)
+	hide_initial_creature_visual.z_index = 30
+	underground_root.add_child(hide_initial_creature_visual)
+	hide_initial_creature_visual.global_position = player.global_position + Vector2(150.0, -35.0)
+
+
+func destroy_hide_initial_creature_visual() -> void:
+	if hide_initial_creature_visual != null and is_instance_valid(hide_initial_creature_visual):
+		hide_initial_creature_visual.queue_free()
+	hide_initial_creature_visual = null
+
+
+func fail_hide_initial(reason: String) -> void:
+	if not hide_initial_active:
+		return
+
+	print("HIDEINICIAL FALHOU: ", reason)
+
+	hide_initial_active = false
+	hide_initial_waiting_for_run = true
+	hide_initial_phase = HideInitialPhase.NONE
+	hide_initial_time_remaining = 0.0
+	room_failure_mode = true
+	encounter_active = true
+
+	if atlas != null and is_instance_valid(atlas) and atlas.has_method("stop_scripted_move_to"):
+		atlas.stop_scripted_move_to()
+
+	destroy_hide_ui()
+	destroy_hide_initial_creature_visual()
+	get_tree().paused = true
+
+	create_threat_choice_ui(
+		"A CRIATURA ENCONTROU VOCÊ",
+		reason + "\nRUN é a única forma de escapar."
+	)
+
+
+func complete_hide_initial(message: String) -> void:
+	hide_initial_active = false
+	hide_initial_waiting_for_run = false
+	hide_initial_completed = true
+	hide_initial_started = true
+	hide_initial_phase = HideInitialPhase.NONE
+	hide_initial_time_remaining = 0.0
+	hide_initial_atlas_parked = false
+	active_hide_spot = null
+	hide_initial_spot = null
+	room_failure_mode = false
+	encounter_active = false
+
+	if atlas != null and is_instance_valid(atlas) and atlas.has_method("stop_scripted_move_to"):
+		atlas.stop_scripted_move_to()
+
+	destroy_hide_ui()
+	destroy_hide_initial_creature_visual()
+
+	SaveManager.set_run_value(
+		"story",
+		"hide_initial_complete",
+		true
+	)
+
+	if main != null and main.has_method("add_chat_message"):
+		main.add_chat_message("ANDROID", message)
+
+	room_cooldown_remaining = 15.0
+	reset_room_stalk_timer()
+	unlock_encounters()
+
+	print("")
+	print("======================================")
+	print("HIDEINICIAL CONCLUÍDO")
+	print("ENCONTROS ALEATÓRIOS DESBLOQUEADOS")
+	print("======================================")
+
+
+func reset_hide_initial_after_failure() -> void:
+	hide_initial_active = false
+	hide_initial_phase = HideInitialPhase.NONE
+	hide_initial_time_remaining = 0.0
+	hide_initial_spot = null
+	hide_initial_atlas_parked = false
+	active_hide_spot = null
+	destroy_hide_ui()
+	destroy_hide_initial_creature_visual()
