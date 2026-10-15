@@ -1,3 +1,4 @@
+
 extends Node2D
 
 
@@ -88,11 +89,48 @@ func _ready():
 		"ANDROID",
 		"Sistema de comunicação operacional."
 	)
-	
-	var intro = preload("res://scripts/intro_sequence.gd").new()
-	add_child(intro)
-	await intro.play()
-	
+
+	# Verificar se a introdução já foi concluída nesta partida.
+	var intro_completed: bool = bool(
+		SaveManager.get_run_value(
+			"story",
+			"intro_completed",
+			false
+		)
+	)
+
+	if not intro_completed:
+		var intro = preload(
+			"res://scripts/intro_sequence.gd"
+		).new()
+
+		add_child(intro)
+
+		# Esperar que a cutscene termine antes de guardar.
+		await intro.play()
+
+		SaveManager.set_run_value(
+			"story",
+			"intro_completed",
+			true
+		)
+
+		# Guardar imediatamente a conclusão da introdução.
+		var save_success: bool = SaveManager.autosave(
+			"intro_completed"
+		)
+
+		if not save_success:
+			push_warning(
+				"Não foi possível guardar automaticamente "
+				+ "a conclusão da introdução."
+			)
+	else:
+		print(
+			"INTRODUÇÃO IGNORADA: SAVE JÁ A CONCLUIU."
+		)
+
+
 func _input(event):
 	if (
 		event is InputEventMouseButton

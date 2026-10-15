@@ -6,7 +6,7 @@ const TEXT_PAUSE := 1.8
 const PLAYER_SIZE := Vector2(28, 28)
 const PANEL_SIZE := Vector2(48, 58)
 const TUTORIAL_SPEED := 240.0
-const INTERACTION_DISTANCE := 65.0
+const INTERACTION_DISTANCE := 90.0
 const MINIGAME_DURATION := 8.0
 const STABILITY_DRAIN := 0.14
 const STABILITY_RECOVERY := 0.012
@@ -253,7 +253,7 @@ func _play_scene_two() -> void:
 	background.color = Color(0.005, 0.012, 0.04)
 
 	title_label = _make_label(
-		"SISTEMA DE NAVEGAÇÃO | NAVE 47",
+		"SISTEMA DE NAVEGAÇÃO DA NAVE 47",
 		0.05, 0.04, 0.95, 0.12, 22
 	)
 	title_label.add_theme_color_override(

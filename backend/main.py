@@ -1,7 +1,20 @@
-from fastapi import FastAPI
+from copy import deepcopy
+
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from backend.world_state import WORLD_STATE
+from backend import (
+    atlas_knowledge as atlas_knowledge_module,
+    atlas_memory as atlas_memory_module,
+    autonomy_state as autonomy_state_module,
+    conversation_context as conversation_context_module,
+    discovery_state as discovery_state_module,
+    gameplay_context as gameplay_context_module,
+    narrative_state as narrative_state_module,
+    relationship_engine as relationship_engine_module,
+    social_state as social_state_module,
+)
 from backend.sensors import process_godot_scan
 from backend.ia import ask_android
 
@@ -96,6 +109,193 @@ class GameplayContextEvent(BaseModel):
 # =========================================================
 
 PROCESSED_AUTONOMY_EVENT_IDS: set[str] = set()
+
+
+# =========================================================
+# ATLAS SAVE / LOAD STATE
+# =========================================================
+
+ATLAS_STATE_VERSION = 1
+
+
+def _export_atlas_state():
+    """Cria uma cópia independente dos estados necessários para restaurar Atlas."""
+    return {
+        "version": ATLAS_STATE_VERSION,
+        "world_state": deepcopy(WORLD_STATE),
+        "knowledge": deepcopy(
+            atlas_knowledge_module.ATLAS_KNOWLEDGE
+        ),
+        "memory": deepcopy(
+            atlas_memory_module.ATLAS_MEMORY
+        ),
+        "autonomy": deepcopy(
+            autonomy_state_module.AUTONOMY_STATE
+        ),
+        "gameplay_context": deepcopy(
+            gameplay_context_module.GAMEPLAY_CONTEXT
+        ),
+        "discoveries": deepcopy(
+            discovery_state_module.DISCOVERY_STATE
+        ),
+        "narrative": deepcopy(
+            narrative_state_module.NARRATIVE_STATE
+        ),
+        "relationship": deepcopy(
+            relationship_engine_module.RELATIONSHIP_STATE
+        ),
+        "social": deepcopy(
+            social_state_module.SOCIAL_STATE
+        ),
+        "conversation_history": deepcopy(
+            conversation_context_module.CONVERSATION_HISTORY
+        ),
+        "processed_autonomy_event_ids": sorted(
+            PROCESSED_AUTONOMY_EVENT_IDS
+        ),
+    }
+
+
+def _replace_dict(target, source, field_name):
+    if not isinstance(source, dict):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"O campo '{field_name}' "
+                "tem de ser um objeto JSON."
+            ),
+        )
+
+    target.clear()
+    target.update(deepcopy(source))
+
+
+def _restore_atlas_state(state):
+    """Restaura os estados em memória sem substituir os objetos globais importados."""
+
+    if not isinstance(state, dict):
+        raise HTTPException(
+            status_code=422,
+            detail="'state' tem de ser um objeto JSON.",
+        )
+
+    version = state.get(
+        "version",
+        ATLAS_STATE_VERSION,
+    )
+
+    if version != ATLAS_STATE_VERSION:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Versão de estado não suportada: {version}.",
+        )
+
+    required_dicts = {
+        "world_state": WORLD_STATE,
+        "knowledge": atlas_knowledge_module.ATLAS_KNOWLEDGE,
+        "memory": atlas_memory_module.ATLAS_MEMORY,
+        "autonomy": autonomy_state_module.AUTONOMY_STATE,
+        "gameplay_context": gameplay_context_module.GAMEPLAY_CONTEXT,
+        "discoveries": discovery_state_module.DISCOVERY_STATE,
+        "narrative": narrative_state_module.NARRATIVE_STATE,
+        "relationship": relationship_engine_module.RELATIONSHIP_STATE,
+        "social": social_state_module.SOCIAL_STATE,
+    }
+
+    # Validar os campos antes de alterar qualquer estado.
+    for field_name in required_dicts:
+        if (
+            field_name in state
+            and not isinstance(state[field_name], dict)
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"O campo '{field_name}' "
+                    "tem de ser um objeto JSON."
+                ),
+            )
+
+    history = state.get(
+        "conversation_history",
+        conversation_context_module.CONVERSATION_HISTORY,
+    )
+
+    if not isinstance(history, list):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "O campo 'conversation_history' "
+                "tem de ser uma lista JSON."
+            ),
+        )
+
+    event_ids = state.get(
+        "processed_autonomy_event_ids",
+        [],
+    )
+
+    if (
+        not isinstance(event_ids, list)
+        or not all(isinstance(item, str) for item in event_ids)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "O campo 'processed_autonomy_event_ids' "
+                "tem de ser uma lista de textos."
+            ),
+        )
+
+    # Restaurar os dicionários existentes, sem substituir
+    # os objetos globais usados pelos restantes módulos.
+    for field_name, target in required_dicts.items():
+        if field_name in state:
+            _replace_dict(
+                target,
+                state[field_name],
+                field_name,
+            )
+
+    # Restaurar o histórico de conversa.
+    conversation_context_module.CONVERSATION_HISTORY.clear()
+    conversation_context_module.CONVERSATION_HISTORY.extend(
+        deepcopy(history)
+    )
+
+    # Restaurar os IDs de eventos já processados.
+    PROCESSED_AUTONOMY_EVENT_IDS.clear()
+    PROCESSED_AUTONOMY_EVENT_IDS.update(event_ids)
+
+    return _export_atlas_state()
+
+
+@app.get("/atlas/state")
+def export_atlas_state():
+    """Devolve o estado atual do Atlas para ser incluído num save do jogo."""
+    return {
+        "status": "ok",
+        "state": _export_atlas_state(),
+    }
+
+
+@app.post("/atlas/state")
+def restore_atlas_state(payload: dict):
+    """Restaura o estado de Atlas enviado pelo save do jogo."""
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=422,
+            detail="O corpo tem de ser um objeto JSON.",
+        )
+
+    state = payload.get("state", payload)
+    restored_state = _restore_atlas_state(state)
+
+    return {
+        "status": "Atlas state restored",
+        "state": restored_state,
+    }
 
 
 # =========================================================

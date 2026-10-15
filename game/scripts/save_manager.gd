@@ -92,7 +92,10 @@ func save_profile():
 	profile_changed.emit()
 
 
+
 func start_new_run():
+	print("TESTE: start_new_run FOI CHAMADA")
+
 	clear_current_autosave()
 
 	active_run_data = default_run_data()
@@ -107,12 +110,17 @@ func start_new_run():
 
 	save_profile()
 
-	print("")
 	print("NEW RUN CREATED")
 	print("Run ID: ", active_run_data["run_id"])
+	print("RUN VAZIA? ", active_run_data.is_empty())
+	print("INSTÂNCIA SAVEMANAGER: ", get_instance_id())
+
 
 
 func reset_active_run():
+	print("AVISO: reset_active_run FOI CHAMADA")
+	print("STACK: ", get_stack())
+	
 	clear_current_autosave()
 
 	active_run_data = {}
@@ -260,6 +268,7 @@ func can_manual_save() -> bool:
 
 
 func get_manual_save_block_reason() -> String:
+	
 	if active_run_data.is_empty():
 		return "Nenhuma run ativa."
 
