@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://cg4bewh02hmm2" path="res://scripts/main.gd" id="1_sugp2"]
 [ext_resource type="Script" uid="uid://be3papg8vqa8w" path="res://scripts/atlas.gd" id="2_0wfyh"]
 [ext_resource type="Script" uid="uid://c83u4ei72o6yb" path="res://scripts/ship.gd" id="2_o6xl0"]
-[ext_resource type="Texture2D" uid="uid://oj510b5vl6du" path="res://sprites/Gemini_Generated_Image_2hpsx42hpsx42hps (1) (1).png" id="2_yq6so"]
+[ext_resource type="Texture2D" uid="uid://dwj6klnv7ipjt" path="res://sprites/img1_cenariodecima.png" id="2_yq6so"]
 [ext_resource type="Script" uid="uid://dpe8dva3ghx4m" path="res://scripts/protocol_door.gd" id="4_jyhfs"]
 [ext_resource type="Script" uid="uid://5ytsp6uu4yiw" path="res://scripts/ship_part.gd" id="5_tbgi4"]
 [ext_resource type="Script" uid="uid://s5ukqw2wf76t" path="res://scripts/ship_parts_manager.gd" id="5_tefeu"]
@@ -34,7 +34,7 @@
 size = Vector2(180, 60)
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_l8mnm"]
-radius = 18.0
+radius = 27.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_sugp2"]
 radius = 14.0
@@ -525,6 +525,7 @@ b = Vector2(712, -2620)
 script = ExtResource("1_sugp2")
 
 [node name="Ground" type="Polygon2D" parent="." unique_id=1191058292]
+texture_repeat = 2
 position = Vector2(495.06366, -346.33853)
 scale = Vector2(1.5029359, 1.5523736)
 color = Color(0.89568764, 0.84647185, 0.56997126, 1)
@@ -532,7 +533,7 @@ texture = ExtResource("2_yq6so")
 texture_offset = Vector2(3006.75, 898.01)
 texture_scale = Vector2(2.35, 2.35)
 texture_rotation = 6.2831855
-polygon = PackedVector2Array(-2404.004, -892.6083, 908.18005, -892.6083, 908.18005, 1640.9313, -762.43286, 1640.9313, -2403.3384, 1640.9313)
+polygon = PackedVector2Array(-2903.027, -877.1481, 908.18005, -892.6083, 908.18005, 1640.9313, -762.43286, 1640.9313, -2903.6926, 1645.4406)
 
 [node name="Ship" type="StaticBody2D" parent="." unique_id=202784240 groups=["detectable", "interactable"]]
 position = Vector2(243.69, -150)
@@ -573,7 +574,7 @@ color = Color(0.13879198, 0.11522191, 0.48618102, 1)
 polygon = PackedVector2Array(-20, -10, 15, -15, 25, 5, 5, 20, -18, 12)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Debris3" unique_id=120900381]
-position = Vector2(895, 1554)
+position = Vector2(2, 2)
 shape = SubResource("CircleShape2D_l8mnm")
 
 [node name="Player" type="CharacterBody2D" parent="." unique_id=1093214856]
@@ -589,7 +590,7 @@ color = Color(0.28235295, 0.9764706, 0.8862745, 1)
 polygon = PackedVector2Array(-20, -20, 20, -20, 20, 20, -20, 20)
 
 [node name="Camera2D" type="Camera2D" parent="Player" unique_id=234476532]
-zoom = Vector2(1.605, 1.605)
+zoom = Vector2(1.6, 1.6)
 
 [node name="Atlas" type="CharacterBody2D" parent="." unique_id=1792037986]
 position = Vector2(120, 0)
