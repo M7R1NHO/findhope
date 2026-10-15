@@ -88,8 +88,11 @@ func _ready():
 		"ANDROID",
 		"Sistema de comunicação operacional."
 	)
-
-
+	
+	var intro = preload("res://scripts/intro_sequence.gd").new()
+	add_child(intro)
+	await intro.play()
+	
 func _input(event):
 	if (
 		event is InputEventMouseButton

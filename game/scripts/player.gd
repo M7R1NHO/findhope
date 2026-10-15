@@ -1,27 +1,25 @@
+
 extends CharacterBody2D
 
-
 @export var speed: float = 200.0
-
 @export var min_x: float = -2800.0
 @export var max_x: float = 1140.0
 @export var min_y: float = -1480.0
 @export var max_y: float = 1400.0
-
 @export var interaction_range: float = 150.0
 
-
 var atlas: CharacterBody2D
+var tutorial_locked: bool = false
+var tutorial_target: Node2D = null
 
 
 func _ready():
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
-
-	atlas = get_parent().get_node("Atlas")
+	atlas = get_parent().get_node_or_null("Atlas")
 
 
 func _physics_process(_delta):
-	if is_typing_in_chat():
+	if tutorial_locked or is_typing_in_chat():
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
@@ -44,16 +42,15 @@ func _physics_process(_delta):
 		direction = direction.normalized()
 
 	velocity = direction * speed
-
 	move_and_slide()
 
-	global_position.x = clamp(
+	global_position.x = clampf(
 		global_position.x,
 		min_x,
 		max_x
 	)
 
-	global_position.y = clamp(
+	global_position.y = clampf(
 		global_position.y,
 		min_y,
 		max_y
@@ -61,56 +58,56 @@ func _physics_process(_delta):
 
 
 func _unhandled_input(event):
-	if is_typing_in_chat():
+	if tutorial_locked or is_typing_in_chat():
 		return
 
-	if (
-		event is InputEventKey
-		and event.pressed
-		and not event.echo
-	):
-		if event.keycode == KEY_SPACE:
-			if atlas != null:
-				atlas.scan_environment()
+	if not event is InputEventKey:
+		return
 
-		if event.keycode == KEY_E:
-			print("E PRESSIONADO")
-			try_interaction()
+	if not event.pressed or event.echo:
+		return
+
+	if event.keycode == KEY_SPACE:
+		if atlas != null:
+			atlas.scan_environment()
+
+	if event.keycode == KEY_E:
+		try_interaction()
 
 
 func try_interaction():
+	if tutorial_target != null:
+		if not is_instance_valid(tutorial_target):
+			tutorial_target = null
+		elif global_position.distance_to(
+			tutorial_target.global_position
+		) <= interaction_range:
+			if tutorial_target.has_method("examine"):
+				tutorial_target.examine()
+			return
+
 	var interactables = get_tree().get_nodes_in_group(
 		"interactable"
 	)
 
-	print(
-		"INTERACTABLES ENCONTRADOS: ",
-		interactables.size()
-	)
-
-	var closest_object = null
+	var closest_object: Node2D = null
 	var closest_distance = interaction_range
 
 	for object in interactables:
+		if not is_instance_valid(object):
+			continue
+
 		if not object is Node2D:
 			continue
 
 		var interaction_position = object.global_position
+		var door_visual = object.get_node_or_null("DoorVisual")
 
-		if object.has_node("DoorVisual"):
-			interaction_position = (
-				object.get_node("DoorVisual").global_position
-			)
+		if door_visual != null:
+			interaction_position = door_visual.global_position
 
 		var distance = global_position.distance_to(
 			interaction_position
-		)
-
-		print(
-			"OBJETO: ",
-			object.name,
-			" | DISTANCIA: ",
-			distance
 		)
 
 		if distance <= closest_distance:
@@ -121,23 +118,26 @@ func try_interaction():
 		print("NENHUM OBJETO PERTO")
 		return
 
-	print(
-		"INTERAGINDO COM: ",
-		closest_object.name
-	)
-
 	if closest_object.has_method("examine"):
 		closest_object.examine()
-
 	else:
-		print(
-			"ERRO: objeto nao possui examine()"
-		)
+		print("Objeto sem método examine(): ", closest_object.name)
 
 
-# =========================================================
-# MOVEMENT BOUNDS
-# =========================================================
+func set_tutorial_locked(locked: bool):
+	tutorial_locked = locked
+
+	if locked:
+		velocity = Vector2.ZERO
+
+
+func set_tutorial_interaction_target(target: Node2D):
+	tutorial_target = target
+
+
+func clear_tutorial_interaction_target():
+	tutorial_target = null
+
 
 func set_movement_bounds(
 	new_min_x: float,
@@ -150,29 +150,12 @@ func set_movement_bounds(
 	min_y = new_min_y
 	max_y = new_max_y
 
-	print(
-		"PLAYER BOUNDS: ",
-		min_x,
-		" / ",
-		max_x,
-		" / ",
-		min_y,
-		" / ",
-		max_y
-	)
 
-
-func teleport_to(
-	target_position: Vector2
-):
+func teleport_to(target_position: Vector2):
 	velocity = Vector2.ZERO
-
 	global_position = target_position
 
 
 func is_typing_in_chat() -> bool:
-	var focused_control = (
-		get_viewport().gui_get_focus_owner()
-	)
-
-	return focused_control is LineEdit
+	var focus = get_viewport().gui_get_focus_owner()
+	return focus is LineEdit
