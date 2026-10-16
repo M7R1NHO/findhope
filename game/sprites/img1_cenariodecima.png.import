@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ljl2yf2hxpn1"
-path="res://.godot/imported/Gemini_Generated_Image_xx7mjbxx7mjbxx7m.jpg-d75380e0447b505131815923c9024434.ctex"
+uid="uid://dwj6klnv7ipjt"
+path="res://.godot/imported/img1_cenariodecima.png-218ab82d36ea6a9d2c96eeb3a5386a55.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://sprites/Gemini_Generated_Image_xx7mjbxx7mjbxx7m.jpg"
-dest_files=["res://.godot/imported/Gemini_Generated_Image_xx7mjbxx7mjbxx7m.jpg-d75380e0447b505131815923c9024434.ctex"]
+source_file="res://sprites/img1_cenariodecima.png"
+dest_files=["res://.godot/imported/img1_cenariodecima.png-218ab82d36ea6a9d2c96eeb3a5386a55.ctex"]
 
 [params]
 

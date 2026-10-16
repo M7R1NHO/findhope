@@ -454,7 +454,7 @@ func enter_underground():
 			true
 		)
 
-	var autosave_success = SaveManager.autosave(
+	var autosave_success = await SaveManager.autosave(
 		"protocol_door_crossed"
 	)
 

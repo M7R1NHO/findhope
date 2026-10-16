@@ -15,12 +15,18 @@ const PROFILE_PATH := "user://findhope_profile.json"
 const CURRENT_RUN_PATH := "user://findhope_current_run.json"
 const MANUAL_SLOT_PATTERN := "user://findhope_slot_%d.json"
 
+const ATLAS_STATE_URL := "http://127.0.0.1:8000/atlas/state"
+const ATLAS_RESET_RUN_URL := "http://127.0.0.1:8000/atlas/reset-run"
+
 
 var profile: Dictionary = {}
 var active_run_data: Dictionary = {}
 var pending_snapshot: Dictionary = {}
 
 var manual_save_blocks: Dictionary = {}
+
+var backend_state_cache: Dictionary = {}
+var backend_request_in_progress: bool = false
 
 
 func _ready():
@@ -51,7 +57,9 @@ func default_run_data() -> Dictionary:
 		"last_checkpoint": "",
 		"player_profile": {},
 		"story": {},
-		"atlas": {},
+		"atlas": {
+			"backend_state": {}
+		},
 		"stats": {},
 		"password": {},
 		"custom": {}
@@ -101,6 +109,11 @@ func start_new_run():
 	active_run_data["created_at"] = current_datetime()
 	active_run_data["updated_at"] = current_datetime()
 
+	active_run_data["atlas"] = {
+		"backend_state": {}
+	}
+
+	backend_state_cache.clear()
 	manual_save_blocks.clear()
 
 	profile["has_started_game"] = true
@@ -111,6 +124,156 @@ func start_new_run():
 	print("NEW RUN CREATED")
 	print("Run ID: ", active_run_data["run_id"])
 
+	reset_backend_for_new_run()
+
+
+func reset_backend_for_new_run() -> void:
+	var request := HTTPRequest.new()
+	request.timeout = 10.0
+
+	add_child(request)
+
+	var error := request.request(
+		ATLAS_RESET_RUN_URL,
+		["Content-Type: application/json"],
+		HTTPClient.METHOD_POST,
+		"{}"
+	)
+
+	if error != OK:
+		push_warning(
+			"Não foi possível pedir o reinício do estado de Atlas: "
+			+ str(error)
+		)
+
+		request.queue_free()
+		return
+
+	var result = await request.request_completed
+
+	request.queue_free()
+
+	if int(result[1]) != 200:
+		push_warning(
+			"O backend não confirmou o reinício de Atlas. HTTP: "
+			+ str(result[1])
+		)
+		return
+
+	backend_state_cache.clear()
+
+	print("ATLAS BACKEND RESET FOR NEW RUN")
+
+
+func capture_backend_state() -> void:
+	if backend_request_in_progress:
+		return
+
+	backend_request_in_progress = true
+
+	var request := HTTPRequest.new()
+	request.timeout = 10.0
+
+	add_child(request)
+
+	var error := request.request(
+		ATLAS_STATE_URL
+	)
+
+	if error != OK:
+		push_warning(
+			"Não foi possível obter o estado do backend: "
+			+ str(error)
+		)
+
+		request.queue_free()
+		backend_request_in_progress = false
+		return
+
+	var result = await request.request_completed
+
+	request.queue_free()
+	backend_request_in_progress = false
+
+	if int(result[1]) != 200:
+		push_warning(
+			"Falha ao obter o estado do backend. HTTP: "
+			+ str(result[1])
+		)
+		return
+
+	var parsed = JSON.parse_string(
+		result[3].get_string_from_utf8()
+	)
+
+	if not (parsed is Dictionary):
+		push_warning(
+			"O backend devolveu uma resposta inválida."
+		)
+		return
+
+	if not (parsed.get("state", {}) is Dictionary):
+		push_warning(
+			"O backend devolveu um estado inválido."
+		)
+		return
+
+	backend_state_cache = parsed["state"].duplicate(true)
+
+	if not active_run_data.is_empty():
+		if not (active_run_data.get("atlas", {}) is Dictionary):
+			active_run_data["atlas"] = {}
+
+		active_run_data["atlas"]["backend_state"] = (
+			backend_state_cache.duplicate(true)
+		)
+
+
+func restore_backend_state(state: Dictionary) -> void:
+	if state.is_empty():
+		await reset_backend_for_new_run()
+		return
+
+	var request := HTTPRequest.new()
+	request.timeout = 10.0
+
+	add_child(request)
+
+	var body := JSON.stringify({
+		"state": state
+	})
+
+	var error := request.request(
+		ATLAS_STATE_URL,
+		["Content-Type: application/json"],
+		HTTPClient.METHOD_POST,
+		body
+	)
+
+	if error != OK:
+		push_warning(
+			"Não foi possível restaurar o estado do backend: "
+			+ str(error)
+		)
+
+		request.queue_free()
+		return
+
+	var result = await request.request_completed
+
+	request.queue_free()
+
+	if int(result[1]) != 200:
+		push_warning(
+			"Falha ao restaurar o estado do backend. HTTP: "
+			+ str(result[1])
+		)
+		return
+
+	backend_state_cache = state.duplicate(true)
+
+	print("ATLAS BACKEND STATE RESTORED")
+
 
 func reset_active_run():
 	clear_current_autosave()
@@ -118,6 +281,7 @@ func reset_active_run():
 	active_run_data = {}
 	pending_snapshot = {}
 
+	backend_state_cache.clear()
 	manual_save_blocks.clear()
 
 	print("")
@@ -143,6 +307,8 @@ func autosave(
 
 	active_run_data["last_checkpoint"] = checkpoint_id
 	active_run_data["updated_at"] = current_datetime()
+
+	await capture_backend_state()
 
 	var snapshot = create_snapshot(
 		"autosave",
@@ -202,6 +368,8 @@ func save_manual_slot(
 		return false
 
 	active_run_data["updated_at"] = current_datetime()
+
+	await capture_backend_state()
 
 	var snapshot = create_snapshot(
 		"manual",
@@ -270,7 +438,6 @@ func get_manual_save_block_reason() -> String:
 
 	for block_id in manual_save_blocks.keys():
 		match str(block_id):
-
 			"run":
 				names.append("RUN")
 
@@ -321,6 +488,7 @@ func create_snapshot(
 		"scene_path": scene_path,
 		"checkpoint": checkpoint_id,
 		"run_data": active_run_data.duplicate(true),
+		"atlas_backend_state": backend_state_cache.duplicate(true),
 		"nodes": capture_saveable_nodes()
 	}
 
@@ -409,6 +577,14 @@ func prepare_current_run_load() -> bool:
 		.duplicate(true)
 	)
 
+	backend_state_cache = (
+		snapshot.get(
+			"atlas_backend_state",
+			active_run_data.get("atlas", {}).get("backend_state", {})
+		)
+		.duplicate(true)
+	)
+
 	manual_save_blocks.clear()
 
 	load_prepared.emit(
@@ -453,6 +629,14 @@ func prepare_manual_slot_load(
 		.duplicate(true)
 	)
 
+	backend_state_cache = (
+		snapshot.get(
+			"atlas_backend_state",
+			active_run_data.get("atlas", {}).get("backend_state", {})
+		)
+		.duplicate(true)
+	)
+
 	manual_save_blocks.clear()
 
 	load_prepared.emit(
@@ -477,6 +661,7 @@ func get_pending_scene_path() -> String:
 			""
 		)
 	)
+
 
 func load_prepared_scene(
 	fallback_scene_path: String = ""
@@ -529,17 +714,39 @@ func load_prepared_scene(
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	apply_pending_snapshot()
+	await apply_pending_snapshot()
 
 	return true
 
-func apply_pending_snapshot():
+
+func apply_pending_snapshot() -> void:
 	if pending_snapshot.is_empty():
 		return
 
 	var saved_nodes: Dictionary = (
 		pending_snapshot.get(
 			"nodes",
+			{}
+		)
+	)
+
+	var run_data: Dictionary = pending_snapshot.get(
+		"run_data",
+		{}
+	)
+
+	var atlas_data = run_data.get(
+		"atlas",
+		{}
+	)
+
+	if not (atlas_data is Dictionary):
+		atlas_data = {}
+
+	var saved_backend_state = pending_snapshot.get(
+		"atlas_backend_state",
+		atlas_data.get(
+			"backend_state",
 			{}
 		)
 	)
@@ -564,6 +771,11 @@ func apply_pending_snapshot():
 
 		node.load_save_data(
 			saved_nodes[save_id]
+		)
+
+	if saved_backend_state is Dictionary:
+		await restore_backend_state(
+			saved_backend_state
 		)
 
 	pending_snapshot = {}
