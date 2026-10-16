@@ -523,11 +523,33 @@ func _on_scan_request_completed(
 		detected_objects
 	)
 
+	var discoveries_to_save: Array = pending_local_discoveries.duplicate()
+
 	show_new_discoveries(
-		pending_local_discoveries
+		discoveries_to_save
 	)
 
 	pending_local_discoveries.clear()
+
+	# Guardar o estado completo do Atlas imediatamente quando uma nova
+	# descoberta é confirmada pelo backend.
+	if not discoveries_to_save.is_empty():
+		var checkpoint := "atlas_discovery_" + "_".join(discoveries_to_save)
+
+		var save_success: bool = await SaveManager.autosave(
+			checkpoint
+		)
+
+		if save_success:
+			print(
+				"ATLAS DISCOVERY SAVED: ",
+				checkpoint
+			)
+		else:
+			push_warning(
+				"A descoberta de Atlas foi registada, mas o autosave falhou: "
+				+ checkpoint
+			)
 
 
 func show_new_discoveries(

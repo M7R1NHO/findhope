@@ -484,7 +484,7 @@ func register_stay_decision():
 		false
 	)
 
-	var success = SaveManager.autosave(
+	var success = await SaveManager.autosave(
 		"surface_stay_selected"
 	)
 

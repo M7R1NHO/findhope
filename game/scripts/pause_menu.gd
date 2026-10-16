@@ -506,7 +506,7 @@ func save_to_slot(
 	slot: int
 ):
 	var success = (
-		SaveManager.save_manual_slot(
+		await SaveManager.save_manual_slot(
 			slot
 		)
 	)

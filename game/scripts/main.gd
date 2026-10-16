@@ -116,7 +116,7 @@ func _ready():
 		)
 
 		# Guardar imediatamente a conclusão da introdução.
-		var save_success: bool = SaveManager.autosave(
+		var save_success: bool = await SaveManager.autosave(
 			"intro_completed"
 		)
 

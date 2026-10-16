@@ -1,9 +1,4 @@
-
-"""Exportação e restauração do estado de Atlas por run.
-
-Este módulo serializa os estados mantidos pelos módulos atuais
-e permite restaurá-los a partir de um snapshot validado.
-"""
+"""Exportação, restauração e reinício do estado de Atlas por run."""
 
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -28,15 +23,50 @@ def _copy_state(value: Any) -> Any:
     return deepcopy(value)
 
 
+def _default_world_state() -> dict:
+    """Devolve o estado inicial do mundo sem reutilizar dicionários globais."""
+    return {
+        "player": {
+            "position": {
+                "x": 0.0,
+                "y": 0.0,
+            }
+        },
+        "atlas": {
+            "position": {
+                "x": 2.0,
+                "y": 0.0,
+            },
+            "radar_range": 50.0,
+            "current_detections": [],
+        },
+        "ship": {
+            "status": "damaged",
+            "position": {
+                "x": 0.0,
+                "y": 0.0,
+            },
+        },
+        "environment": {
+            "planet_name": None,
+            "weather": "unknown",
+            "time_of_day": "unknown",
+        },
+        "mission": {
+            "current_objective": "evaluate_crash_site",
+        },
+    }
+
+
 def export_atlas_run_state(
     run_id: str,
-    processed_autonomy_event_ids=None
+    processed_autonomy_event_ids=None,
 ) -> dict:
-    """Cria um snapshot do estado atual do backend para uma run."""
+    """Cria uma cópia independente do estado atual do backend."""
     normalized_run_id = str(run_id or "").strip()
 
     if not normalized_run_id:
-        raise ValueError("run_id é obrigatório")
+        raise ValueError("run_id é obrigatório.")
 
     return {
         "state_version": ATLAS_RUN_STATE_VERSION,
@@ -68,11 +98,11 @@ def export_atlas_run_state(
 def _replace_dict(
     target: dict,
     source: Any,
-    field_name: str
+    field_name: str,
 ) -> None:
     if not isinstance(source, dict):
         raise ValueError(
-            f"Campo inválido no snapshot: {field_name}"
+            f"Campo inválido no snapshot: {field_name}."
         )
 
     target.clear()
@@ -82,11 +112,11 @@ def _replace_dict(
 def _replace_list(
     target: list,
     source: Any,
-    field_name: str
+    field_name: str,
 ) -> None:
     if not isinstance(source, list):
         raise ValueError(
-            f"Campo inválido no snapshot: {field_name}"
+            f"Campo inválido no snapshot: {field_name}."
         )
 
     target.clear()
@@ -95,8 +125,9 @@ def _replace_list(
 
 def validate_atlas_run_state(
     snapshot: Any,
-    expected_run_id: str | None = None
+    expected_run_id: str | None = None,
 ) -> tuple[bool, str]:
+    """Valida o snapshot antes de modificar qualquer estado global."""
     if not isinstance(snapshot, dict):
         return False, "O estado recebido tem de ser um objeto JSON."
 
@@ -155,12 +186,12 @@ def validate_atlas_run_state(
 
 def restore_atlas_run_state(
     snapshot: dict,
-    expected_run_id: str | None = None
+    expected_run_id: str | None = None,
 ) -> dict:
     """Valida e restaura os estados globais incluídos no snapshot."""
     valid, reason = validate_atlas_run_state(
         snapshot,
-        expected_run_id
+        expected_run_id,
     )
 
     if not valid:
@@ -169,52 +200,52 @@ def restore_atlas_run_state(
     _replace_dict(
         atlas_memory.ATLAS_MEMORY,
         snapshot["memory"],
-        "memory"
+        "memory",
     )
     _replace_dict(
         atlas_knowledge.ATLAS_KNOWLEDGE,
         snapshot["knowledge"],
-        "knowledge"
+        "knowledge",
     )
     _replace_dict(
         autonomy_state.AUTONOMY_STATE,
         snapshot["autonomy"],
-        "autonomy"
+        "autonomy",
     )
     _replace_dict(
         discovery_state.DISCOVERY_STATE,
         snapshot["discoveries"],
-        "discoveries"
+        "discoveries",
     )
     _replace_dict(
         gameplay_context.GAMEPLAY_CONTEXT,
         snapshot["gameplay_context"],
-        "gameplay_context"
+        "gameplay_context",
     )
     _replace_dict(
         narrative_state.NARRATIVE_STATE,
         snapshot["narrative"],
-        "narrative"
+        "narrative",
     )
     _replace_dict(
         relationship_engine.RELATIONSHIP_STATE,
         snapshot["relationship"],
-        "relationship"
+        "relationship",
     )
     _replace_list(
         conversation_context.CONVERSATION_HISTORY,
         snapshot["conversation"],
-        "conversation"
+        "conversation",
     )
     _replace_dict(
         social_state.SOCIAL_STATE,
         snapshot["social"],
-        "social"
+        "social",
     )
     _replace_dict(
         world_state.WORLD_STATE,
         snapshot["world"],
-        "world"
+        "world",
     )
 
     return {
@@ -228,11 +259,11 @@ def restore_atlas_run_state(
 
 
 def reset_atlas_run_state(run_id: str) -> dict:
-    """Reinicia os módulos atuais para iniciar uma run sem memórias antigas."""
+    """Reinicia os módulos atuais para iniciar uma run sem estado anterior."""
     normalized_run_id = str(run_id or "").strip()
 
     if not normalized_run_id:
-        raise ValueError("run_id é obrigatório")
+        raise ValueError("run_id é obrigatório.")
 
     atlas_memory.reset_atlas_memory()
     atlas_knowledge.reset_atlas_knowledge()
@@ -245,43 +276,13 @@ def reset_atlas_run_state(run_id: str) -> dict:
 
     social_state.SOCIAL_STATE.clear()
     social_state.SOCIAL_STATE.update({
-        "atlas_irritation": 0
+        "atlas_irritation": 0,
     })
 
     world_state.WORLD_STATE.clear()
-    world_state.WORLD_STATE.update({
-        "player": {
-            "position": {
-                "x": 0.0,
-                "y": 0.0
-            }
-        },
-        "atlas": {
-            "position": {
-                "x": 2.0,
-                "y": 0.0
-            },
-            "radar_range": 50.0,
-            "current_detections": []
-        },
-        "ship": {
-            "status": "damaged",
-            "position": {
-                "x": 0.0,
-                "y": 0.0
-            }
-        },
-        "environment": {
-            "planet_name": None,
-            "weather": "unknown",
-            "time_of_day": "unknown"
-        },
-        "mission": {
-            "current_objective": "evaluate_crash_site"
-        }
-    })
+    world_state.WORLD_STATE.update(_default_world_state())
 
     return {
         "run_id": normalized_run_id,
-        "reset": True
+        "reset": True,
     }

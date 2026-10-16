@@ -47,9 +47,7 @@ from backend.discovery_state import (
     reset_discovery_state,
 )
 
-from backend.protocol_decision import (
-    evaluate_protocol_door,
-)
+from backend.protocol_decision import evaluate_protocol_door
 
 
 app = FastAPI(title="Find Hope")
@@ -123,30 +121,14 @@ def _export_atlas_state():
     return {
         "version": ATLAS_STATE_VERSION,
         "world_state": deepcopy(WORLD_STATE),
-        "knowledge": deepcopy(
-            atlas_knowledge_module.ATLAS_KNOWLEDGE
-        ),
-        "memory": deepcopy(
-            atlas_memory_module.ATLAS_MEMORY
-        ),
-        "autonomy": deepcopy(
-            autonomy_state_module.AUTONOMY_STATE
-        ),
-        "gameplay_context": deepcopy(
-            gameplay_context_module.GAMEPLAY_CONTEXT
-        ),
-        "discoveries": deepcopy(
-            discovery_state_module.DISCOVERY_STATE
-        ),
-        "narrative": deepcopy(
-            narrative_state_module.NARRATIVE_STATE
-        ),
-        "relationship": deepcopy(
-            relationship_engine_module.RELATIONSHIP_STATE
-        ),
-        "social": deepcopy(
-            social_state_module.SOCIAL_STATE
-        ),
+        "knowledge": deepcopy(atlas_knowledge_module.ATLAS_KNOWLEDGE),
+        "memory": deepcopy(atlas_memory_module.ATLAS_MEMORY),
+        "autonomy": deepcopy(autonomy_state_module.AUTONOMY_STATE),
+        "gameplay_context": deepcopy(gameplay_context_module.GAMEPLAY_CONTEXT),
+        "discoveries": deepcopy(discovery_state_module.DISCOVERY_STATE),
+        "narrative": deepcopy(narrative_state_module.NARRATIVE_STATE),
+        "relationship": deepcopy(relationship_engine_module.RELATIONSHIP_STATE),
+        "social": deepcopy(social_state_module.SOCIAL_STATE),
         "conversation_history": deepcopy(
             conversation_context_module.CONVERSATION_HISTORY
         ),
@@ -160,10 +142,7 @@ def _replace_dict(target, source, field_name):
     if not isinstance(source, dict):
         raise HTTPException(
             status_code=422,
-            detail=(
-                f"O campo '{field_name}' "
-                "tem de ser um objeto JSON."
-            ),
+            detail=f"O campo '{field_name}' tem de ser um objeto JSON.",
         )
 
     target.clear()
@@ -171,7 +150,7 @@ def _replace_dict(target, source, field_name):
 
 
 def _restore_atlas_state(state):
-    """Restaura os estados em memória sem substituir os objetos globais importados."""
+    """Restaura o estado de Atlas sem substituir os objetos globais."""
 
     if not isinstance(state, dict):
         raise HTTPException(
@@ -179,10 +158,7 @@ def _restore_atlas_state(state):
             detail="'state' tem de ser um objeto JSON.",
         )
 
-    version = state.get(
-        "version",
-        ATLAS_STATE_VERSION,
-    )
+    version = state.get("version", ATLAS_STATE_VERSION)
 
     if version != ATLAS_STATE_VERSION:
         raise HTTPException(
@@ -202,18 +178,12 @@ def _restore_atlas_state(state):
         "social": social_state_module.SOCIAL_STATE,
     }
 
-    # Validar os campos antes de alterar qualquer estado.
+    # Validar antes de alterar qualquer estado.
     for field_name in required_dicts:
-        if (
-            field_name in state
-            and not isinstance(state[field_name], dict)
-        ):
+        if field_name in state and not isinstance(state[field_name], dict):
             raise HTTPException(
                 status_code=422,
-                detail=(
-                    f"O campo '{field_name}' "
-                    "tem de ser um objeto JSON."
-                ),
+                detail=f"O campo '{field_name}' tem de ser um objeto JSON.",
             )
 
     history = state.get(
@@ -224,16 +194,10 @@ def _restore_atlas_state(state):
     if not isinstance(history, list):
         raise HTTPException(
             status_code=422,
-            detail=(
-                "O campo 'conversation_history' "
-                "tem de ser uma lista JSON."
-            ),
+            detail="O campo 'conversation_history' tem de ser uma lista JSON.",
         )
 
-    event_ids = state.get(
-        "processed_autonomy_event_ids",
-        [],
-    )
+    event_ids = state.get("processed_autonomy_event_ids", [])
 
     if (
         not isinstance(event_ids, list)
@@ -247,32 +211,81 @@ def _restore_atlas_state(state):
             ),
         )
 
-    # Restaurar os dicionários existentes, sem substituir
-    # os objetos globais usados pelos restantes módulos.
     for field_name, target in required_dicts.items():
         if field_name in state:
-            _replace_dict(
-                target,
-                state[field_name],
-                field_name,
-            )
+            _replace_dict(target, state[field_name], field_name)
 
-    # Restaurar o histórico de conversa.
     conversation_context_module.CONVERSATION_HISTORY.clear()
     conversation_context_module.CONVERSATION_HISTORY.extend(
         deepcopy(history)
     )
 
-    # Restaurar os IDs de eventos já processados.
     PROCESSED_AUTONOMY_EVENT_IDS.clear()
     PROCESSED_AUTONOMY_EVENT_IDS.update(event_ids)
 
     return _export_atlas_state()
 
 
+@app.post("/atlas/reset-run")
+def reset_atlas_run():
+    """Reinicia o estado volátil de Atlas para uma nova partida."""
+
+    reset_atlas_knowledge()
+    reset_atlas_memory()
+    reset_autonomy_state()
+    reset_gameplay_context()
+    reset_discovery_state()
+
+    narrative_state_module.reset_narrative_state()
+    relationship_engine_module.reset_relationship_state()
+    social_state_module.reset_social_state()
+    conversation_context_module.reset_conversation_context()
+
+    PROCESSED_AUTONOMY_EVENT_IDS.clear()
+
+    # Repor o estado físico inicial sem substituir o dicionário global.
+    WORLD_STATE.clear()
+    WORLD_STATE.update({
+        "player": {
+            "position": {
+                "x": 0.0,
+                "y": 0.0,
+            }
+        },
+        "atlas": {
+            "position": {
+                "x": 2.0,
+                "y": 0.0,
+            },
+            "radar_range": 50.0,
+            "current_detections": [],
+        },
+        "ship": {
+            "status": "damaged",
+            "position": {
+                "x": 0.0,
+                "y": 0.0,
+            },
+        },
+        "environment": {
+            "planet_name": None,
+            "weather": "unknown",
+            "time_of_day": "unknown",
+        },
+        "mission": {
+            "current_objective": "evaluate_crash_site",
+        },
+    })
+
+    return {
+        "status": "Atlas run reset",
+        "state": _export_atlas_state(),
+    }
+
+
 @app.get("/atlas/state")
 def export_atlas_state():
-    """Devolve o estado atual do Atlas para ser incluído num save do jogo."""
+    """Devolve o estado de Atlas para ser incluído num save."""
     return {
         "status": "ok",
         "state": _export_atlas_state(),
@@ -304,9 +317,7 @@ def restore_atlas_state(payload: dict):
 
 @app.get("/")
 def root():
-    return {
-        "message": "Find Hope API online"
-    }
+    return {"message": "Find Hope API online"}
 
 
 # =========================================================
@@ -315,10 +326,7 @@ def root():
 
 @app.post("/chat")
 def chat(data: ChatMessage):
-
-    response = ask_android(
-        data.message
-    )
+    response = ask_android(data.message)
 
     return {
         "message": data.message,
@@ -331,10 +339,7 @@ def chat(data: ChatMessage):
 # =========================================================
 
 @app.post("/world/scan")
-def receive_godot_scan(
-    data: GodotScan
-):
-
+def receive_godot_scan(data: GodotScan):
     atlas_position = {
         "x": data.atlas_position.x,
         "y": data.atlas_position.y,
@@ -350,27 +355,12 @@ def receive_godot_scan(
         for detection in data.detections
     ]
 
-    processed = process_godot_scan(
-        atlas_position,
-        detections,
-    )
-
-    new_discoveries = (
-        process_scan_discoveries(
-            detections
-        )
-    )
+    processed = process_godot_scan(atlas_position, detections)
+    new_discoveries = process_scan_discoveries(detections)
 
     if new_discoveries:
-        print(
-            "\nNEW SURFACE DISCOVERIES:",
-            new_discoveries,
-        )
-
-        print(
-            "\nDISCOVERY STATE:",
-            get_discovery_state(),
-        )
+        print("\nNEW SURFACE DISCOVERIES:", new_discoveries)
+        print("\nDISCOVERY STATE:", get_discovery_state())
 
     return {
         "status": "scan processed",
@@ -383,11 +373,7 @@ def receive_godot_scan(
 
 @app.get("/atlas/current-detections")
 def current_detections():
-    return WORLD_STATE[
-        "atlas"
-    ][
-        "current_detections"
-    ]
+    return WORLD_STATE["atlas"]["current_detections"]
 
 
 # =========================================================
@@ -395,10 +381,7 @@ def current_detections():
 # =========================================================
 
 @app.post("/atlas/position")
-def update_atlas_position(
-    data: AtlasPosition
-):
-
+def update_atlas_position(data: AtlasPosition):
     WORLD_STATE["atlas"]["position"] = {
         "x": data.x,
         "y": data.y,
@@ -406,11 +389,7 @@ def update_atlas_position(
 
     return {
         "status": "Atlas position updated",
-        "position": WORLD_STATE[
-            "atlas"
-        ][
-            "position"
-        ],
+        "position": WORLD_STATE["atlas"]["position"],
     }
 
 
@@ -425,12 +404,9 @@ def atlas_knowledge():
 
 @app.post("/atlas/reset-knowledge")
 def reset_knowledge():
-
     reset_atlas_knowledge()
 
-    return {
-        "status": "Atlas knowledge reset"
-    }
+    return {"status": "Atlas knowledge reset"}
 
 
 # =========================================================
@@ -443,10 +419,7 @@ def atlas_memory():
 
 
 @app.post("/atlas/memory")
-def create_memory(
-    data: MemoryData
-):
-
+def create_memory(data: MemoryData):
     success = add_memory(
         memory_type=data.memory_type,
         entity=data.entity,
@@ -464,19 +437,14 @@ def create_memory(
             "message": "Invalid memory data",
         }
 
-    return {
-        "status": "Memory stored"
-    }
+    return {"status": "Memory stored"}
 
 
 @app.post("/atlas/reset-memory")
 def reset_memory():
-
     reset_atlas_memory()
 
-    return {
-        "status": "Atlas memory reset"
-    }
+    return {"status": "Atlas memory reset"}
 
 
 # =========================================================
@@ -490,7 +458,6 @@ def gameplay_discoveries():
 
 @app.post("/gameplay/discoveries/reset")
 def reset_discoveries():
-
     reset_discovery_state()
 
     return {
@@ -509,10 +476,7 @@ def gameplay_context():
 
 
 @app.post("/gameplay/context/event")
-def gameplay_context_event(
-    data: GameplayContextEvent
-):
-
+def gameplay_context_event(data: GameplayContextEvent):
     success = register_gameplay_event(
         event_id=data.event_id,
         event_type=data.event_type,
@@ -546,12 +510,9 @@ def gameplay_context_event(
 
 @app.post("/gameplay/context/reset")
 def reset_gameplay():
-
     reset_gameplay_context()
 
-    return {
-        "status": "Gameplay context reset"
-    }
+    return {"status": "Gameplay context reset"}
 
 
 # =========================================================
@@ -560,15 +521,9 @@ def reset_gameplay():
 
 @app.get("/gameplay/protocol-door/decision")
 def protocol_door_decision():
+    decision = evaluate_protocol_door()
 
-    decision = (
-        evaluate_protocol_door()
-    )
-
-    print(
-        "\nPROTOCOL DOOR DECISION:",
-        decision,
-    )
+    print("\nPROTOCOL DOOR DECISION:", decision)
 
     return decision
 
@@ -591,41 +546,26 @@ def atlas_autonomy():
 
 
 @app.post("/atlas/autonomy/event")
-def autonomy_gameplay_event(
-    data: AutonomyGameplayEvent
-):
-
-    if (
-        data.event
-        not in ALLOWED_GAMEPLAY_AUTONOMY_EVENTS
-    ):
+def autonomy_gameplay_event(data: AutonomyGameplayEvent):
+    if data.event not in ALLOWED_GAMEPLAY_AUTONOMY_EVENTS:
         return {
             "status": "error",
-            "message": (
-                "Invalid gameplay autonomy event"
-            ),
-            "allowed_events": sorted(
-                ALLOWED_GAMEPLAY_AUTONOMY_EVENTS
-            ),
+            "message": "Invalid gameplay autonomy event",
+            "allowed_events": sorted(ALLOWED_GAMEPLAY_AUTONOMY_EVENTS),
         }
 
     event_id = None
 
     if data.event_id is not None:
-
-        normalized_event_id = (
-            data.event_id.strip()
-        )
+        normalized_event_id = data.event_id.strip()
 
         if normalized_event_id:
             event_id = normalized_event_id
 
     if (
         event_id is not None
-        and event_id
-        in PROCESSED_AUTONOMY_EVENT_IDS
+        and event_id in PROCESSED_AUTONOMY_EVENT_IDS
     ):
-
         state = get_autonomy_state()
 
         print(
@@ -636,10 +576,7 @@ def autonomy_gameplay_event(
             },
         )
 
-        print(
-            "\nEVENT IGNORED - STATE UNCHANGED:",
-            state,
-        )
+        print("\nEVENT IGNORED - STATE UNCHANGED:", state)
 
         return {
             "status": "duplicate event ignored",
@@ -657,10 +594,7 @@ def autonomy_gameplay_event(
     )
 
     if event_id is not None:
-
-        PROCESSED_AUTONOMY_EVENT_IDS.add(
-            event_id
-        )
+        PROCESSED_AUTONOMY_EVENT_IDS.add(event_id)
 
     print(
         "\nAUTONOMY GAMEPLAY EVENT:",
@@ -671,10 +605,7 @@ def autonomy_gameplay_event(
         },
     )
 
-    print(
-        "\nAUTONOMY STATE AFTER GAMEPLAY EVENT:",
-        state,
-    )
+    print("\nAUTONOMY STATE AFTER GAMEPLAY EVENT:", state)
 
     return {
         "status": "autonomy event processed",
@@ -688,9 +619,7 @@ def autonomy_gameplay_event(
 
 @app.post("/atlas/reset-autonomy")
 def reset_autonomy():
-
     reset_autonomy_state()
-
     PROCESSED_AUTONOMY_EVENT_IDS.clear()
 
     return {
