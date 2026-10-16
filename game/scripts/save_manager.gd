@@ -17,6 +17,7 @@ const MANUAL_SLOT_PATTERN := "user://findhope_slot_%d.json"
 
 const ATLAS_STATE_URL := "http://127.0.0.1:8000/atlas/state"
 const ATLAS_RESET_RUN_URL := "http://127.0.0.1:8000/atlas/reset-run"
+const SAVES_API_URL := "http://127.0.0.1:8000/saves"
 
 
 var profile: Dictionary = {}
@@ -41,6 +42,7 @@ func _ready():
 func default_profile() -> Dictionary:
 	return {
 		"save_version": SAVE_VERSION,
+		"profile_key": "",
 		"has_started_game": false,
 		"has_full_completion": false,
 		"achievements": {},
@@ -84,8 +86,22 @@ func load_profile():
 	for key in loaded.keys():
 		profile[key] = loaded[key]
 
+	ensure_profile_key()
+	if str(profile.get("profile_key", "")).is_empty():
+		save_profile()
+
+
+func ensure_profile_key() -> void:
+	var existing_key := str(profile.get("profile_key", "")).strip_edges()
+	if existing_key.length() >= 32:
+		return
+
+	var crypto := Crypto.new()
+	profile["profile_key"] = crypto.generate_random_bytes(32).hex_encode()
+
 
 func save_profile():
+	ensure_profile_key()
 	profile["save_version"] = SAVE_VERSION
 
 	if not write_json_file(
@@ -291,6 +307,55 @@ func reset_active_run():
 	print("Android diaries preserved.")
 
 
+func save_snapshot_remote(snapshot: Dictionary, save_type: String, slot: int) -> bool:
+	var profile_key := str(profile.get("profile_key", "")).strip_edges()
+	if profile_key.length() < 32:
+		push_warning("Não foi possível sincronizar: profile_key inválida.")
+		return false
+
+	var slot_type := "auto" if save_type == "autosave" else "manual"
+	@warning_ignore("incompatible_ternary")
+	var slot_number = null if slot_type == "auto" else slot
+	var body := JSON.stringify({
+		"profile_key": profile_key,
+		"slot_type": slot_type,
+		"slot_number": slot_number,
+		"snapshot": snapshot,
+		"save_name": "Autosave" if slot_type == "auto" else "Slot " + str(slot)
+	})
+
+	var request := HTTPRequest.new()
+	request.timeout = 15.0
+	add_child(request)
+
+	var error := request.request(
+		SAVES_API_URL,
+		["Content-Type: application/json"],
+		HTTPClient.METHOD_POST,
+		body
+	)
+
+	if error != OK:
+		push_warning("Falha ao iniciar sincronização do save: " + str(error))
+		request.queue_free()
+		return false
+
+	var result = await request.request_completed
+	request.queue_free()
+
+	if int(result[1]) != 200:
+		push_warning("O save ficou guardado localmente, mas a sincronização falhou. HTTP: " + str(result[1]))
+		return false
+
+	var response = JSON.parse_string(result[3].get_string_from_utf8())
+	if not (response is Dictionary) or not bool(response.get("success", false)):
+		push_warning("O servidor não confirmou a sincronização do save.")
+		return false
+
+	print("SAVE SINCRONIZADO COM SUPABASE: ", slot_type, " / ", slot)
+	return true
+
+
 func autosave(
 	checkpoint_id: String
 ) -> bool:
@@ -327,6 +392,8 @@ func autosave(
 		)
 
 		return false
+
+	await save_snapshot_remote(snapshot, "autosave", 0)
 
 	print("")
 	print("AUTOSAVE COMPLETE")
@@ -390,6 +457,8 @@ func save_manual_slot(
 		)
 
 		return false
+
+	await save_snapshot_remote(snapshot, "manual", slot)
 
 	print("")
 	print("MANUAL SAVE COMPLETE")
@@ -872,7 +941,36 @@ func get_all_manual_slots() -> Array:
 
 	return slots
 
+func delete_all_manual_slots() -> bool:
+	print("[SAVES] A iniciar eliminação dos slots.")
+	var all_deleted := true
 
+	for slot in range(1, SLOT_COUNT + 1):
+		var path := get_manual_slot_path(slot)
+		print("[SAVES] Slot ", slot, ": ", path)
+		print("[SAVES] Existe antes de apagar: ", FileAccess.file_exists(path))
+
+		if not FileAccess.file_exists(path):
+			continue
+
+		var absolute_path := ProjectSettings.globalize_path(path)
+		var error := DirAccess.remove_absolute(absolute_path)
+		print("[SAVES] Resultado da eliminação: ", error)
+		print("[SAVES] Existe depois de apagar: ", FileAccess.file_exists(path))
+
+		if error != OK:
+			all_deleted = false
+			push_warning(
+				"Não foi possível apagar o Slot "
+				+ str(slot)
+				+ ". Erro: "
+				+ str(error)
+			)
+
+	if all_deleted:
+		print("TODOS OS SLOTS MANUAIS FORAM APAGADOS.")
+
+	return all_deleted
 
 func set_run_value(
 	section: String,
@@ -1171,3 +1269,5 @@ func read_json_file(
 		return {}
 
 	return parsed
+	
+	

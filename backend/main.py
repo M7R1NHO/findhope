@@ -1,7 +1,14 @@
 from copy import deepcopy
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
+from backend.save_persistence import (
+    list_saves,
+    load_snapshot,
+    save_snapshot,
+)
 
 from backend.world_state import WORLD_STATE
 from backend import (
@@ -59,6 +66,14 @@ app = FastAPI(title="Find Hope")
 
 class ChatMessage(BaseModel):
     message: str
+
+
+class SaveRequest(BaseModel):
+    profile_key: str
+    slot_type: Literal["auto", "manual"]
+    slot_number: int | None = None
+    snapshot: dict
+    save_name: str | None = None
 
 
 class MemoryData(BaseModel):
@@ -309,6 +324,78 @@ def restore_atlas_state(payload: dict):
         "status": "Atlas state restored",
         "state": restored_state,
     }
+
+
+# =========================================================
+# SAVE PERSISTENCE (POSTGRESQL)
+# =========================================================
+
+@app.post("/saves")
+def create_or_update_save(data: SaveRequest):
+    """Guarda ou atualiza um autosave ou um dos cinco slots manuais."""
+    try:
+        return save_snapshot(
+            profile_key=data.profile_key,
+            slot_type=data.slot_type,
+            slot_number=data.slot_number,
+            snapshot=data.snapshot,
+            save_name=data.save_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        print("Erro ao guardar save:", type(exc).__name__)
+        raise HTTPException(
+            status_code=500,
+            detail="Não foi possível guardar o save.",
+        ) from exc
+
+
+@app.get("/saves/{profile_key}")
+def get_player_saves(profile_key: str):
+    """Lista os slots guardados para um perfil."""
+    try:
+        return {"saves": list_saves(profile_key)}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        print("Erro ao listar saves:", type(exc).__name__)
+        raise HTTPException(
+            status_code=500,
+            detail="Não foi possível listar os saves.",
+        ) from exc
+
+
+@app.get("/saves/{profile_key}/{slot_type}/{slot_number}")
+def get_player_save(
+    profile_key: str,
+    slot_type: Literal["auto", "manual"],
+    slot_number: int,
+):
+    """Carrega um save; usar 0 como número do autosave."""
+    resolved_slot_number = (
+        None if slot_type == "auto" and slot_number == 0 else slot_number
+    )
+
+    try:
+        snapshot = load_snapshot(
+            profile_key=profile_key,
+            slot_type=slot_type,
+            slot_number=resolved_slot_number,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        print("Erro ao carregar save:", type(exc).__name__)
+        raise HTTPException(
+            status_code=500,
+            detail="Não foi possível carregar o save.",
+        ) from exc
+
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Save não encontrado.")
+
+    return {"snapshot": snapshot}
 
 
 # =========================================================

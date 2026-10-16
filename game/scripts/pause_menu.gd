@@ -312,6 +312,14 @@ func open_save_menu():
 			slot
 		)
 
+	var delete_button = Button.new()
+	delete_button.text = "APAGAR TODOS OS SAVES"
+	delete_button.custom_minimum_size = Vector2(0, 52)
+	delete_button.pressed.connect(
+		open_delete_all_saves_confirmation
+	)
+	container.add_child(delete_button)
+
 	create_back_button(
 		container
 	)
@@ -577,6 +585,14 @@ func open_load_menu():
 			container,
 			slot
 		)
+
+	var delete_button = Button.new()
+	delete_button.text = "APAGAR TODOS OS SAVES"
+	delete_button.custom_minimum_size = Vector2(0, 52)
+	delete_button.pressed.connect(
+		open_delete_all_saves_confirmation
+)
+	container.add_child(delete_button)
 
 	create_back_button(
 		container
@@ -1082,3 +1098,64 @@ func set_status(
 		return
 
 	status_label.text = message
+	
+func open_delete_all_saves_confirmation():
+	close_submenu()
+
+	submenu_layer = create_submenu_base()
+
+	var container = create_submenu_container(
+		submenu_layer
+	)
+
+	var title = Label.new()
+	title.text = "APAGAR TODOS OS SAVES?"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	container.add_child(title)
+
+	var body = Label.new()
+	body.text = (
+		"Esta ação vai apagar os saves manuais "
+		+ "dos Slots 1 a 5.\n\n"
+		+ "O autosave, as conquistas e os diários "
+		+ "serão preservados.\n\n"
+		+ "Tens a certeza?"
+	)
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	container.add_child(body)
+
+	var buttons = HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 15)
+	container.add_child(buttons)
+
+	var cancel = Button.new()
+	cancel.text = "CANCELAR"
+	cancel.custom_minimum_size = Vector2(190, 55)
+	cancel.pressed.connect(open_save_menu)
+	buttons.add_child(cancel)
+
+	var confirm = Button.new()
+	confirm.text = "APAGAR TUDO"
+	confirm.custom_minimum_size = Vector2(190, 55)
+	confirm.pressed.connect(
+		confirm_delete_all_manual_saves
+	)
+	buttons.add_child(confirm)
+
+func confirm_delete_all_manual_saves():
+	var success = SaveManager.delete_all_manual_slots()
+
+	close_submenu()
+
+	if success:
+		set_status("Todos os saves manuais foram apagados.")
+	else:
+		set_status(
+			"Não foi possível apagar todos os saves. "
+			+ "Verifica os avisos na consola."
+		)
+
+	open_save_menu()
