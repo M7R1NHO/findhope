@@ -430,16 +430,14 @@ func load_manual_slot(
 
 
 func load_prepared_save():
-	var scene_path = (
-		SaveManager.get_pending_scene_path()
-	)
+	var scene_path = SaveManager.get_pending_scene_path()
 
 	if scene_path.strip_edges().is_empty():
 		scene_path = game_scene_path
 
 	if scene_path.strip_edges().is_empty():
 		set_status(
-			"O save não possui uma cena válida."
+			"O save nao possui uma cena valida."
 		)
 		return
 

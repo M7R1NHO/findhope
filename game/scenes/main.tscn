@@ -31,7 +31,7 @@
 [ext_resource type="Script" uid="uid://cfh7aoywgfdci" path="res://scripts/run_state.gd" id="26_2wyq8"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
-size = Vector2(180, 60)
+size = Vector2(652, 250)
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_l8mnm"]
 radius = 27.0
@@ -540,10 +540,13 @@ position = Vector2(243.69, -150)
 script = ExtResource("2_o6xl0")
 
 [node name="Ship" type="Polygon2D" parent="Ship" unique_id=1636235921]
+position = Vector2(233.155, -98)
+scale = Vector2(3.33155, 3.8)
 color = Color(0.21206132, 0.00033903302, 0.56683713, 1)
 polygon = PackedVector2Array(-80, -35, 80, -35, 100, 0, 80, 35, -80, 35, -100, 0)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Ship" unique_id=1169714705]
+position = Vector2(231.31, -97)
 shape = SubResource("RectangleShape2D_l8mnm")
 
 [node name="Debris1" type="StaticBody2D" parent="." unique_id=925556185 groups=["detectable"]]
