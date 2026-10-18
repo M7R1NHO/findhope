@@ -144,3 +144,17 @@ def load_snapshot(profile_key: str, slot_type: str, slot_number: int | None) -> 
     if isinstance(value, str):
         value = json.loads(value)
     return value if isinstance(value, dict) else None
+
+
+def delete_manual_saves(profile_key: str) -> dict[str, Any]:
+    """Apaga APENAS os slots manuais do perfil. O autosave nunca é tocado."""
+    key = _validate_profile_key(profile_key)
+    with get_db_connection() as connection:
+        profile_id = _resolve_profile_id(connection, key)
+        rows = connection.execute(
+            """DELETE FROM public.game_saves
+               WHERE profile_id = %s AND slot_type = 'manual'
+               RETURNING slot_number""",
+            (profile_id,),
+        ).fetchall()
+    return {"success": True, "deleted": len(rows)}

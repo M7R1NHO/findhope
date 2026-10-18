@@ -197,6 +197,13 @@ func get_backend_state_url() -> String:
 
 
 func capture_backend_state() -> bool:
+	# Dois saves quase simultâneos (duplo clique, autosave + manual) não devem
+	# falhar: o segundo espera pelo primeiro em vez de devolver false.
+	var waited_frames: int = 0
+	while backend_request_in_progress and waited_frames < 1200:
+		await get_tree().process_frame
+		waited_frames += 1
+
 	if backend_request_in_progress:
 		return false
 
@@ -912,6 +919,17 @@ func apply_pending_snapshot() -> bool:
 			save_failed.emit("atlas_state_restore_failed")
 			return false
 
+	# Depois de carregar um slot manual, esse estado passa a ser o autosave da
+	# run. Assim CONTINUAR JOGO retoma onde carregaste (local e remoto) e não
+	# um checkpoint antigo.
+	if str(pending_snapshot.get("save_type", "")) == "manual":
+		var as_autosave: Dictionary = pending_snapshot.duplicate(true)
+		as_autosave["save_type"] = "autosave"
+		as_autosave["slot"] = 0
+		if not write_json_file(CURRENT_RUN_PATH, as_autosave):
+			push_warning("Não foi possível atualizar o autosave local após carregar o slot.")
+		call_deferred("_sync_snapshot_remote_background", as_autosave.duplicate(true), "autosave", 0)
+
 	pending_snapshot = {}
 
 	print("")
@@ -1329,5 +1347,3 @@ func read_json_file(
 		return {}
 
 	return parsed
-	
-	

@@ -510,14 +510,24 @@ func open_overwrite_confirmation(
 	)
 
 
+var save_in_progress: bool = false
+
+
 func save_to_slot(
 	slot: int
 ):
+	if save_in_progress:
+		return
+
+	save_in_progress = true
+
 	var success = (
 		await SaveManager.save_manual_slot(
 			slot
 		)
 	)
+
+	save_in_progress = false
 
 	if not success:
 		close_submenu()
@@ -539,7 +549,9 @@ func save_to_slot(
 
 func open_load_menu():
 	close_submenu()
-	await SaveManager.sync_remote_saves_to_local()
+	# Só espera pela rede na primeira vez; depois usa os metadados em cache.
+	if not SaveManager.remote_save_metadata_loaded:
+		await SaveManager.sync_remote_saves_to_local()
 
 	submenu_layer = create_submenu_base()
 
@@ -791,8 +803,14 @@ func load_slot(
 
 	get_tree().paused = false
 
+	# Sem cena de fallback, um snapshot sem scene_path falhava em silêncio.
+	var fallback_scene: String = ""
+	if get_tree().current_scene != null:
+		fallback_scene = get_tree().current_scene.scene_file_path
+
 	SaveManager.call_deferred(
-		"load_prepared_scene"
+		"load_prepared_scene",
+		fallback_scene
 	)
 
 func open_options():

@@ -179,6 +179,49 @@ def normalize_interpreter_result(data):
     }
 
 
+JSON_SHAPE_HINT = (
+    "\n\nRespond ONLY with a JSON object of exactly this shape: "
+    '{"memories": [{"memory_type": "semantic|episodic", '
+    '"entity": "player|atlas|shared|world", "category": "...", '
+    '"key": "...", "value": "...", "confidence": 0-1, '
+    '"importance": 0-1}], "query": {"need_memory": true|false, '
+    '"entity": "...", "category": "...", "query": "..."}}. '
+    "Use the key \"memories\" (an array) at the top level."
+)
+
+
+def _create_with_fallback(client, model, system_prompt, message):
+    """O modo json_schema estrito do Groq falha de vez em quando
+    (json_validate_failed, ex.: o modelo escreve '{preferences').
+    Tenta 2x com o schema e depois em modo json_object, para que uma
+    falha do interpretador não faça a memória perder-se em silêncio."""
+    attempts = [
+        (MEMORY_RESPONSE_SCHEMA, system_prompt),
+        (MEMORY_RESPONSE_SCHEMA, system_prompt),
+        ({"type": "json_object"}, system_prompt + JSON_SHAPE_HINT),
+    ]
+    last_error = None
+
+    for response_format, prompt in attempts:
+        try:
+            return client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": message}
+                ],
+                response_format=response_format,
+                reasoning_effort="none",
+                temperature=0,
+                max_tokens=400
+            )
+        except Exception as e:
+            last_error = e
+            print(f"Interpreter: tentativa falhou ({e}); a repetir.")
+
+    raise last_error
+
+
 def interpret_memory(
     client,
     model,
@@ -237,22 +280,11 @@ confidence and importance must be between 0 and 1.
 """
 
     try:
-        completion = client.chat.completions.create(
-            model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": message
-                }
-            ],
-            response_format=MEMORY_RESPONSE_SCHEMA,
-            reasoning_effort="none",
-            temperature=0,
-            max_tokens=400
+        completion = _create_with_fallback(
+            client,
+            model,
+            system_prompt,
+            message
         )
 
         # =========================================================

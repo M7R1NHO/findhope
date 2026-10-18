@@ -1,3 +1,5 @@
+import json
+import os
 from copy import deepcopy
 from typing import Literal
 from threading import RLock
@@ -248,6 +250,37 @@ def _restore_atlas_state(state):
 RUN_STATES: dict[str, dict] = {}
 RUN_STATE_LOCK = RLock()
 
+# O --reload do uvicorn reinicia o processo sempre que um .py muda e apagaria
+# RUN_STATES. Guardamos uma cópia em disco (ficheiro .json: não dispara reload).
+RUN_STATES_PATH = os.path.join(os.path.dirname(__file__), ".run_states.json")
+
+
+def _persist_run_states():
+    try:
+        tmp_path = RUN_STATES_PATH + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(RUN_STATES, f, ensure_ascii=False, default=str)
+        os.replace(tmp_path, RUN_STATES_PATH)
+    except Exception as e:
+        print(f"Aviso: não foi possível persistir RUN_STATES: {e}")
+
+
+def _load_run_states():
+    try:
+        with open(RUN_STATES_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            RUN_STATES.update(
+                {k: v for k, v in data.items() if isinstance(v, dict)}
+            )
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        print(f"Aviso: não foi possível ler {RUN_STATES_PATH}: {e}")
+
+
+_load_run_states()
+
 def _normalise_run_id(value) -> str | None:
     if value is None:
         return None
@@ -271,6 +304,7 @@ def _run_in_isolated_state(run_id: str | None, operation):
                 _restore_atlas_state(stored)
             result = operation()
             RUN_STATES[run_id] = _export_atlas_state()
+            _persist_run_states()
             return result
         finally:
             _restore_atlas_state(previous)
@@ -309,6 +343,7 @@ def reset_atlas_run(payload: dict | None = None):
         try:
             result = do_reset()
             RUN_STATES[run_id] = _export_atlas_state()
+            _persist_run_states()
             return result
         finally:
             _restore_atlas_state(previous)
@@ -322,8 +357,13 @@ def export_atlas_state(run_id: str | None = None):
         with RUN_STATE_LOCK:
             state = RUN_STATES.get(run_id)
             if state is None:
-                state = _export_atlas_state()
-                RUN_STATES[run_id] = deepcopy(state)
+                # Nunca fabricar o estado de uma run desconhecida a partir do
+                # global: após um reinício do backend isso gravaria um estado
+                # vazio por cima de um save bom, com HTTP 200.
+                raise HTTPException(
+                    status_code=404,
+                    detail="Estado desta run não carregado no backend.",
+                )
             return {"status": "ok", "run_id": run_id, "state": deepcopy(state)}
     return {"status": "ok", "state": _export_atlas_state()}
 
@@ -343,6 +383,7 @@ def restore_atlas_state(payload: dict):
         try:
             restored = _restore_atlas_state(state)
             RUN_STATES[run_id] = deepcopy(restored)
+            _persist_run_states()
             return {"status": "Atlas state restored", "run_id": run_id, "state": restored}
         finally:
             _restore_atlas_state(previous)

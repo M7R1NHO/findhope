@@ -260,7 +260,8 @@ func start_new_game():
 
 func open_load_menu():
 	close_modal()
-	await SaveManager.sync_remote_saves_to_local()
+	if not SaveManager.remote_save_metadata_loaded:
+		await SaveManager.sync_remote_saves_to_local()
 
 	modal_layer = CanvasLayer.new()
 	modal_layer.layer = 1000
