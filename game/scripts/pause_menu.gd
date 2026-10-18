@@ -539,6 +539,7 @@ func save_to_slot(
 
 func open_load_menu():
 	close_submenu()
+	await SaveManager.sync_remote_saves_to_local()
 
 	submenu_layer = create_submenu_base()
 
@@ -773,11 +774,7 @@ func confirm_load_slot(
 func load_slot(
 	slot: int
 ):
-	var prepared = (
-		SaveManager.prepare_manual_slot_load(
-			slot
-		)
-	)
+	var prepared = await SaveManager.prepare_manual_slot_load(slot)
 
 	if not prepared:
 		close_submenu()

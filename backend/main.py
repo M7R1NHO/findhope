@@ -1,5 +1,6 @@
 from copy import deepcopy
 from typing import Literal
+from threading import RLock
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -66,6 +67,7 @@ app = FastAPI(title="Find Hope")
 
 class ChatMessage(BaseModel):
     message: str
+    run_id: str | None = None
 
 
 class SaveRequest(BaseModel):
@@ -241,89 +243,109 @@ def _restore_atlas_state(state):
     return _export_atlas_state()
 
 
+# Estado isolado por partida. O lock é necessário porque os módulos Atlas usam
+# dicionários globais internamente. Os pedidos com run_id são serializados.
+RUN_STATES: dict[str, dict] = {}
+RUN_STATE_LOCK = RLock()
+
+def _normalise_run_id(value) -> str | None:
+    if value is None:
+        return None
+    run_id = str(value).strip()
+    if not run_id:
+        return None
+    if len(run_id) > 128:
+        raise HTTPException(status_code=422, detail="run_id não pode exceder 128 caracteres.")
+    return run_id
+
+def _run_in_isolated_state(run_id: str | None, operation):
+    """Executa uma operação no estado da partida e repõe o estado anterior."""
+    run_id = _normalise_run_id(run_id)
+    if not run_id:
+        return operation()
+    with RUN_STATE_LOCK:
+        previous = _export_atlas_state()
+        try:
+            stored = RUN_STATES.get(run_id)
+            if stored is not None:
+                _restore_atlas_state(stored)
+            result = operation()
+            RUN_STATES[run_id] = _export_atlas_state()
+            return result
+        finally:
+            _restore_atlas_state(previous)
+
+
 @app.post("/atlas/reset-run")
-def reset_atlas_run():
-    """Reinicia o estado volátil de Atlas para uma nova partida."""
+def reset_atlas_run(payload: dict | None = None):
+    """Reinicia uma partida; se receber run_id, apenas essa sessão é reiniciada."""
+    run_id = _normalise_run_id((payload or {}).get("run_id"))
 
-    reset_atlas_knowledge()
-    reset_atlas_memory()
-    reset_autonomy_state()
-    reset_gameplay_context()
-    reset_discovery_state()
+    def do_reset():
+        reset_atlas_knowledge()
+        reset_atlas_memory()
+        reset_autonomy_state()
+        reset_gameplay_context()
+        reset_discovery_state()
+        narrative_state_module.reset_narrative_state()
+        relationship_engine_module.reset_relationship_state()
+        social_state_module.reset_social_state()
+        conversation_context_module.reset_conversation_context()
+        PROCESSED_AUTONOMY_EVENT_IDS.clear()
+        WORLD_STATE.clear()
+        WORLD_STATE.update({
+            "player": {"position": {"x": 0.0, "y": 0.0}},
+            "atlas": {"position": {"x": 2.0, "y": 0.0}, "radar_range": 50.0, "current_detections": []},
+            "ship": {"status": "damaged", "position": {"x": 0.0, "y": 0.0}},
+            "environment": {"planet_name": None, "weather": "unknown", "time_of_day": "unknown"},
+            "mission": {"current_objective": "evaluate_crash_site"},
+        })
+        return {"status": "Atlas run reset", "state": _export_atlas_state()}
 
-    narrative_state_module.reset_narrative_state()
-    relationship_engine_module.reset_relationship_state()
-    social_state_module.reset_social_state()
-    conversation_context_module.reset_conversation_context()
-
-    PROCESSED_AUTONOMY_EVENT_IDS.clear()
-
-    # Repor o estado físico inicial sem substituir o dicionário global.
-    WORLD_STATE.clear()
-    WORLD_STATE.update({
-        "player": {
-            "position": {
-                "x": 0.0,
-                "y": 0.0,
-            }
-        },
-        "atlas": {
-            "position": {
-                "x": 2.0,
-                "y": 0.0,
-            },
-            "radar_range": 50.0,
-            "current_detections": [],
-        },
-        "ship": {
-            "status": "damaged",
-            "position": {
-                "x": 0.0,
-                "y": 0.0,
-            },
-        },
-        "environment": {
-            "planet_name": None,
-            "weather": "unknown",
-            "time_of_day": "unknown",
-        },
-        "mission": {
-            "current_objective": "evaluate_crash_site",
-        },
-    })
-
-    return {
-        "status": "Atlas run reset",
-        "state": _export_atlas_state(),
-    }
+    if not run_id:
+        return do_reset()
+    with RUN_STATE_LOCK:
+        previous = _export_atlas_state()
+        try:
+            result = do_reset()
+            RUN_STATES[run_id] = _export_atlas_state()
+            return result
+        finally:
+            _restore_atlas_state(previous)
 
 
 @app.get("/atlas/state")
-def export_atlas_state():
-    """Devolve o estado de Atlas para ser incluído num save."""
-    return {
-        "status": "ok",
-        "state": _export_atlas_state(),
-    }
+def export_atlas_state(run_id: str | None = None):
+    """Exporta o estado global legado ou o estado de uma partida específica."""
+    run_id = _normalise_run_id(run_id)
+    if run_id:
+        with RUN_STATE_LOCK:
+            state = RUN_STATES.get(run_id)
+            if state is None:
+                state = _export_atlas_state()
+                RUN_STATES[run_id] = deepcopy(state)
+            return {"status": "ok", "run_id": run_id, "state": deepcopy(state)}
+    return {"status": "ok", "state": _export_atlas_state()}
 
 
 @app.post("/atlas/state")
 def restore_atlas_state(payload: dict):
-    """Restaura o estado de Atlas enviado pelo save do jogo."""
-
+    """Restaura o estado. Opcionalmente aceita run_id para isolar a partida."""
     if not isinstance(payload, dict):
-        raise HTTPException(
-            status_code=422,
-            detail="O corpo tem de ser um objeto JSON.",
-        )
-
+        raise HTTPException(status_code=422, detail="O corpo tem de ser um objeto JSON.")
+    run_id = _normalise_run_id(payload.get("run_id"))
     state = payload.get("state", payload)
-    restored_state = _restore_atlas_state(state)
-
-    return {
-        "status": "Atlas state restored",
-        "state": restored_state,
-    }
+    if not run_id:
+        restored = _restore_atlas_state(state)
+        return {"status": "Atlas state restored", "state": restored}
+    with RUN_STATE_LOCK:
+        previous = _export_atlas_state()
+        try:
+            restored = _restore_atlas_state(state)
+            RUN_STATES[run_id] = deepcopy(restored)
+            return {"status": "Atlas state restored", "run_id": run_id, "state": restored}
+        finally:
+            _restore_atlas_state(previous)
 
 
 # =========================================================
@@ -413,12 +435,11 @@ def root():
 
 @app.post("/chat")
 def chat(data: ChatMessage):
-    response = ask_android(data.message)
+    def ask():
+        return ask_android(data.message)
 
-    return {
-        "message": data.message,
-        "response": response,
-    }
+    response = _run_in_isolated_state(data.run_id, ask)
+    return {"message": data.message, "response": response, "run_id": data.run_id}
 
 
 # =========================================================

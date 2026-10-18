@@ -11,8 +11,9 @@ var modal_layer: CanvasLayer = null
 
 func _ready():
 	process_mode = Node.PROCESS_MODE_ALWAYS
-
 	create_menu()
+	# A sincronização remota decorre em segundo plano e não bloqueia o menu.
+	SaveManager.call_deferred("_sync_remote_saves_in_background")
 
 
 func create_menu():
@@ -209,7 +210,7 @@ func start_first_game():
 		)
 		return
 
-	SaveManager.start_new_run()
+	await SaveManager.start_new_run()
 
 	get_tree().change_scene_to_file(
 		game_scene_path
@@ -217,15 +218,7 @@ func start_first_game():
 
 
 func continue_game():
-	if not SaveManager.has_current_run_save():
-		set_status(
-			"Nenhum autosave disponível."
-		)
-		return
-
-	var prepared = (
-		SaveManager.prepare_current_run_load()
-	)
+	var prepared = await SaveManager.prepare_current_run_load()
 
 	if not prepared:
 		set_status(
@@ -258,7 +251,7 @@ func start_new_game():
 		return
 
 	SaveManager.reset_active_run()
-	SaveManager.start_new_run()
+	await SaveManager.start_new_run()
 
 	get_tree().change_scene_to_file(
 		game_scene_path
@@ -267,6 +260,7 @@ func start_new_game():
 
 func open_load_menu():
 	close_modal()
+	await SaveManager.sync_remote_saves_to_local()
 
 	modal_layer = CanvasLayer.new()
 	modal_layer.layer = 1000
@@ -410,11 +404,7 @@ func create_load_slot_button(
 func load_manual_slot(
 	slot: int
 ):
-	var prepared = (
-		SaveManager.prepare_manual_slot_load(
-			slot
-		)
-	)
+	var prepared = await SaveManager.prepare_manual_slot_load(slot)
 
 	if not prepared:
 		set_status(

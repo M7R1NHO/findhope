@@ -28,15 +28,23 @@ var manual_save_blocks: Dictionary = {}
 
 var backend_state_cache: Dictionary = {}
 var backend_request_in_progress: bool = false
+var remote_save_metadata: Array = []
+var remote_save_metadata_loaded: bool = false
 
 
 func _ready():
 	load_profile()
+	# Não bloquear a inicialização do autoload à espera da rede.
+	call_deferred("_sync_remote_saves_in_background")
 
 	print("")
 	print("SAVE MANAGER READY")
 	print("Menu state: ", get_menu_state())
 	print("Current autosave: ", has_current_run_save())
+
+
+func _sync_remote_saves_in_background() -> void:
+	await sync_remote_saves_to_local()
 
 
 func default_profile() -> Dictionary:
@@ -140,7 +148,7 @@ func start_new_run():
 	print("NEW RUN CREATED")
 	print("Run ID: ", active_run_data["run_id"])
 
-	reset_backend_for_new_run()
+	await reset_backend_for_new_run()
 
 
 func reset_backend_for_new_run() -> void:
@@ -153,7 +161,7 @@ func reset_backend_for_new_run() -> void:
 		ATLAS_RESET_RUN_URL,
 		["Content-Type: application/json"],
 		HTTPClient.METHOD_POST,
-		"{}"
+		JSON.stringify({"run_id": str(active_run_data.get("run_id", ""))})
 	)
 
 	if error != OK:
@@ -181,9 +189,16 @@ func reset_backend_for_new_run() -> void:
 	print("ATLAS BACKEND RESET FOR NEW RUN")
 
 
-func capture_backend_state() -> void:
+func get_backend_state_url() -> String:
+	var run_id := str(active_run_data.get("run_id", "")).strip_edges()
+	if run_id.is_empty():
+		return ATLAS_STATE_URL
+	return ATLAS_STATE_URL + "?run_id=" + run_id.uri_encode()
+
+
+func capture_backend_state() -> bool:
 	if backend_request_in_progress:
-		return
+		return false
 
 	backend_request_in_progress = true
 
@@ -193,7 +208,7 @@ func capture_backend_state() -> void:
 	add_child(request)
 
 	var error := request.request(
-		ATLAS_STATE_URL
+		get_backend_state_url()
 	)
 
 	if error != OK:
@@ -204,7 +219,7 @@ func capture_backend_state() -> void:
 
 		request.queue_free()
 		backend_request_in_progress = false
-		return
+		return false
 
 	var result = await request.request_completed
 
@@ -216,7 +231,7 @@ func capture_backend_state() -> void:
 			"Falha ao obter o estado do backend. HTTP: "
 			+ str(result[1])
 		)
-		return
+		return false
 
 	var parsed = JSON.parse_string(
 		result[3].get_string_from_utf8()
@@ -226,13 +241,13 @@ func capture_backend_state() -> void:
 		push_warning(
 			"O backend devolveu uma resposta inválida."
 		)
-		return
+		return false
 
 	if not (parsed.get("state", {}) is Dictionary):
 		push_warning(
 			"O backend devolveu um estado inválido."
 		)
-		return
+		return false
 
 	backend_state_cache = parsed["state"].duplicate(true)
 
@@ -243,12 +258,13 @@ func capture_backend_state() -> void:
 		active_run_data["atlas"]["backend_state"] = (
 			backend_state_cache.duplicate(true)
 		)
+	return true
 
 
-func restore_backend_state(state: Dictionary) -> void:
+func restore_backend_state(state: Dictionary) -> bool:
 	if state.is_empty():
 		await reset_backend_for_new_run()
-		return
+		return true
 
 	var request := HTTPRequest.new()
 	request.timeout = 10.0
@@ -256,6 +272,7 @@ func restore_backend_state(state: Dictionary) -> void:
 	add_child(request)
 
 	var body := JSON.stringify({
+		"run_id": str(active_run_data.get("run_id", "")),
 		"state": state
 	})
 
@@ -273,7 +290,7 @@ func restore_backend_state(state: Dictionary) -> void:
 		)
 
 		request.queue_free()
-		return
+		return false
 
 	var result = await request.request_completed
 
@@ -284,11 +301,12 @@ func restore_backend_state(state: Dictionary) -> void:
 			"Falha ao restaurar o estado do backend. HTTP: "
 			+ str(result[1])
 		)
-		return
+		return false
 
 	backend_state_cache = state.duplicate(true)
 
 	print("ATLAS BACKEND STATE RESTORED")
+	return true
 
 
 func reset_active_run():
@@ -356,6 +374,133 @@ func save_snapshot_remote(snapshot: Dictionary, save_type: String, slot: int) ->
 	return true
 
 
+func _sync_snapshot_remote_background(snapshot: Dictionary, save_type: String, slot: int) -> void:
+	var remote_ok: bool = await save_snapshot_remote(snapshot, save_type, slot)
+	if not remote_ok:
+		push_warning("Save local concluído; a sincronização remota falhou para " + save_type + " " + str(slot) + ".")
+
+
+# =========================================================
+# CARREGAMENTO REMOTO (SUPABASE) + FALLBACK LOCAL
+# =========================================================
+
+func fetch_remote_snapshot(save_type: String, slot: int) -> Dictionary:
+	var profile_key := str(profile.get("profile_key", "")).strip_edges()
+	if profile_key.length() < 32:
+		push_warning("Não foi possível carregar o save remoto: profile_key inválida.")
+		return {}
+
+	var slot_type := "auto" if save_type == "autosave" else "manual"
+	var slot_number := 0 if slot_type == "auto" else slot
+	var url := SAVES_API_URL + "/" + profile_key + "/" + slot_type + "/" + str(slot_number)
+
+	var request := HTTPRequest.new()
+	request.timeout = 15.0
+	add_child(request)
+	var error := request.request(url)
+	if error != OK:
+		push_warning("Não foi possível iniciar o carregamento remoto: " + str(error))
+		request.queue_free()
+		return {}
+
+	var result = await request.request_completed
+	request.queue_free()
+	if int(result[1]) != 200:
+		if int(result[1]) != 404:
+			push_warning("Falha ao carregar save remoto. HTTP: " + str(result[1]))
+		return {}
+
+	var parsed = JSON.parse_string(result[3].get_string_from_utf8())
+	if not (parsed is Dictionary):
+		push_warning("O servidor devolveu uma resposta inválida ao carregar o save.")
+		return {}
+
+	var snapshot = parsed.get("snapshot", {})
+	if not (snapshot is Dictionary) or not validate_snapshot(snapshot):
+		push_warning("O save remoto não contém um snapshot válido.")
+		return {}
+	return snapshot.duplicate(true)
+
+
+func prepare_snapshot_for_load(snapshot: Dictionary, save_type: String, slot: int) -> bool:
+	if not validate_snapshot(snapshot):
+		return false
+
+	pending_snapshot = snapshot.duplicate(true)
+	active_run_data = snapshot.get("run_data", default_run_data()).duplicate(true)
+	var run_data_atlas = active_run_data.get("atlas", {})
+	if not (run_data_atlas is Dictionary):
+		run_data_atlas = {}
+	var state = snapshot.get("atlas_backend_state", run_data_atlas.get("backend_state", {}))
+	if not (state is Dictionary):
+		state = {}
+	backend_state_cache = state.duplicate(true)
+	manual_save_blocks.clear()
+	load_prepared.emit(save_type, slot)
+	return true
+
+
+func prepare_current_run_load_any() -> bool:
+	# Primeiro tenta a cópia remota; se não existir ou a rede falhar, usa o ficheiro local.
+	var remote_snapshot := await fetch_remote_snapshot("autosave", 0)
+	if not remote_snapshot.is_empty():
+		if not write_json_file(CURRENT_RUN_PATH, remote_snapshot):
+			push_warning("O autosave remoto foi carregado, mas não foi possível atualizar a cópia local.")
+		return prepare_snapshot_for_load(remote_snapshot, "autosave", 0)
+	# Fallback local sem chamar o wrapper, para evitar recursividade.
+	var local_snapshot := read_json_file(CURRENT_RUN_PATH)
+	if local_snapshot.is_empty():
+		return false
+	return prepare_snapshot_for_load(local_snapshot, "autosave", 0)
+
+
+func prepare_manual_slot_load_any(slot: int) -> bool:
+	if not is_valid_slot(slot):
+		return false
+	var remote_snapshot := await fetch_remote_snapshot("manual", slot)
+	if not remote_snapshot.is_empty():
+		if not write_json_file(get_manual_slot_path(slot), remote_snapshot):
+			push_warning("O slot remoto foi carregado, mas não foi possível atualizar a cópia local.")
+		return prepare_snapshot_for_load(remote_snapshot, "manual", slot)
+	# Fallback local sem chamar o wrapper, para evitar recursividade.
+	var local_snapshot := read_json_file(get_manual_slot_path(slot))
+	if local_snapshot.is_empty():
+		return false
+	return prepare_snapshot_for_load(local_snapshot, "manual", slot)
+
+
+func list_remote_saves() -> Array:
+	var profile_key := str(profile.get("profile_key", "")).strip_edges()
+	if profile_key.length() < 32:
+		return []
+	var request := HTTPRequest.new()
+	request.timeout = 15.0
+	add_child(request)
+	var error := request.request(SAVES_API_URL + "/" + profile_key)
+	if error != OK:
+		push_warning("Não foi possível iniciar a listagem de saves remotos: " + str(error))
+		request.queue_free()
+		return []
+	var result = await request.request_completed
+	request.queue_free()
+	if int(result[1]) != 200:
+		push_warning("Falha ao listar saves remotos. HTTP: " + str(result[1]))
+		return []
+	var parsed = JSON.parse_string(result[3].get_string_from_utf8())
+	if not (parsed is Dictionary):
+		return []
+	var saves = parsed.get("saves", [])
+	remote_save_metadata = saves.duplicate(true) if saves is Array else []
+	remote_save_metadata_loaded = true
+	return remote_save_metadata.duplicate(true)
+
+
+func sync_remote_saves_to_local() -> void:
+	# A interface só precisa dos metadados. O snapshot completo é descarregado
+	# apenas quando o jogador escolhe um slot, evitando vários pedidos em série.
+	await list_remote_saves()
+
+
 func autosave(
 	checkpoint_id: String
 ) -> bool:
@@ -373,7 +518,9 @@ func autosave(
 	active_run_data["last_checkpoint"] = checkpoint_id
 	active_run_data["updated_at"] = current_datetime()
 
-	await capture_backend_state()
+	if not await capture_backend_state():
+		save_failed.emit("atlas_state_capture_failed")
+		return false
 
 	var snapshot = create_snapshot(
 		"autosave",
@@ -393,7 +540,9 @@ func autosave(
 
 		return false
 
-	await save_snapshot_remote(snapshot, "autosave", 0)
+	# O save local já está concluído. Sincronizar em segundo plano para não
+	# bloquear o jogo/menu enquanto o servidor responde.
+	call_deferred("_sync_snapshot_remote_background", snapshot.duplicate(true), "autosave", 0)
 
 	print("")
 	print("AUTOSAVE COMPLETE")
@@ -436,7 +585,9 @@ func save_manual_slot(
 
 	active_run_data["updated_at"] = current_datetime()
 
-	await capture_backend_state()
+	if not await capture_backend_state():
+		save_failed.emit("atlas_state_capture_failed")
+		return false
 
 	var snapshot = create_snapshot(
 		"manual",
@@ -458,7 +609,9 @@ func save_manual_slot(
 
 		return false
 
-	await save_snapshot_remote(snapshot, "manual", slot)
+	# O save local já está concluído. A sincronização remota não deve bloquear
+	# o botão Confirmar nem a interface de pausa.
+	call_deferred("_sync_snapshot_remote_background", snapshot.duplicate(true), "manual", slot)
 
 	print("")
 	print("MANUAL SAVE COMPLETE")
@@ -622,99 +775,10 @@ func get_node_save_id(
 
 
 func prepare_current_run_load() -> bool:
-	if not has_current_run_save():
-		return false
+	return await prepare_current_run_load_any()
 
-	var snapshot = read_json_file(
-		CURRENT_RUN_PATH
-	)
-
-	if not validate_snapshot(
-		snapshot
-	):
-		return false
-
-	pending_snapshot = (
-		snapshot.duplicate(true)
-	)
-
-	active_run_data = (
-		snapshot.get(
-			"run_data",
-			default_run_data()
-		)
-		.duplicate(true)
-	)
-
-	backend_state_cache = (
-		snapshot.get(
-			"atlas_backend_state",
-			active_run_data.get("atlas", {}).get("backend_state", {})
-		)
-		.duplicate(true)
-	)
-
-	manual_save_blocks.clear()
-
-	load_prepared.emit(
-		"autosave",
-		0
-	)
-
-	return true
-
-
-func prepare_manual_slot_load(
-	slot: int
-) -> bool:
-	if not is_valid_slot(slot):
-		return false
-
-	var path = get_manual_slot_path(
-		slot
-	)
-
-	if not FileAccess.file_exists(path):
-		return false
-
-	var snapshot = read_json_file(
-		path
-	)
-
-	if not validate_snapshot(
-		snapshot
-	):
-		return false
-
-	pending_snapshot = (
-		snapshot.duplicate(true)
-	)
-
-	active_run_data = (
-		snapshot.get(
-			"run_data",
-			default_run_data()
-		)
-		.duplicate(true)
-	)
-
-	backend_state_cache = (
-		snapshot.get(
-			"atlas_backend_state",
-			active_run_data.get("atlas", {}).get("backend_state", {})
-		)
-		.duplicate(true)
-	)
-
-	manual_save_blocks.clear()
-
-	load_prepared.emit(
-		"manual",
-		slot
-	)
-
-	return true
-
+func prepare_manual_slot_load(slot: int) -> bool:
+	return await prepare_manual_slot_load_any(slot)
 
 func has_pending_load() -> bool:
 	return not pending_snapshot.is_empty()
@@ -783,14 +847,15 @@ func load_prepared_scene(
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	await apply_pending_snapshot()
+	if not await apply_pending_snapshot():
+		return false
 
 	return true
 
 
-func apply_pending_snapshot() -> void:
+func apply_pending_snapshot() -> bool:
 	if pending_snapshot.is_empty():
-		return
+		return false
 
 	var saved_nodes: Dictionary = (
 		pending_snapshot.get(
@@ -843,9 +908,9 @@ func apply_pending_snapshot() -> void:
 		)
 
 	if saved_backend_state is Dictionary:
-		await restore_backend_state(
-			saved_backend_state
-		)
+		if not await restore_backend_state(saved_backend_state):
+			save_failed.emit("atlas_state_restore_failed")
+			return false
 
 	pending_snapshot = {}
 
@@ -853,6 +918,7 @@ func apply_pending_snapshot() -> void:
 	print("SAVE SNAPSHOT APPLIED")
 
 	load_applied.emit()
+	return true
 
 
 func find_saveable_node(
@@ -878,54 +944,48 @@ func has_current_run_save() -> bool:
 	)
 
 
-func has_manual_slot(
-	slot: int
-) -> bool:
+func has_manual_slot(slot: int) -> bool:
 	if not is_valid_slot(slot):
 		return false
+	if FileAccess.file_exists(get_manual_slot_path(slot)):
+		return true
+	for entry in remote_save_metadata:
+		if not (entry is Dictionary):
+			continue
+		if str(entry.get("slot_type", "")) == "manual" and int(entry.get("slot_number", 0)) == slot:
+			return true
+	return false
 
-	return FileAccess.file_exists(
-		get_manual_slot_path(slot)
-	)
 
-
-func get_manual_slot_info(
-	slot: int
-) -> Dictionary:
-	if not has_manual_slot(slot):
+func get_manual_slot_info(slot: int) -> Dictionary:
+	if not is_valid_slot(slot):
 		return {}
-
-	var snapshot = read_json_file(
-		get_manual_slot_path(slot)
-	)
-
-	if snapshot.is_empty():
-		return {}
-
-	var run_data: Dictionary = snapshot.get(
-		"run_data",
-		{}
-	)
-
-	return {
-		"slot": slot,
-		"saved_at": snapshot.get(
-			"saved_at",
-			""
-		),
-		"checkpoint": snapshot.get(
-			"checkpoint",
-			""
-		),
-		"run_id": run_data.get(
-			"run_id",
-			""
-		),
-		"player_profile": run_data.get(
-			"player_profile",
-			{}
-		)
-	}
+	# Preferir o snapshot local, se existir, para mostrar informação detalhada.
+	if FileAccess.file_exists(get_manual_slot_path(slot)):
+		var snapshot: Dictionary = read_json_file(get_manual_slot_path(slot))
+		if not snapshot.is_empty():
+			var run_data: Dictionary = snapshot.get("run_data", {})
+			return {
+				"slot": slot,
+				"saved_at": snapshot.get("saved_at", ""),
+				"checkpoint": snapshot.get("checkpoint", ""),
+				"run_id": run_data.get("run_id", ""),
+				"player_profile": run_data.get("player_profile", {})
+			}
+	# Sem cache local, usar os metadados recebidos da API.
+	for entry in remote_save_metadata:
+		if not (entry is Dictionary):
+			continue
+		if str(entry.get("slot_type", "")) != "manual" or int(entry.get("slot_number", 0)) != slot:
+			continue
+		return {
+			"slot": slot,
+			"saved_at": str(entry.get("updated_at", entry.get("created_at", ""))),
+			"checkpoint": str(entry.get("save_name", "Save manual")),
+			"run_id": str(entry.get("run_id", "")),
+			"player_profile": {}
+		}
+	return {}
 
 
 func get_all_manual_slots() -> Array:

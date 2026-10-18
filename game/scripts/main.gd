@@ -203,6 +203,7 @@ func send_message_to_atlas(
 	]
 
 	var body = JSON.stringify({
+		"run_id": str(SaveManager.active_run_data.get("run_id", "")),
 		"message": message,
 		"current_room": current_room,
 		"current_room_map_info": room_map_info,
