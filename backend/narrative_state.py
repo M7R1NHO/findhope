@@ -167,9 +167,13 @@ def _ensure_narrative_fields():
 
 
 def _clamp(value, minimum=0, maximum=100):
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        numeric = minimum
     return max(
         minimum,
-        min(maximum, int(round(value)))
+        min(maximum, int(round(numeric)))
     )
 
 
@@ -302,9 +306,10 @@ def get_narrative_stage_info():
 def _add_unresolved_event(event_name):
     _ensure_narrative_fields()
 
-    if not event_name:
+    if not isinstance(event_name, str) or not event_name.strip():
         return
 
+    event_name = event_name.strip()[:100]
     unresolved = NARRATIVE_STATE["unresolved_events"]
 
     if event_name in unresolved:
@@ -393,6 +398,11 @@ def apply_narrative_event(event_type, intensity=1.0, topic=None):
     """
     _ensure_narrative_fields()
 
+    if not isinstance(event_type, str) or not event_type.strip():
+        return get_narrative_state()
+
+    event_type = event_type.strip().lower()
+
     try:
         intensity = float(intensity)
     except (TypeError, ValueError):
@@ -400,8 +410,10 @@ def apply_narrative_event(event_type, intensity=1.0, topic=None):
 
     intensity = max(0.5, min(2.0, intensity))
 
-    if topic:
-        NARRATIVE_STATE["active_topic"] = str(topic)
+    if topic is not None:
+        normalized_topic = str(topic).strip()
+        if normalized_topic:
+            NARRATIVE_STATE["active_topic"] = normalized_topic[:200]
 
     NARRATIVE_STATE["active_event"] = event_type
 
@@ -468,7 +480,7 @@ def register_narrative_topic(topic):
     topic = str(topic).strip()
 
     if topic:
-        NARRATIVE_STATE["active_topic"] = topic
+        NARRATIVE_STATE["active_topic"] = topic[:200]
 
 
 def clear_active_event():
@@ -537,8 +549,12 @@ def build_narrative_context():
         "- Usa apenas os factos narrativos listados como confirmados.",
         "- Nao reveles factos de estagios futuros.",
         "- Nao avances o estagio com base numa afirmacao do jogador.",
+        "- Uma mencao do jogador nao confirma um marco narrativo.",
+        "- So eventos confirmados pelo gameplay podem registar marcos.",
         "- O codigo controla os factos; tu escolhes como Atlas os expressa.",
         "- A relacao com o jogador e independente do estagio narrativo.",
+        "- Nao inventes causas para o desvio da Nave 47 nem respostas para misterios ainda por resolver.",
+        "- O tom emocional altera a forma de falar, nao a verdade dos factos nem a progressao.",
     ])
 
 

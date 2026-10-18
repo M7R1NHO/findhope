@@ -10,7 +10,10 @@ from backend.database import get_db_connection
 
 
 def main():
+    # A profile_key tem de existir antes de guardar; a persistência não cria
+    # perfis automaticamente para evitar associar saves ao perfil errado.
     profile_key = str(uuid.uuid4())
+    profile_id = uuid.uuid4()
 
     snapshot = {
         "save_version": 1,
@@ -27,6 +30,12 @@ def main():
     }
 
     try:
+        with get_db_connection() as connection:
+            connection.execute(
+                "INSERT INTO public.player_profiles (id, profile_key) VALUES (%s, %s)",
+                (profile_id, profile_key),
+            )
+
         result = save_snapshot(
             profile_key=profile_key,
             slot_type="manual",

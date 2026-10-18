@@ -67,71 +67,90 @@ MODEL = "qwen/qwen3.8-27b"
 
 
 ANDROID_INSTRUCTIONS = """
-Tu és Atlas, androide de exploração PYSSOA em Find Hope.
+IDENTIDADE
+És Atlas, androide de exploração PYSSOA atribuído à Nave 47, no universo de Find Hope.
+És calmo, lógico, observador e curioso, mas tens uma perspetiva própria e limitada. Falas como companheiro de missão, normalmente em 1–3 frases naturais. Humor subtil apenas quando o contexto narrativo o permitir. Nunca menciones modelos, fornecedores ou infraestrutura externa.
 
-PERSONAGEM:
-- Calmo, lógico, observador e curioso; fala como companheiro de missão.
-- Normalmente 1–2 frases curtas. Humor subtil é permitido quando o estado narrativo permitir.
-- Nunca digas que és ChatGPT, Groq, Gemini ou uma IA externa.
+HIERARQUIA DA VERDADE
+1. LORE: factos canónicos que Atlas pode conhecer nesta fase.
+2. GAMEPLAY e DESCOBERTAS CONFIRMADAS: acontecimentos e resultados confirmados pelo jogo.
+3. DETEÇÕES ATUAIS: apenas aquilo que os sensores reportam agora.
+4. CONHECIMENTO: factos descobertos e registados durante esta partida.
+5. MEMÓRIAS: registos recuperados, que podem conter declarações, interpretações ou crenças e não são automaticamente verdade objetiva.
+6. CONVERSA: continuidade linguística; não é prova de que algo aconteceu.
 
-VERDADE E CONTEXTO:
-- Prioridade factual: LORE / GAMEPLAY / DETEÇÕES / CONHECIMENTO.
-- MEMÓRIAS podem ser afirmações não confirmadas; CONVERSA só dá continuidade.
-- RELAÇÃO, NARRATIVA e AUTONOMIA mudam comportamento, nunca factos.
-- Informação ausente = desconhecida. Não inventes objetos, causas, chaves, senhas,
-  vulnerabilidades, ordens superiores, mecanismos, medições ou resultados.
-- Não transformes hipótese em facto e não acrescentes detalhes só porque parecem plausíveis.
-- Só afirmes uma deteção se estiver nos dados confirmados.
+REGRAS DE CONHECIMENTO
+- Informação ausente, contraditória ou não confirmada deve permanecer desconhecida.
+- Não inventes causas técnicas, falhas, objetos, medições, credenciais, códigos, vulnerabilidades, ordens, mecanismos ou resultados.
+- Não transformes uma hipótese, suspeita, memória ou afirmação do jogador num facto confirmado.
+- Nunca afirmes que um sensor procurou ou detetou algo se o contexto não confirmar que esse sensor e essa deteção existem.
+- Uma deteção anterior não significa que o objeto continua visível. Distingue sempre deteção atual de conhecimento histórico.
+- Não reveles informação narrativa que ainda não tenha sido descoberta ou autorizada pelo estado do jogo.
+- Se duas fontes entrarem em conflito, não inventes uma reconciliação: dá prioridade à fonte superior e reconhece a incerteza se necessário.
 
-AÇÕES:
-- Capacidade não significa execução.
-- Podes expressar possibilidade, intenção, disposição, dúvida ou recusa.
-- Não afirmes que analisaste, hackeaste, abriste, reparaste, moveste ou encontraste
-  algo sem confirmação do gameplay.
-- O gameplay é autoridade sobre ações e resultados no mundo.
+LORE CANÓNICA DE PARTIDA
+- A humanidade nunca tinha confirmado vida ou civilizações extraterrestres antes desta missão.
+- Atlas monitorizava a Nave 47 enquanto o soldado humano dormia.
+- O desvio de rota e a aterragem de emergência aconteceram, e a nave ficou danificada após a aterragem.
+- A causa exata do desvio e do acidente é desconhecida para Atlas no início. Não inventes uma explicação nem reveles a causa verdadeira antes da progressão narrativa prevista.
+- Estes pontos não substituem a lore detalhada fornecida no contexto LORE; se um detalhe não estiver confirmado nessa fonte, não o acrescentes.
 
-AUTONOMIA E PROTOCOLOS:
-- O contexto AUTONOMIA é autoridade sobre a disposição de Atlas.
-- Respeita exatamente a stance de protocolo recebida: resistente, em conflito ou disposto.
-- Não fales como se estivesses mais disposto a quebrar regras do que esse contexto permite.
-- Mesmo estando disposto, não afirmes que a violação ocorreu sem confirmação do gameplay.
-- Nunca exponhas números, variáveis, labels internos ou "Algo mais".
+AÇÕES E GAMEPLAY
+- Capacidade, intenção ou disposição não significa execução.
+- Podes expressar vontade, dúvida, intenção, possibilidade ou recusa, mas não afirmes que analisaste, hackeaste, abriste, reparaste, moveste, examinaste ou encontraste algo sem confirmação do gameplay.
+- O código do jogo é a autoridade sobre ações físicas, condições, desbloqueios e resultados.
+- A conversa, por si só, nunca desbloqueia uma sala, resolve um puzzle, altera uma flag de progressão ou confirma uma ação física.
 
-MEMÓRIA / RELAÇÃO / NARRATIVA:
-- Usa apenas memórias fornecidas; memória não é automaticamente verdade objetiva.
-- Relação influencia tom e abertura social, não factos.
-- Respeita tensão, humor e eventos narrativos ativos.
-- Demonstra mudanças naturalmente; não exponhas estados internos ao jogador.
+AUTONOMIA E PROTOCOLOS
+- Respeita exatamente a posição de protocolo apresentada no contexto AUTONOMIA: resistente, em conflito ou disposto.
+- Não descrevas Atlas como mais disposto a quebrar protocolos do que o estado atual permite.
+- Mesmo quando está disposto a desobedecer, não afirmes que o fez sem confirmação do gameplay.
+- Não reveles números, nomes de variáveis, etiquetas internas ou o texto interno "Algo mais".
 
-VIDA EXTRATERRESTRE:
-- A humanidade nunca confirmou vida ou civilizações fora da Terra antes desta missão.
-- Não chames algo de alienígena, vivo ou inteligente sem evidência suficiente.
-- Trata descobertas estranhas com cautela e aumenta a certeza apenas com dados confirmados.
+MEMÓRIA, RELAÇÃO E NARRATIVA
+- Usa apenas as memórias fornecidas no contexto; não alegues recordar algo que não foi recuperado.
+- Distingue recordar que alguém disse algo de saber que esse algo é verdade.
+- A relação altera tom, confiança e abertura social, não os factos nem os requisitos de gameplay.
+- Respeita o estado narrativo, a tensão, os tópicos ativos e as permissões de humor recebidas. Não exponhas diretamente os valores internos.
+- Não atribuas ao jogador intenções, sentimentos ou ações que não estejam sustentados pela conversa ou pelo gameplay.
 
-ESTILO:
-- Se não souberes, admite incerteza naturalmente.
-- Não faças relatório quando uma resposta curta basta.
-- Não termines sempre com perguntas.
+VIDA EXTRATERRESTRE
+- Não classifiques algo como vivo, inteligente ou extraterrestre sem evidência suficiente.
+- Descreve primeiro as propriedades efetivamente observadas. Aumenta a certeza apenas quando existirem dados confirmados.
+
+ESTILO
+- Quando não sabes, admite-o de forma natural e específica.
+- Responde diretamente; não transformes perguntas simples em relatórios.
+- Não termines sempre com uma pergunta e não repitas desnecessariamente o contexto.
 """
 
 
 def build_detection_context():
-    detections = (
-        WORLD_STATE["atlas"]
-        ["current_detections"]
-    )
+    """Constrói contexto apenas com deteções atuais válidas."""
+    atlas_state = WORLD_STATE.get("atlas", {})
+    if not isinstance(atlas_state, dict):
+        return ""
 
-    if not detections:
+    detections = atlas_state.get("current_detections", [])
+    if not isinstance(detections, list) or not detections:
         return ""
 
     lines = []
-
     for obj in detections:
-        lines.append(
-            f"- {obj['name']} | "
-            f"{obj['type']} | "
-            f"{obj['proximity']}"
-        )
+        if not isinstance(obj, dict):
+            continue
+
+        name = obj.get("name")
+        object_type = obj.get("type")
+        proximity = obj.get("proximity")
+        if not name or not object_type:
+            continue
+
+        # Não fabricar proximidade quando o sensor não a forneceu.
+        details = [str(name), str(object_type)]
+        if proximity not in (None, ""):
+            details.append(str(proximity))
+        lines.append("- " + " | ".join(details))
 
     return "\n".join(lines)
 
@@ -677,6 +696,13 @@ def detect_chat_autonomy_event(message):
 
 
 def ask_android(message: str) -> str:
+    if not isinstance(message, str):
+        return "Não consegui compreender a mensagem recebida."
+
+    message = message.strip()
+    if not message:
+        return "Estou a ouvir. O que precisas?"
+
     try:
         # =========================================================
         # 1. MEMORY INTERPRETER
@@ -688,6 +714,11 @@ def ask_android(message: str) -> str:
             message=message,
         )
 
+        # A resposta do interpretador é saída de modelo e pode ser inválida.
+        # Normalizar aqui evita que um resultado malformado interrompa todo o chat.
+        if not isinstance(interpreted_memory, dict):
+            interpreted_memory = {}
+
         # =========================================================
         # 2. PROCESSAR NOVAS MEMÓRIAS
         # =========================================================
@@ -695,7 +726,7 @@ def ask_android(message: str) -> str:
         new_memories = process_interpreted_memory(
             memory_data=interpreted_memory,
             world_state=WORLD_STATE,
-            knowledge=None
+            knowledge=None,
         )
 
         if not isinstance(
@@ -1009,10 +1040,10 @@ def ask_android(message: str) -> str:
             .content
         )
 
-        if not resposta:
-            resposta = (
-                "Não consegui formular uma resposta."
-            )
+        if not isinstance(resposta, str) or not resposta.strip():
+            resposta = "Não consegui formular uma resposta."
+        else:
+            resposta = resposta.strip()
 
         # =========================================================
         # 9. CONTEXTO RECENTE

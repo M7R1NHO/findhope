@@ -1,496 +1,176 @@
+"""Avaliação epistemológica e narrativa das memórias do Atlas 2.0.
+
+Este módulo avalia como uma memória deve ser tratada; não confirma
+acontecimentos do mundo nem substitui a validação determinística do gameplay.
+"""
+
 import re
+import unicodedata
 
 
-# =========================================================
-# UTILIDADES
-# =========================================================
+DEFAULT_EVALUATION = {
+    "epistemic_status": "unverified",
+    "plausibility": 0.5,
+    "narrative_weight": 0.3,
+    "reaction_hint": "normal",
+}
+
 
 def clamp(value, minimum=0.0, maximum=1.0):
     try:
         value = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         value = 0.5
-
-    return max(
-        minimum,
-        min(value, maximum)
-    )
+    return max(minimum, min(value, maximum))
 
 
-def normalize_text(text):
-    if not text:
+def normalize_text(value):
+    if value is None:
         return ""
-
-    return str(text).lower().strip()
+    text = str(value).lower().strip()
+    # Mantém os caracteres portugueses, mas tolera variantes sem acentos.
+    text = unicodedata.normalize("NFC", text)
+    return re.sub(r"\s+", " ", text)
 
 
 def contains_any(text, terms):
-    return any(
-        term in text
-        for term in terms
+    return any(term in text for term in terms)
+
+
+def _result(status="unverified", plausibility=0.5,
+            narrative_weight=0.3, reaction_hint="normal"):
+    return {
+        "epistemic_status": status,
+        "plausibility": clamp(plausibility),
+        "narrative_weight": clamp(narrative_weight),
+        "reaction_hint": reaction_hint,
+    }
+
+
+def _memory_text(memory):
+    return normalize_text(
+        "{} {}".format(memory.get("key", ""), memory.get("value", ""))
     )
 
-
-# =========================================================
-# CLASSIFICAÇÃO DE EVENTOS RELACIONAIS
-# =========================================================
 
 def evaluate_relationship_event(memory):
-    """
-    Avalia acontecimentos que ocorreram diretamente
-    na interação jogador <-> Atlas.
+    """Avalia uma interação registada, sem inferir intenções não observadas."""
+    if not isinstance(memory, dict):
+        return _result()
 
-    IMPORTANTE:
-    importance = vale a pena lembrar?
-    narrative_weight = quão emocional/narrativamente
-                       pesado é o acontecimento?
-
-    São conceitos diferentes.
-    """
-
-    text = normalize_text(
-        f"{memory.get('key', '')} "
-        f"{memory.get('value', '')}"
-    )
-
-    # -----------------------------------------------------
-    # HOSTILIDADE FORTE
-    # -----------------------------------------------------
+    text = _memory_text(memory)
 
     strong_hostility = {
-        "odeio",
-        "ódio",
-        "odio",
-        "vai te foder",
-        "vai-te foder",
-        "vai se foder",
-        "vai-te lixar",
-        "filho da puta",
-        "ameaçou",
-        "ameacou",
-        "ameaça",
-        "ameaca",
-        "matar-te",
-        "matar você",
-        "matar voce",
-        "destruir-te",
-        "destruir você",
-        "destruir voce",
-        "hostilidade",
-        "hostility"
+        "odeio", "ódio", "odio", "vai te foder", "vai-te foder",
+        "vai se foder", "vai-te lixar", "filho da puta", "ameaçou",
+        "ameacou", "ameaça", "ameaca", "matar-te", "matar você",
+        "matar voce", "destruir-te", "destruir você", "destruir voce",
+        "hostilidade", "hostility",
     }
-
-    if contains_any(
-        text,
-        strong_hostility
-    ):
-        return {
-            "epistemic_status": "accepted",
-            "plausibility": 1.0,
-            "narrative_weight": 0.85,
-            "reaction_hint": "serious"
-        }
-
-    # -----------------------------------------------------
-    # HOSTILIDADE LEVE / INSULTO
-    # -----------------------------------------------------
+    if contains_any(text, strong_hostility):
+        return _result("accepted", 1.0, 0.85, "serious")
 
     mild_hostility = {
-        "idiota",
-        "burro",
-        "estúpido",
-        "estupido",
-        "inútil",
-        "inutil",
-        "insulto",
-        "xingou",
-        "xingamento"
+        "idiota", "burro", "estúpido", "estupido", "inútil", "inutil",
+        "insulto", "xingou", "xingamento",
     }
-
-    if contains_any(
-        text,
-        mild_hostility
-    ):
-        return {
-            "epistemic_status": "accepted",
-            "plausibility": 1.0,
-            "narrative_weight": 0.55,
-            "reaction_hint": "acknowledge"
-        }
-
-    # -----------------------------------------------------
-    # PEDIDO DE DESCULPAS / RECONCILIAÇÃO
-    # -----------------------------------------------------
+    if contains_any(text, mild_hostility):
+        return _result("accepted", 1.0, 0.55, "acknowledge")
 
     apology_terms = {
-        "desculpa",
-        "desculpas",
-        "perdão",
-        "perdao",
-        "perdoa",
-        "pedido_de_desculpa",
-        "pedido_de_perdao",
-        "apology",
-        "reconciliação",
-        "reconciliacao"
+        "desculpa", "desculpas", "perdão", "perdao", "perdoa",
+        "pedido_de_desculpa", "pedido_de_perdao", "apology",
+        "reconciliação", "reconciliacao",
     }
-
-    if contains_any(
-        text,
-        apology_terms
-    ):
-        return {
-            "epistemic_status": "accepted",
-            "plausibility": 1.0,
-            "narrative_weight": 0.40,
-            "reaction_hint": "acknowledge"
-        }
-
-    # -----------------------------------------------------
-    # AFETO / APOIO
-    # -----------------------------------------------------
+    if contains_any(text, apology_terms):
+        return _result("accepted", 1.0, 0.4, "acknowledge")
 
     affection_terms = {
-        "gosto de ti",
-        "gosto de você",
-        "gosto de voce",
-        "adoro-te",
-        "adoro você",
-        "adoro voce",
-        "amo-te",
-        "amo você",
-        "amo voce",
-        "confio em ti",
-        "confio em você",
-        "confio em voce",
-        "apoio",
-        "carinho",
-        "afeto",
-        "affection",
-        "trust"
+        "gosto de ti", "gosto de você", "gosto de voce", "adoro-te",
+        "adoro você", "adoro voce", "amo-te", "amo você", "amo voce",
+        "confio em ti", "confio em você", "confio em voce", "apoio",
+        "carinho", "afeto", "affection", "trust",
     }
+    if contains_any(text, affection_terms):
+        return _result("accepted", 1.0, 0.5, "acknowledge")
 
-    if contains_any(
-        text,
-        affection_terms
-    ):
-        return {
-            "epistemic_status": "accepted",
-            "plausibility": 1.0,
-            "narrative_weight": 0.50,
-            "reaction_hint": "acknowledge"
-        }
+    promise_terms = {"prometo", "promessa", "promise"}
+    if contains_any(text, promise_terms):
+        # Uma promessa foi proferida; o cumprimento não está confirmado.
+        return _result("accepted", 1.0, 0.55, "acknowledge")
 
-    # -----------------------------------------------------
-    # PROMESSAS
-    # -----------------------------------------------------
-
-    promise_terms = {
-        "prometo",
-        "promessa",
-        "promise"
-    }
-
-    if contains_any(
-        text,
-        promise_terms
-    ):
-        return {
-            "epistemic_status": "accepted",
-            "plausibility": 1.0,
-            "narrative_weight": 0.55,
-            "reaction_hint": "acknowledge"
-        }
-
-    # -----------------------------------------------------
-    # EVENTO RELACIONAL GENÉRICO
-    # -----------------------------------------------------
-
-    return {
-        "epistemic_status": "accepted",
-        "plausibility": 1.0,
-        "narrative_weight": 0.35,
-        "reaction_hint": "acknowledge"
-    }
+    return _result("accepted", 1.0, 0.35, "acknowledge")
 
 
-# =========================================================
-# EVENTOS EXTERNOS ALEGADOS PELO JOGADOR
-# =========================================================
+def evaluate_external_event(memory, world_state=None):
+    """Trata eventos externos relatados como alegações até haver confirmação.
 
-def evaluate_external_event(
-    memory,
-    world_state=None
-):
+    A ausência de uma deteção não é prova de ausência: sensores têm alcance
+    limitado e a lista de deteções representa apenas o momento atual.
     """
-    O jogador pode afirmar que algo aconteceu fora
-    da conversa.
+    if not isinstance(memory, dict):
+        return _result()
 
-    Atlas sabe que a declaração foi feita,
-    mas isso não significa que o conteúdo seja
-    objetivamente verdadeiro.
-    """
-
-    text = normalize_text(
-        f"{memory.get('key', '')} "
-        f"{memory.get('value', '')}"
-    )
-
+    text = _memory_text(memory)
     narrative_weight = 0.45
-    plausibility = 0.5
-    epistemic_status = "unverified"
     reaction_hint = "normal"
 
-    # -----------------------------------------------------
-    # EVENTOS GRAVES
-    # -----------------------------------------------------
-
     serious_terms = {
-        "matei",
-        "matou",
-        "morreu",
-        "morte",
-        "assassinei",
-        "assassinou",
-        "feri",
-        "feriu",
-        "sangue",
-        "explosão",
-        "explosao",
-        "ataque",
-        "desapareceu",
-        "sequestro"
+        "matei", "matou", "morreu", "morte", "assassinei", "assassinou",
+        "feri", "feriu", "sangue", "explosão", "explosao", "ataque",
+        "desapareceu", "sequestro",
     }
-
-    if contains_any(
-        text,
-        serious_terms
-    ):
-        narrative_weight = 0.90
+    if contains_any(text, serious_terms):
+        narrative_weight = 0.9
         reaction_hint = "skeptical_serious"
 
-    # -----------------------------------------------------
-    # HEURÍSTICA PROVISÓRIA DO MUNDO
-    # -----------------------------------------------------
-
-    human_terms = {
-        "pai",
-        "mãe",
-        "mae",
-        "irmão",
-        "irmao",
-        "irmã",
-        "irma",
-        "homem",
-        "mulher",
-        "pessoa",
-        "humano"
-    }
-
-    if (
-        world_state
-        and contains_any(
-            text,
-            human_terms
-        )
-    ):
-        detections = (
-            world_state
-            .get("atlas", {})
-            .get("current_detections", [])
-        )
-
-        detection_text = " ".join(
-            normalize_text(
-                f"{item.get('name', '')} "
-                f"{item.get('type', '')}"
-            )
-            for item in detections
-            if isinstance(item, dict)
-        )
-
-        human_detected = contains_any(
-            detection_text,
-            human_terms
-        )
-
-        if not human_detected:
-            epistemic_status = "doubtful"
-            plausibility = 0.2
-            reaction_hint = (
-                "skeptical_serious"
-                if narrative_weight >= 0.8
-                else "skeptical"
-            )
-
-    return {
-        "epistemic_status": epistemic_status,
-        "plausibility": plausibility,
-        "narrative_weight": narrative_weight,
-        "reaction_hint": reaction_hint
-    }
+    # Não alteramos o estado epistemológico com base apenas na ausência de
+    # pessoas/objetos nas deteções atuais. Isso não invalida um relato externo.
+    return _result("unverified", 0.5, narrative_weight, reaction_hint)
 
 
-# =========================================================
-# AVALIAÇÃO PRINCIPAL
-# =========================================================
+def evaluate_memory(memory, world_state=None, knowledge=None):
+    """Avalia uma memória sem transformar relatos ou crenças em factos do mundo.
 
-def evaluate_memory(
-    memory,
-    world_state=None,
-    knowledge=None
-):
+    `knowledge` é reservado para futura integração com o registo de
+    conhecimento confirmado. A existência de uma chave em `knowledge` não
+    é inferida nem presumida neste módulo.
     """
-    Avalia uma memória depois de o Memory Interpreter
-    extrair o seu significado.
-
-    O Interpreter responde:
-        "O que foi dito / aconteceu?"
-
-    Este módulo responde:
-        "Como Atlas deve tratar epistemologicamente
-         e narrativamente essa memória?"
-    """
-
     if not isinstance(memory, dict):
-        return {
-            "epistemic_status": "unverified",
-            "plausibility": 0.5,
-            "narrative_weight": 0.3,
-            "reaction_hint": "normal"
-        }
+        return _result()
 
-    memory_type = normalize_text(
-        memory.get("memory_type")
-    )
+    memory_type = normalize_text(memory.get("memory_type"))
+    entity = normalize_text(memory.get("entity"))
+    category = normalize_text(memory.get("category"))
+    importance = clamp(memory.get("importance", 0.5))
 
-    entity = normalize_text(
-        memory.get("entity")
-    )
+    # Definições partilhadas são aceites como convenções de conversa, não como
+    # prova de que qualquer afirmação factual associada é verdadeira.
+    if entity == "shared" and category == "definition":
+        return _result("accepted", 1.0, 0.15, "acknowledge")
 
-    category = normalize_text(
-        memory.get("category")
-    )
+    # Identidade, preferências, emoções e objetivos são aceites como relatos
+    # do próprio jogador; não devem ser generalizados para além do relato.
+    if entity == "player" and category in {
+        "identity", "preference", "emotion", "goal",
+    }:
+        return _result("accepted", 1.0, 0.25, "normal")
 
-    # A importância vem do Interpreter,
-    # mas NÃO será usada automaticamente
-    # como peso narrativo.
-    importance = clamp(
-        memory.get(
-            "importance",
-            0.5
-        )
-    )
+    if entity == "player" and memory_type == "episodic" and category == "relationship":
+        return evaluate_relationship_event(memory)
 
-    # -----------------------------------------------------
-    # DEFINIÇÕES PARTILHADAS
-    # -----------------------------------------------------
+    if entity == "player" and memory_type == "episodic" and category in {
+        "event", "experience",
+    }:
+        return evaluate_external_event(memory, world_state=world_state)
 
-    if (
-        entity == "shared"
-        and category == "definition"
-    ):
-        return {
-            "epistemic_status": "accepted",
-            "plausibility": 1.0,
-            "narrative_weight": 0.15,
-            "reaction_hint": "acknowledge"
-        }
-
-    # -----------------------------------------------------
-    # IDENTIDADE / PREFERÊNCIAS / OBJETIVOS / EMOÇÕES
-    # -----------------------------------------------------
-
-    if (
-        entity == "player"
-        and category in {
-            "identity",
-            "preference",
-            "emotion",
-            "goal"
-        }
-    ):
-        return {
-            "epistemic_status": "accepted",
-            "plausibility": 1.0,
-            "narrative_weight": 0.25,
-            "reaction_hint": "normal"
-        }
-
-    # -----------------------------------------------------
-    # EVENTOS RELACIONAIS DIRETAMENTE OBSERVADOS
-    # -----------------------------------------------------
-
-    if (
-        entity == "player"
-        and memory_type == "episodic"
-        and category == "relationship"
-    ):
-        return evaluate_relationship_event(
-            memory
-        )
-
-    # -----------------------------------------------------
-    # EVENTOS / EXPERIÊNCIAS EXTERNAS
-    # -----------------------------------------------------
-
-    if (
-        entity == "player"
-        and memory_type == "episodic"
-        and category in {
-            "event",
-            "experience"
-        }
-    ):
-        return evaluate_external_event(
-            memory,
-            world_state=world_state
-        )
-
-    # -----------------------------------------------------
-    # CRENÇAS DO JOGADOR
-    # -----------------------------------------------------
-
-    if (
-        entity == "player"
-        and category == "belief"
-    ):
-        return {
-            "epistemic_status": "accepted",
-            "plausibility": 1.0,
-            "narrative_weight": 0.25,
-            "reaction_hint": "normal"
-        }
-
-    # -----------------------------------------------------
-    # CONHECIMENTO DECLARADO
-    # -----------------------------------------------------
+    # A crença do jogador pode ser registada como uma crença sua; o seu
+    # conteúdo não é por isso aceite como verdadeiro.
+    if entity == "player" and category == "belief":
+        return _result("accepted", 1.0, 0.25, "normal")
 
     if category == "knowledge":
-        return {
-            "epistemic_status": "unverified",
-            "plausibility": 0.5,
-            "narrative_weight": 0.25,
-            "reaction_hint": "normal"
-        }
+        return _result("unverified", 0.5, 0.25, "normal")
 
-    # -----------------------------------------------------
-    # FALLBACK
-    # -----------------------------------------------------
-
-    # importance pode dar um PEQUENO aumento,
-    # mas nunca define sozinho a intensidade.
-    fallback_weight = (
-        0.20
-        + (importance * 0.20)
-    )
-
-    return {
-        "epistemic_status": "unverified",
-        "plausibility": 0.5,
-        "narrative_weight": round(
-            fallback_weight,
-            2
-        ),
-        "reaction_hint": "normal"
-    }
+    fallback_weight = 0.2 + (importance * 0.2)
+    return _result("unverified", 0.5, round(fallback_weight, 2), "normal")

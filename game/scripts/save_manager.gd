@@ -151,7 +151,12 @@ func start_new_run():
 	await reset_backend_for_new_run()
 
 
-func reset_backend_for_new_run() -> void:
+func reset_backend_for_new_run() -> bool:
+	var run_id := str(active_run_data.get("run_id", "")).strip_edges()
+	if run_id.is_empty():
+		push_warning("Não foi possível reiniciar Atlas: run_id vazio.")
+		return false
+
 	var request := HTTPRequest.new()
 	request.timeout = 10.0
 
@@ -171,7 +176,7 @@ func reset_backend_for_new_run() -> void:
 		)
 
 		request.queue_free()
-		return
+		return false
 
 	var result = await request.request_completed
 
@@ -182,17 +187,27 @@ func reset_backend_for_new_run() -> void:
 			"O backend não confirmou o reinício de Atlas. HTTP: "
 			+ str(result[1])
 		)
-		return
+		return false
 
-	backend_state_cache.clear()
+	var response = JSON.parse_string(result[3].get_string_from_utf8())
+	if not (response is Dictionary) or str(response.get("status", "")) != "Atlas run reset":
+		push_warning("O backend devolveu uma confirmação inválida ao reiniciar Atlas.")
+		return false
+
+	var reset_state = response.get("state", {})
+	if not (reset_state is Dictionary):
+		push_warning("O backend devolveu um estado inválido ao reiniciar Atlas.")
+		return false
+	backend_state_cache = reset_state.duplicate(true)
 
 	print("ATLAS BACKEND RESET FOR NEW RUN")
+	return true
 
 
 func get_backend_state_url() -> String:
 	var run_id := str(active_run_data.get("run_id", "")).strip_edges()
 	if run_id.is_empty():
-		return ATLAS_STATE_URL
+		return ""
 	return ATLAS_STATE_URL + "?run_id=" + run_id.uri_encode()
 
 
@@ -207,6 +222,11 @@ func capture_backend_state() -> bool:
 	if backend_request_in_progress:
 		return false
 
+	var state_url := get_backend_state_url()
+	if state_url.is_empty():
+		push_warning("Não foi possível obter o estado do Atlas: run_id vazio.")
+		return false
+
 	backend_request_in_progress = true
 
 	var request := HTTPRequest.new()
@@ -215,7 +235,7 @@ func capture_backend_state() -> bool:
 	add_child(request)
 
 	var error := request.request(
-		get_backend_state_url()
+		state_url
 	)
 
 	if error != OK:
@@ -269,9 +289,14 @@ func capture_backend_state() -> bool:
 
 
 func restore_backend_state(state: Dictionary) -> bool:
+	var run_id := str(active_run_data.get("run_id", "")).strip_edges()
+	if run_id.is_empty():
+		push_warning("Não foi possível restaurar Atlas: run_id vazio.")
+		return false
+
 	if state.is_empty():
-		await reset_backend_for_new_run()
-		return true
+		# Um estado vazio só é aceite se o backend confirmar o reset.
+		return await reset_backend_for_new_run()
 
 	var request := HTTPRequest.new()
 	request.timeout = 10.0
@@ -279,7 +304,7 @@ func restore_backend_state(state: Dictionary) -> bool:
 	add_child(request)
 
 	var body := JSON.stringify({
-		"run_id": str(active_run_data.get("run_id", "")),
+		"run_id": run_id,
 		"state": state
 	})
 
@@ -310,9 +335,20 @@ func restore_backend_state(state: Dictionary) -> bool:
 		)
 		return false
 
-	backend_state_cache = state.duplicate(true)
+	var response = JSON.parse_string(result[3].get_string_from_utf8())
+	if not (response is Dictionary) or not (response.get("state", {}) is Dictionary):
+		push_warning("O backend não devolveu o estado restaurado de Atlas.")
+		return false
+	if str(response.get("run_id", "")) != run_id:
+		push_warning("O backend confirmou uma run diferente da selecionada.")
+		return false
 
-	print("ATLAS BACKEND STATE RESTORED")
+	backend_state_cache = response["state"].duplicate(true)
+	if not (active_run_data.get("atlas", {}) is Dictionary):
+		active_run_data["atlas"] = {}
+	active_run_data["atlas"]["backend_state"] = backend_state_cache.duplicate(true)
+
+	print("ATLAS BACKEND STATE RESTORED: ", run_id)
 	return true
 
 
@@ -447,15 +483,28 @@ func prepare_snapshot_for_load(snapshot: Dictionary, save_type: String, slot: in
 	return true
 
 
+func _snapshot_saved_at(snapshot: Dictionary) -> String:
+	return str(snapshot.get("saved_at", "")).strip_edges()
+
+
 func prepare_current_run_load_any() -> bool:
-	# Primeiro tenta a cópia remota; se não existir ou a rede falhar, usa o ficheiro local.
+	# Lê as duas cópias e escolhe a mais recente. A API pode ainda conter uma
+	# versão antiga se a sincronização em segundo plano não tiver terminado.
+	var local_snapshot := read_json_file(CURRENT_RUN_PATH)
 	var remote_snapshot := await fetch_remote_snapshot("autosave", 0)
+
+	if not local_snapshot.is_empty() and not remote_snapshot.is_empty():
+		var local_time := _snapshot_saved_at(local_snapshot)
+		var remote_time := _snapshot_saved_at(remote_snapshot)
+		if not local_time.is_empty() and local_time >= remote_time:
+			call_deferred("_sync_snapshot_remote_background", local_snapshot.duplicate(true), "autosave", 0)
+			return prepare_snapshot_for_load(local_snapshot, "autosave", 0)
+
 	if not remote_snapshot.is_empty():
 		if not write_json_file(CURRENT_RUN_PATH, remote_snapshot):
 			push_warning("O autosave remoto foi carregado, mas não foi possível atualizar a cópia local.")
 		return prepare_snapshot_for_load(remote_snapshot, "autosave", 0)
-	# Fallback local sem chamar o wrapper, para evitar recursividade.
-	var local_snapshot := read_json_file(CURRENT_RUN_PATH)
+
 	if local_snapshot.is_empty():
 		return false
 	return prepare_snapshot_for_load(local_snapshot, "autosave", 0)
@@ -464,13 +513,23 @@ func prepare_current_run_load_any() -> bool:
 func prepare_manual_slot_load_any(slot: int) -> bool:
 	if not is_valid_slot(slot):
 		return false
+
+	var local_path := get_manual_slot_path(slot)
+	var local_snapshot := read_json_file(local_path)
 	var remote_snapshot := await fetch_remote_snapshot("manual", slot)
+
+	if not local_snapshot.is_empty() and not remote_snapshot.is_empty():
+		var local_time := _snapshot_saved_at(local_snapshot)
+		var remote_time := _snapshot_saved_at(remote_snapshot)
+		if not local_time.is_empty() and local_time >= remote_time:
+			call_deferred("_sync_snapshot_remote_background", local_snapshot.duplicate(true), "manual", slot)
+			return prepare_snapshot_for_load(local_snapshot, "manual", slot)
+
 	if not remote_snapshot.is_empty():
-		if not write_json_file(get_manual_slot_path(slot), remote_snapshot):
+		if not write_json_file(local_path, remote_snapshot):
 			push_warning("O slot remoto foi carregado, mas não foi possível atualizar a cópia local.")
 		return prepare_snapshot_for_load(remote_snapshot, "manual", slot)
-	# Fallback local sem chamar o wrapper, para evitar recursividade.
-	var local_snapshot := read_json_file(get_manual_slot_path(slot))
+
 	if local_snapshot.is_empty():
 		return false
 	return prepare_snapshot_for_load(local_snapshot, "manual", slot)

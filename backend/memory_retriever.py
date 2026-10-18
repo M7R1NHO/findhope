@@ -2,7 +2,22 @@ import re
 import unicodedata
 from difflib import SequenceMatcher
 
-from backend.atlas_memory import ATLAS_MEMORY
+from backend import atlas_memory
+
+
+def _get_memories(run_id=None):
+    """Obtém as memórias da partida solicitada, mantendo compatibilidade legada."""
+    try:
+        store = atlas_memory.get_atlas_memory(run_id=run_id)
+    except TypeError:
+        # Compatibilidade temporária com versões antigas do módulo.
+        if run_id is not None:
+            return []
+        store = atlas_memory.get_atlas_memory()
+    if not isinstance(store, dict):
+        return []
+    memories = store.get("memories", [])
+    return memories if isinstance(memories, list) else []
 
 
 STOP_WORDS = {
@@ -373,7 +388,7 @@ def calculate_memory_score(
 # DIRECT KEY
 # =========================================================
 
-def find_direct_key_matches(message):
+def find_direct_key_matches(message, memories=None):
     """
     Fast-path para keys explicitamente
     mencionadas na mensagem.
@@ -389,7 +404,10 @@ def find_direct_key_matches(message):
 
     matches = []
 
-    for memory in ATLAS_MEMORY["memories"]:
+    if memories is None:
+        memories = _get_memories()
+
+    for memory in memories:
         key = memory.get(
             "key",
             ""
@@ -428,7 +446,8 @@ def find_direct_key_matches(message):
 
 def find_structured_scope_matches(
     query_data,
-    limit=6
+    limit=6,
+    memories=None,
 ):
     """
     Fallback controlado para memórias semânticas estáveis.
@@ -471,7 +490,10 @@ def find_structured_scope_matches(
 
     matches = []
 
-    for memory in ATLAS_MEMORY["memories"]:
+    if memories is None:
+        memories = _get_memories()
+
+    for memory in memories:
         memory_entity = normalize_text(
             memory.get(
                 "entity",
@@ -521,7 +543,8 @@ def find_structured_scope_matches(
 def retrieve_from_query(
     message,
     query_data,
-    limit
+    limit,
+    memories=None,
 ):
     semantic_query = str(
         query_data.get(
@@ -532,8 +555,11 @@ def retrieve_from_query(
 
     scored = []
 
+    if memories is None:
+        memories = _get_memories()
+
     if semantic_query:
-        for memory in ATLAS_MEMORY["memories"]:
+        for memory in memories:
             relevance = calculate_text_relevance(
                 memory=memory,
                 original_message=message,
@@ -572,7 +598,8 @@ def retrieve_from_query(
 
     return find_structured_scope_matches(
         query_data=query_data,
-        limit=limit
+        limit=limit,
+        memories=memories,
     )
 
 
@@ -582,7 +609,8 @@ def retrieve_from_query(
 
 def find_lexical_matches(
     message,
-    limit=6
+    limit=6,
+    memories=None,
 ):
     """
     Usado apenas quando o Interpreter NÃO
@@ -605,7 +633,10 @@ def find_lexical_matches(
 
     scored = []
 
-    for memory in ATLAS_MEMORY["memories"]:
+    if memories is None:
+        memories = _get_memories()
+
+    for memory in memories:
         memory_text = build_memory_text(
             memory
         )
@@ -662,7 +693,8 @@ def find_lexical_matches(
 def retrieve_relevant_memories(
     message,
     query_data=None,
-    limit=6
+    limit=6,
+    run_id=None,
 ):
     """
     Recupera somente memórias com evidência
@@ -677,10 +709,15 @@ def retrieve_relevant_memories(
     METADATA NUNCA CRIA RELEVÂNCIA.
     """
 
-    memories = ATLAS_MEMORY.get(
-        "memories",
-        []
-    )
+    if not isinstance(message, str) or not message.strip():
+        return []
+
+    try:
+        limit = max(1, min(50, int(limit)))
+    except (TypeError, ValueError, OverflowError):
+        limit = 6
+
+    memories = _get_memories(run_id=run_id)
 
     if not memories:
         return []
@@ -702,7 +739,8 @@ def retrieve_relevant_memories(
 
     direct_matches = (
         find_direct_key_matches(
-            message
+            message,
+            memories=memories,
         )
     )
 
@@ -719,7 +757,8 @@ def retrieve_relevant_memories(
         return retrieve_from_query(
             message=message,
             query_data=query_data,
-            limit=limit
+            limit=limit,
+            memories=memories,
         )
 
     # -----------------------------------------------------
@@ -728,5 +767,6 @@ def retrieve_relevant_memories(
 
     return find_lexical_matches(
         message=message,
-        limit=limit
+        limit=limit,
+        memories=memories,
     )

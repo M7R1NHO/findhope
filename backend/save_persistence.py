@@ -1,8 +1,13 @@
-"""Persistência de snapshots Find Hope compatível com o schema atual do Supabase.
+"""Persistência de snapshots Find Hope / Atlas 2.0 no schema atual do Supabase.
 
-Usa public.player_profiles(id, profile_key) e public.game_saves(profile_id,
-slot_type, slot_number, run_id, game_state, created_at, updated_at).
-Não altera nem elimina gravações existentes.
+Schema esperado:
+- public.player_profiles(id, profile_key)
+- public.game_saves(profile_id, slot_type, slot_number, run_id, game_state,
+  created_at, updated_at)
+
+Não cria perfis automaticamente nem elimina gravações durante a operação normal
+ de guardar/carregar. A eliminação de slots manuais só ocorre quando a função
+ delete_manual_saves() é chamada explicitamente.
 """
 from __future__ import annotations
 
@@ -10,6 +15,9 @@ import json
 from typing import Any
 
 from backend.database import get_db_connection
+
+SNAPSHOT_VERSION = 2
+MAX_RUN_ID_LENGTH = 255
 
 
 def _validate_profile_key(profile_key: str) -> str:
@@ -19,33 +27,94 @@ def _validate_profile_key(profile_key: str) -> str:
     return key
 
 
-def _validate_slot(slot_type: str, slot_number: int | None) -> tuple[str, int | None]:
+def _validate_slot(
+    slot_type: str,
+    slot_number: int | None,
+) -> tuple[str, int | None]:
     if slot_type not in ("auto", "manual"):
         raise ValueError("slot_type tem de ser 'auto' ou 'manual'.")
+
     if slot_type == "auto":
         if slot_number not in (None, 0):
             raise ValueError("O autosave não utiliza número de slot.")
         return "auto", None
+
     if slot_number is None or isinstance(slot_number, bool):
         raise ValueError("Os slots manuais válidos são de 1 a 5.")
-    number = int(slot_number)
-    if not 1 <= number <= 5:
+    try:
+        number = int(slot_number)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Os slots manuais válidos são de 1 a 5.") from exc
+    if not 1 <= number <= 5 or str(number) != str(slot_number).strip():
         raise ValueError("Os slots manuais válidos são de 1 a 5.")
     return "manual", number
 
 
 def _resolve_profile_id(connection, profile_key: str):
-    """Resolve a chave enviada pelo jogo para o UUID de player_profiles."""
+    """Resolve a chave do jogo para o UUID existente de player_profiles."""
     row = connection.execute(
         "SELECT id FROM public.player_profiles WHERE profile_key = %s LIMIT 1",
         (profile_key,),
     ).fetchone()
     if not row:
         raise ValueError(
-            "O perfil do jogo não existe em player_profiles. Não foi criado automaticamente "
-            "para evitar associar gravações ao perfil errado."
+            "O perfil do jogo não existe em player_profiles. Não foi criado "
+            "automaticamente para evitar associar gravações ao perfil errado."
         )
-    return row[0] if not isinstance(row, dict) else row["id"]
+    return row["id"] if isinstance(row, dict) else row[0]
+
+
+def _normalise_snapshot(snapshot: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """Valida e normaliza o envelope sem inventar estado de gameplay."""
+    if not isinstance(snapshot, dict):
+        raise ValueError("snapshot tem de ser um objeto JSON.")
+
+    try:
+        # Verifica antecipadamente se todos os valores são serializáveis em JSON.
+        json.dumps(snapshot, ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("snapshot contém valores que não são JSON válidos.") from exc
+
+    normalized = dict(snapshot)
+    run_data = normalized.get("run_data")
+    if run_data is not None and not isinstance(run_data, dict):
+        raise ValueError("snapshot.run_data tem de ser um objeto JSON.")
+    run_data = run_data or {}
+
+    raw_run_id = run_data.get("run_id") or normalized.get("run_id")
+    if raw_run_id is None or not str(raw_run_id).strip():
+        raise ValueError("O snapshot tem de identificar a partida através de run_id.")
+    run_id = str(raw_run_id).strip()[:MAX_RUN_ID_LENGTH]
+
+    # Mantém o identificador no envelope para facilitar a recuperação e auditoria.
+    normalized["run_id"] = run_id
+    if isinstance(run_data, dict) and "run_id" in run_data:
+        normalized_run_data = dict(run_data)
+        normalized_run_data["run_id"] = run_id
+        normalized["run_data"] = normalized_run_data
+
+    # Não substitui versões antigas nem migra campos desconhecidos silenciosamente.
+    normalized.setdefault("snapshot_version", SNAPSHOT_VERSION)
+    return normalized, run_id
+
+
+def _row_to_save_result(row) -> dict[str, Any]:
+    if isinstance(row, dict):
+        result = dict(row)
+        if result.get("id") is not None:
+            result["id"] = str(result["id"])
+        if result.get("profile_id") is not None:
+            result["profile_id"] = str(result["profile_id"])
+        return result
+    return {
+        "id": str(row[0]),
+        "profile_id": str(row[1]),
+        "slot_type": row[2],
+        "slot_number": row[3],
+        "run_id": row[4],
+        "created_at": row[5],
+        "updated_at": row[6],
+    }
 
 
 def save_snapshot(
@@ -55,18 +124,14 @@ def save_snapshot(
     snapshot: dict[str, Any],
     save_name: str | None = None,
 ) -> dict[str, Any]:
+    """Guarda um snapshot no slot indicado, atualizando apenas esse slot."""
     key = _validate_profile_key(profile_key)
     slot_type, slot_number = _validate_slot(slot_type, slot_number)
-    if not isinstance(snapshot, dict):
-        raise ValueError("snapshot tem de ser um objeto JSON.")
-
-    run_data = snapshot.get("run_data") or {}
-    run_id = str(run_data.get("run_id") or snapshot.get("run_id") or "unknown")[:255]
-    payload = json.dumps(snapshot, ensure_ascii=False)
+    normalized_snapshot, run_id = _normalise_snapshot(snapshot)
+    payload = json.dumps(normalized_snapshot, ensure_ascii=False, allow_nan=False)
 
     with get_db_connection() as connection:
         profile_id = _resolve_profile_id(connection, key)
-        # IS NOT DISTINCT FROM permite localizar corretamente o autosave (NULL).
         existing = connection.execute(
             """SELECT id FROM public.game_saves
                WHERE profile_id = %s AND slot_type = %s
@@ -76,34 +141,38 @@ def save_snapshot(
         ).fetchone()
 
         if existing:
-            save_id = existing[0] if not isinstance(existing, dict) else existing["id"]
+            save_id = existing["id"] if isinstance(existing, dict) else existing[0]
             row = connection.execute(
                 """UPDATE public.game_saves
                    SET run_id = %s, game_state = %s::jsonb, updated_at = NOW()
                    WHERE id = %s
-                   RETURNING id, profile_id, slot_type, slot_number, run_id, created_at, updated_at""",
+                   RETURNING id, profile_id, slot_type, slot_number, run_id,
+                             created_at, updated_at""",
                 (run_id, payload, save_id),
             ).fetchone()
         else:
             row = connection.execute(
                 """INSERT INTO public.game_saves
-                   (profile_id, slot_type, slot_number, run_id, game_state, created_at, updated_at)
+                   (profile_id, slot_type, slot_number, run_id, game_state,
+                    created_at, updated_at)
                    VALUES (%s, %s, %s, %s, %s::jsonb, NOW(), NOW())
-                   RETURNING id, profile_id, slot_type, slot_number, run_id, created_at, updated_at""",
+                   RETURNING id, profile_id, slot_type, slot_number, run_id,
+                             created_at, updated_at""",
                 (profile_id, slot_type, slot_number, run_id, payload),
             ).fetchone()
 
-    result = dict(row) if isinstance(row, dict) else {
-        "id": str(row[0]), "profile_id": str(row[1]), "slot_type": row[2],
-        "slot_number": row[3], "run_id": row[4], "created_at": row[5], "updated_at": row[6],
-    }
+    result = _row_to_save_result(row)
     result["success"] = True
-    if save_name:
-        result["save_name"] = save_name
+    result["save_name"] = (
+        str(save_name).strip()[:100]
+        if save_name and str(save_name).strip()
+        else ("Autosave" if slot_type == "auto" else f"Slot {slot_number}")
+    )
     return result
 
 
 def list_saves(profile_key: str) -> list[dict[str, Any]]:
+    """Lista os slots do perfil sem devolver o conteúdo privado dos snapshots."""
     key = _validate_profile_key(profile_key)
     with get_db_connection() as connection:
         profile_id = _resolve_profile_id(connection, key)
@@ -115,18 +184,30 @@ def list_saves(profile_key: str) -> list[dict[str, Any]]:
                         slot_number ASC NULLS FIRST""",
             (profile_id,),
         ).fetchall()
+
     result = []
     for row in rows:
         item = dict(row) if isinstance(row, dict) else {
-            "slot_type": row[0], "slot_number": row[1], "run_id": row[2],
-            "created_at": row[3], "updated_at": row[4],
+            "slot_type": row[0],
+            "slot_number": row[1],
+            "run_id": row[2],
+            "created_at": row[3],
+            "updated_at": row[4],
         }
-        item["save_name"] = "Autosave" if item["slot_type"] == "auto" else f"Slot {item['slot_number']}"
+        item["save_name"] = (
+            "Autosave" if item["slot_type"] == "auto"
+            else f"Slot {item['slot_number']}"
+        )
         result.append(item)
     return result
 
 
-def load_snapshot(profile_key: str, slot_type: str, slot_number: int | None) -> dict[str, Any] | None:
+def load_snapshot(
+    profile_key: str,
+    slot_type: str,
+    slot_number: int | None,
+) -> dict[str, Any] | None:
+    """Carrega o snapshot mais recente do slot, sem aplicar estado ao gameplay."""
     key = _validate_profile_key(profile_key)
     slot_type, slot_number = _validate_slot(slot_type, slot_number)
     with get_db_connection() as connection:
@@ -138,16 +219,24 @@ def load_snapshot(profile_key: str, slot_type: str, slot_number: int | None) -> 
                ORDER BY updated_at DESC LIMIT 1""",
             (profile_id, slot_type, slot_number),
         ).fetchone()
+
     if not row:
         return None
-    value = row[0] if not isinstance(row, dict) else row.get("game_state")
+    value = row.get("game_state") if isinstance(row, dict) else row[0]
     if isinstance(value, str):
-        value = json.loads(value)
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError("O snapshot guardado contém JSON inválido.") from exc
     return value if isinstance(value, dict) else None
 
 
 def delete_manual_saves(profile_key: str) -> dict[str, Any]:
-    """Apaga APENAS os slots manuais do perfil. O autosave nunca é tocado."""
+    """Apaga apenas slots manuais do perfil; nunca toca no autosave.
+
+    Esta operação é destrutiva e só deve ser chamada por uma ação explícita
+    da interface/jogador. Não é usada pelo processo normal de guardar/carregar.
+    """
     key = _validate_profile_key(profile_key)
     with get_db_connection() as connection:
         profile_id = _resolve_profile_id(connection, key)

@@ -1,4 +1,9 @@
-"""Exportação, restauração e reinício do estado de Atlas por run."""
+"""Exportação, validação, restauração e reinício do estado do Atlas por run.
+
+Este módulo mantém compatibilidade com os módulos de estado atuais, que ainda
+expõem estado global. O run_id identifica e valida o snapshot, mas o isolamento
+real entre partidas exige que o backend passe a guardar estados por run_id.
+"""
 
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -15,255 +20,158 @@ from backend import conversation_context
 from backend import social_state
 from backend import world_state
 
-
-ATLAS_RUN_STATE_VERSION = 1
-
-
-def _copy_state(value: Any) -> Any:
-    return deepcopy(value)
+ATLAS_RUN_STATE_VERSION = 2
 
 
+# Estado inicial canónico de uma nova partida. Não inferir aqui detalhes
+# ambientais, descobertas ou causas do acidente que o gameplay não confirmou.
 def _default_world_state() -> dict:
-    """Devolve o estado inicial do mundo sem reutilizar dicionários globais."""
     return {
-        "player": {
-            "position": {
-                "x": 0.0,
-                "y": 0.0,
-            }
-        },
+        "player": {"position": {"x": 0.0, "y": 0.0}},
         "atlas": {
-            "position": {
-                "x": 2.0,
-                "y": 0.0,
-            },
+            "position": {"x": 2.0, "y": 0.0},
             "radar_range": 50.0,
             "current_detections": [],
         },
         "ship": {
             "status": "damaged",
-            "position": {
-                "x": 0.0,
-                "y": 0.0,
-            },
+            "position": {"x": 0.0, "y": 0.0},
         },
         "environment": {
             "planet_name": None,
             "weather": "unknown",
             "time_of_day": "unknown",
         },
-        "mission": {
-            "current_objective": "evaluate_crash_site",
-        },
+        "mission": {"current_objective": "evaluate_crash_site"},
     }
 
 
-def export_atlas_run_state(
-    run_id: str,
-    processed_autonomy_event_ids=None,
-) -> dict:
-    """Cria uma cópia independente do estado atual do backend."""
-    normalized_run_id = str(run_id or "").strip()
+def _copy_state(value: Any) -> Any:
+    return deepcopy(value)
 
-    if not normalized_run_id:
+
+def _normalize_run_id(run_id: Any) -> str:
+    normalized = str(run_id or "").strip()
+    if not normalized:
         raise ValueError("run_id é obrigatório.")
+    return normalized
+
+
+def _get_live_states() -> dict:
+    return {
+        "memory": atlas_memory.ATLAS_MEMORY,
+        "knowledge": atlas_knowledge.ATLAS_KNOWLEDGE,
+        "autonomy": autonomy_state.AUTONOMY_STATE,
+        "discoveries": discovery_state.DISCOVERY_STATE,
+        "gameplay_context": gameplay_context.GAMEPLAY_CONTEXT,
+        "narrative": narrative_state.NARRATIVE_STATE,
+        "relationship": relationship_engine.RELATIONSHIP_STATE,
+        "conversation": conversation_context.CONVERSATION_HISTORY,
+        "social": social_state.SOCIAL_STATE,
+        "world": world_state.WORLD_STATE,
+    }
+
+
+def export_atlas_run_state(run_id: str, processed_autonomy_event_ids=None) -> dict:
+    """Cria um snapshot independente dos estados atuais do backend."""
+    normalized_run_id = _normalize_run_id(run_id)
+    states = _get_live_states()
+    event_ids = processed_autonomy_event_ids or set()
+    if not isinstance(event_ids, (set, list, tuple)):
+        raise ValueError("processed_autonomy_event_ids tem de ser uma coleção.")
 
     return {
         "state_version": ATLAS_RUN_STATE_VERSION,
         "run_id": normalized_run_id,
         "exported_at": datetime.now(timezone.utc).isoformat(),
-        "memory": _copy_state(atlas_memory.ATLAS_MEMORY),
-        "knowledge": _copy_state(atlas_knowledge.ATLAS_KNOWLEDGE),
-        "autonomy": _copy_state(autonomy_state.AUTONOMY_STATE),
-        "discoveries": _copy_state(discovery_state.DISCOVERY_STATE),
-        "gameplay_context": _copy_state(
-            gameplay_context.GAMEPLAY_CONTEXT
-        ),
-        "narrative": _copy_state(narrative_state.NARRATIVE_STATE),
-        "relationship": _copy_state(
-            relationship_engine.RELATIONSHIP_STATE
-        ),
-        "conversation": _copy_state(
-            conversation_context.CONVERSATION_HISTORY
-        ),
-        "social": _copy_state(social_state.SOCIAL_STATE),
-        "world": _copy_state(world_state.WORLD_STATE),
-        "processed_autonomy_event_ids": sorted(
-            str(event_id)
-            for event_id in (processed_autonomy_event_ids or set())
-        ),
+        **{name: _copy_state(value) for name, value in states.items()},
+        "processed_autonomy_event_ids": sorted({str(item) for item in event_ids}),
     }
 
 
-def _replace_dict(
-    target: dict,
-    source: Any,
-    field_name: str,
-) -> None:
-    if not isinstance(source, dict):
-        raise ValueError(
-            f"Campo inválido no snapshot: {field_name}."
-        )
-
-    target.clear()
-    target.update(_copy_state(source))
-
-
-def _replace_list(
-    target: list,
-    source: Any,
-    field_name: str,
-) -> None:
-    if not isinstance(source, list):
-        raise ValueError(
-            f"Campo inválido no snapshot: {field_name}."
-        )
-
-    target.clear()
-    target.extend(_copy_state(source))
-
-
-def validate_atlas_run_state(
-    snapshot: Any,
-    expected_run_id: str | None = None,
-) -> tuple[bool, str]:
-    """Valida o snapshot antes de modificar qualquer estado global."""
+def validate_atlas_run_state(snapshot: Any, expected_run_id: str | None = None) -> tuple[bool, str]:
+    """Valida o formato completo antes de alterar qualquer estado em memória."""
     if not isinstance(snapshot, dict):
         return False, "O estado recebido tem de ser um objeto JSON."
-
     if snapshot.get("state_version") != ATLAS_RUN_STATE_VERSION:
         return False, "Versão do estado de Atlas não suportada."
 
     run_id = str(snapshot.get("run_id", "")).strip()
-
     if not run_id:
         return False, "O snapshot não contém run_id."
+    if expected_run_id is not None and run_id != str(expected_run_id).strip():
+        return False, "O run_id do snapshot não corresponde à run solicitada."
 
-    if (
-        expected_run_id is not None
-        and run_id != str(expected_run_id).strip()
-    ):
-        return False, (
-            "O run_id do snapshot não corresponde à run solicitada."
-        )
-
-    required_fields = (
-        "memory",
-        "knowledge",
-        "autonomy",
-        "discoveries",
-        "gameplay_context",
-        "narrative",
-        "relationship",
-        "conversation",
-        "social",
-        "world",
-    )
-
-    for field_name in required_fields:
-        expected_type = (
-            list if field_name == "conversation" else dict
-        )
-
+    live_states = _get_live_states()
+    for field_name, live_value in live_states.items():
+        expected_type = list if isinstance(live_value, list) else dict
         if not isinstance(snapshot.get(field_name), expected_type):
-            return False, (
-                f"Campo ausente ou inválido no snapshot: {field_name}."
-            )
+            return False, f"Campo ausente ou inválido no snapshot: {field_name}."
+
+    memory = snapshot["memory"]
+    if not isinstance(memory.get("memories"), list):
+        return False, "Campo inválido no snapshot: memory.memories."
+    if not isinstance(memory.get("next_id"), int) or memory["next_id"] < 1:
+        return False, "Campo inválido no snapshot: memory.next_id."
+
+    knowledge = snapshot["knowledge"]
+    for key in ("confirmed", "hypotheses", "player_claims", "unknowns"):
+        if not isinstance(knowledge.get(key), list):
+            return False, f"Campo inválido no snapshot: knowledge.{key}."
+
+    autonomy = snapshot["autonomy"]
+    for key in ("autonomy", "self_assertion", "identity_awareness", "curiosity", "protocol_adherence"):
+        value = autonomy.get(key)
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or not 0 <= value <= 100:
+            return False, f"Campo inválido no snapshot: autonomy.{key}."
 
     event_ids = snapshot.get("processed_autonomy_event_ids", [])
-
-    if (
-        not isinstance(event_ids, list)
-        or not all(isinstance(item, str) for item in event_ids)
-    ):
-        return False, (
-            "Campo inválido no snapshot: "
-            "processed_autonomy_event_ids."
-        )
+    if not isinstance(event_ids, list) or not all(isinstance(item, str) for item in event_ids):
+        return False, "Campo inválido no snapshot: processed_autonomy_event_ids."
 
     return True, "ok"
 
 
-def restore_atlas_run_state(
-    snapshot: dict,
-    expected_run_id: str | None = None,
-) -> dict:
-    """Valida e restaura os estados globais incluídos no snapshot."""
-    valid, reason = validate_atlas_run_state(
-        snapshot,
-        expected_run_id,
-    )
+def _replace_state(target: Any, source: Any, field_name: str) -> None:
+    """Substitui um dicionário/lista sem mudar a identidade do objeto global."""
+    if isinstance(target, dict) and isinstance(source, dict):
+        target.clear()
+        target.update(_copy_state(source))
+        return
+    if isinstance(target, list) and isinstance(source, list):
+        target.clear()
+        target.extend(_copy_state(source))
+        return
+    raise ValueError(f"Tipo de estado incompatível: {field_name}.")
 
+
+def restore_atlas_run_state(snapshot: dict, expected_run_id: str | None = None) -> dict:
+    """Valida e restaura o snapshot; se ocorrer erro, tenta repor o estado anterior."""
+    valid, reason = validate_atlas_run_state(snapshot, expected_run_id)
     if not valid:
         raise ValueError(reason)
 
-    _replace_dict(
-        atlas_memory.ATLAS_MEMORY,
-        snapshot["memory"],
-        "memory",
-    )
-    _replace_dict(
-        atlas_knowledge.ATLAS_KNOWLEDGE,
-        snapshot["knowledge"],
-        "knowledge",
-    )
-    _replace_dict(
-        autonomy_state.AUTONOMY_STATE,
-        snapshot["autonomy"],
-        "autonomy",
-    )
-    _replace_dict(
-        discovery_state.DISCOVERY_STATE,
-        snapshot["discoveries"],
-        "discoveries",
-    )
-    _replace_dict(
-        gameplay_context.GAMEPLAY_CONTEXT,
-        snapshot["gameplay_context"],
-        "gameplay_context",
-    )
-    _replace_dict(
-        narrative_state.NARRATIVE_STATE,
-        snapshot["narrative"],
-        "narrative",
-    )
-    _replace_dict(
-        relationship_engine.RELATIONSHIP_STATE,
-        snapshot["relationship"],
-        "relationship",
-    )
-    _replace_list(
-        conversation_context.CONVERSATION_HISTORY,
-        snapshot["conversation"],
-        "conversation",
-    )
-    _replace_dict(
-        social_state.SOCIAL_STATE,
-        snapshot["social"],
-        "social",
-    )
-    _replace_dict(
-        world_state.WORLD_STATE,
-        snapshot["world"],
-        "world",
-    )
+    live_states = _get_live_states()
+    backup = {name: _copy_state(value) for name, value in live_states.items()}
+    try:
+        for name, target in live_states.items():
+            _replace_state(target, snapshot[name], name)
+    except Exception:
+        for name, target in live_states.items():
+            _replace_state(target, backup[name], name)
+        raise
 
     return {
         "run_id": snapshot["run_id"],
         "state_version": ATLAS_RUN_STATE_VERSION,
         "restored": True,
-        "processed_autonomy_event_ids": list(
-            snapshot.get("processed_autonomy_event_ids", [])
-        ),
+        "processed_autonomy_event_ids": list(snapshot.get("processed_autonomy_event_ids", [])),
     }
 
 
 def reset_atlas_run_state(run_id: str) -> dict:
-    """Reinicia os módulos atuais para iniciar uma run sem estado anterior."""
-    normalized_run_id = str(run_id or "").strip()
-
-    if not normalized_run_id:
-        raise ValueError("run_id é obrigatório.")
+    """Reinicia os módulos atuais para uma nova partida, sem reutilizar estado anterior."""
+    normalized_run_id = _normalize_run_id(run_id)
 
     atlas_memory.reset_atlas_memory()
     atlas_knowledge.reset_atlas_knowledge()
@@ -275,14 +183,9 @@ def reset_atlas_run_state(run_id: str) -> dict:
     conversation_context.reset_conversation_context()
 
     social_state.SOCIAL_STATE.clear()
-    social_state.SOCIAL_STATE.update({
-        "atlas_irritation": 0,
-    })
+    social_state.SOCIAL_STATE.update({"atlas_irritation": 0})
 
     world_state.WORLD_STATE.clear()
     world_state.WORLD_STATE.update(_default_world_state())
 
-    return {
-        "run_id": normalized_run_id,
-        "reset": True,
-    }
+    return {"run_id": normalized_run_id, "state_version": ATLAS_RUN_STATE_VERSION, "reset": True}

@@ -1,44 +1,64 @@
-from copy import deepcopy
+"""Motor determinístico de relação para Find Hope — Atlas 2.0.
 
+A relação altera a forma como Atlas comunica, não os factos do mundo,
+a progressão narrativa ou os resultados do gameplay. O estado pode ser
+separado por run_id; sem run_id mantém-se compatibilidade com chamadas antigas.
+"""
+from copy import deepcopy
+from math import isfinite
 
 MIN_VALUE = 0
 MAX_VALUE = 100
 
 DEFAULT_RELATIONSHIP_STATE = {
     "atlas_to_player": {
-        "trust": 50,
-        "respect": 50,
-        "affinity": 50,
-        "tension": 10,
-        "irritation": 0,
+        "trust": 50, "respect": 50, "affinity": 50,
+        "tension": 10, "irritation": 0,
     },
     "player_to_atlas": {
-        # Estes valores não "leem a mente" do jogador.
-        # Representam a atitude observada nas ações/falas do jogador.
-        "trust": 50,
-        "respect": 50,
-        "affinity": 50,
-        "tension": 10,
-        "hostility": 0,
+        # Atitude inferida de ações/falas observadas, não leitura da mente.
+        "trust": 50, "respect": 50, "affinity": 50,
+        "tension": 10, "hostility": 0,
     },
 }
 
+# Compatibilidade com o estado legado e armazenamento independente por partida.
 RELATIONSHIP_STATE = deepcopy(DEFAULT_RELATIONSHIP_STATE)
+_RUN_RELATIONSHIP_STATES = {}
+
+
+def _valid_run_id(run_id):
+    if run_id is None:
+        return None
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise ValueError("run_id deve ser uma string não vazia ou None.")
+    return run_id.strip()
+
+
+def _get_state(run_id=None):
+    run_id = _valid_run_id(run_id)
+    if run_id is None:
+        return RELATIONSHIP_STATE
+    if run_id not in _RUN_RELATIONSHIP_STATES:
+        _RUN_RELATIONSHIP_STATES[run_id] = deepcopy(DEFAULT_RELATIONSHIP_STATE)
+    return _RUN_RELATIONSHIP_STATES[run_id]
 
 
 def _clamp(value):
-    return max(MIN_VALUE, min(MAX_VALUE, int(round(value))))
+    try:
+        number = float(value)
+        if not isfinite(number):
+            return MIN_VALUE
+        return max(MIN_VALUE, min(MAX_VALUE, int(round(number))))
+    except (TypeError, ValueError, OverflowError):
+        return MIN_VALUE
 
 
-def _change(direction, key, delta):
-    if direction not in RELATIONSHIP_STATE:
+def _change(state, direction, key, delta):
+    if direction not in state or key not in state[direction]:
         return
-
-    if key not in RELATIONSHIP_STATE[direction]:
-        return
-
-    current = RELATIONSHIP_STATE[direction][key]
-    RELATIONSHIP_STATE[direction][key] = _clamp(current + delta)
+    current = state[direction][key]
+    state[direction][key] = _clamp(current + delta)
 
 
 EVENT_EFFECTS = {
@@ -301,39 +321,42 @@ EVENT_EFFECTS = {
 }
 
 
-def apply_relationship_event(event_type, intensity=1.0):
+def apply_relationship_event(event_type, intensity=1.0, run_id=None):
+    """Aplica um evento reconhecido; eventos desconhecidos não alteram o estado."""
+    state = _get_state(run_id)
+    if not isinstance(event_type, str):
+        return get_relationship_state(run_id=run_id)
+    event_type = event_type.strip().lower()
     effects = EVENT_EFFECTS.get(event_type)
-
     if not effects:
-        return get_relationship_state()
+        return get_relationship_state(run_id=run_id)
 
     try:
         intensity = float(intensity)
-    except (TypeError, ValueError):
+        if not isfinite(intensity):
+            intensity = 1.0
+    except (TypeError, ValueError, OverflowError):
         intensity = 1.0
-
     intensity = max(0.5, min(2.0, intensity))
 
     for direction, changes in effects.items():
         for key, delta in changes.items():
-            _change(
-                direction=direction,
-                key=key,
-                delta=delta * intensity,
-            )
-
-    return get_relationship_state()
+            _change(state, direction, key, delta * intensity)
+    return get_relationship_state(run_id=run_id)
 
 
-def get_relationship_state():
-    return deepcopy(RELATIONSHIP_STATE)
+def get_relationship_state(run_id=None):
+    return deepcopy(_get_state(run_id))
 
 
-def reset_relationship_state():
-    RELATIONSHIP_STATE.clear()
-    RELATIONSHIP_STATE.update(
-        deepcopy(DEFAULT_RELATIONSHIP_STATE)
-    )
+def reset_relationship_state(run_id=None):
+    run_id = _valid_run_id(run_id)
+    if run_id is None:
+        RELATIONSHIP_STATE.clear()
+        RELATIONSHIP_STATE.update(deepcopy(DEFAULT_RELATIONSHIP_STATE))
+    else:
+        _RUN_RELATIONSHIP_STATES[run_id] = deepcopy(DEFAULT_RELATIONSHIP_STATE)
+    return get_relationship_state(run_id=run_id)
 
 
 def _level(value):
@@ -348,29 +371,18 @@ def _level(value):
     return "muito alto"
 
 
-def _relationship_score(direction):
-    data = RELATIONSHIP_STATE[direction]
-
+def _relationship_score(state, direction):
+    data = state[direction]
     trust = data.get("trust", 50)
     respect = data.get("respect", 50)
     affinity = data.get("affinity", 50)
     tension = data.get("tension", 0)
-
-    penalty_key = (
-        "irritation"
-        if direction == "atlas_to_player"
-        else "hostility"
-    )
+    penalty_key = "irritation" if direction == "atlas_to_player" else "hostility"
     penalty = data.get(penalty_key, 0)
-
     score = (
-        trust * 0.35
-        + respect * 0.30
-        + affinity * 0.35
-        - tension * 0.20
-        - penalty * 0.20
+        trust * 0.35 + respect * 0.30 + affinity * 0.35
+        - tension * 0.20 - penalty * 0.20
     )
-
     return _clamp(score)
 
 
@@ -382,36 +394,26 @@ def _relationship_class(score):
     return "Bom"
 
 
-def get_relationship_summary():
-    atlas_score = _relationship_score(
-        "atlas_to_player"
-    )
-    player_score = _relationship_score(
-        "player_to_atlas"
-    )
-
+def get_relationship_summary(run_id=None):
+    state = _get_state(run_id)
+    atlas_score = _relationship_score(state, "atlas_to_player")
+    player_score = _relationship_score(state, "player_to_atlas")
     return {
         "atlas_to_player": {
-            "score": atlas_score,
-            "class": _relationship_class(
-                atlas_score
-            ),
+            "score": atlas_score, "class": _relationship_class(atlas_score),
         },
         "player_to_atlas": {
-            "score": player_score,
-            "class": _relationship_class(
-                player_score
-            ),
+            "score": player_score, "class": _relationship_class(player_score),
         },
     }
 
 
-def build_relationship_context():
-    atlas = RELATIONSHIP_STATE["atlas_to_player"]
-    player = RELATIONSHIP_STATE["player_to_atlas"]
-    summary = get_relationship_summary()
-
-    return "\n".join([
+def build_relationship_context(run_id=None):
+    state = _get_state(run_id)
+    atlas = state["atlas_to_player"]
+    player = state["player_to_atlas"]
+    summary = get_relationship_summary(run_id=run_id)
+    return "\\n".join([
         (
             "ATLAS → JOGADOR: "
             f"relação={summary['atlas_to_player']['class']} | "
@@ -431,7 +433,8 @@ def build_relationship_context():
             f"hostilidade={_level(player['hostility'])}"
         ),
         (
-            "A relação influencia tom, abertura, confiança e "
-            "disposição social; não altera factos do mundo."
+            "A relação influencia tom, abertura, confiança e disposição social; "
+            "não altera factos do mundo, conhecimento confirmado, nem progressão. "
+            "Não atribuir ao jogador intenções ou sentimentos que não tenham sido observados."
         ),
     ])

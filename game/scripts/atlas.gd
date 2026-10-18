@@ -414,13 +414,28 @@ func get_surface_discovery_state() -> Dictionary:
 func send_scan_to_backend(
 	detections: Array
 ):
+	var run_id := str(
+		SaveManager.active_run_data.get("run_id", "")
+	).strip_edges()
+
+	if run_id.is_empty():
+		push_warning("Não foi possível enviar o scan: run_id da partida vazio.")
+		scan_in_progress = false
+		show_new_discoveries(pending_local_discoveries)
+		pending_local_discoveries.clear()
+		sensor_message.emit("Não consegui associar o scan à partida atual.")
+		return
+
 	var body = {
+		"run_id": run_id,
 		"atlas_position": {
 			"x": global_position.x,
 			"y": global_position.y
 		},
 		"detections": detections
 	}
+
+	print("ATLAS SCAN RUN_ID: ", run_id)
 
 	var json_body = JSON.stringify(
 		body

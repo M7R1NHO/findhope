@@ -161,21 +161,38 @@ def normalize_interpreter_result(data):
 
     if not isinstance(memories, list):
         memories = []
+    else:
+        memories = [item for item in memories if isinstance(item, dict)]
 
     if not isinstance(query, dict):
         query = {}
 
-    if query.get("need_memory") is not True:
-        query = {
-            "need_memory": False,
-            "entity": "any",
-            "category": "any",
-            "query": ""
-        }
+    need_memory = query.get("need_memory") is True
+    entity = query.get("entity", "any")
+    category = query.get("category", "any")
+    query_text = query.get("query", "")
+
+    if entity not in {"player", "atlas", "shared", "world", "any"}:
+        entity = "any"
+    if category not in {
+        "identity", "preference", "belief", "relationship", "event",
+        "knowledge", "definition", "goal", "emotion", "experience", "any"
+    }:
+        category = "any"
+    if not isinstance(query_text, str):
+        query_text = ""
+
+    if not need_memory:
+        entity, category, query_text = "any", "any", ""
 
     return {
         "memories": memories,
-        "query": query
+        "query": {
+            "need_memory": need_memory,
+            "entity": entity,
+            "category": category,
+            "query": query_text.strip(),
+        }
     }
 
 
@@ -225,10 +242,30 @@ def _create_with_fallback(client, model, system_prompt, message):
 def interpret_memory(
     client,
     model,
-    message: str
+    message: str,
+    run_id=None,
 ):
     system_prompt = """
-You are Atlas's memory interpreter.
+You are Atlas's memory interpreter for Find Hope / Atlas 2.0.
+
+Atlas is an exploration android assigned to Nave 47. Preserve the distinction
+between canonical lore, confirmed gameplay, current sensor detections,
+player claims, hypotheses, and memories. A memory records what was said or
+experienced; it does not automatically establish objective truth.
+
+Canonical constraints:
+- Humanity had not confirmed extraterrestrial life or civilizations before
+  this mission.
+- The cause of the ship's unexpected trajectory change is unknown unless
+  authoritative game state explicitly establishes it.
+- Do not invent discoveries, sensor readings, actions, puzzle outcomes,
+  unlocks, or story revelations.
+- A player's belief is a belief held by the player, not proof that its content
+  is true. Attribute claims to their source.
+- Do not store a question as a fact, or infer a persistent preference from a
+  single ambiguous remark.
+- Only create memories supported by the current message. Do not invent
+  earlier events to fill gaps.
 
 Return:
 1. new memories created by the CURRENT message;
@@ -349,7 +386,8 @@ confidence and importance must be between 0 and 1.
 def process_interpreted_memory(
     memory_data,
     world_state=None,
-    knowledge=None
+    knowledge=None,
+    run_id=None,
 ):
     if not memory_data:
         return []
@@ -374,6 +412,15 @@ def process_interpreted_memory(
             knowledge=knowledge
         )
 
+        # Validate the model-produced object before indexing required fields.
+        required = (
+            "memory_type", "entity", "category", "key", "value",
+            "confidence", "importance",
+        )
+        if any(field not in memory for field in required):
+            print("Memória rejeitada: faltam campos obrigatórios.")
+            continue
+
         success = add_memory(
             memory_type=memory["memory_type"],
             entity=memory["entity"],
@@ -394,7 +441,8 @@ def process_interpreted_memory(
             ),
             reaction_hint=evaluation.get(
                 "reaction_hint"
-            )
+            ),
+            run_id=run_id,
         )
 
         if not success:

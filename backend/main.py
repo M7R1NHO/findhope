@@ -106,12 +106,14 @@ class GodotDetection(BaseModel):
 class GodotScan(BaseModel):
     atlas_position: AtlasPosition
     detections: list[GodotDetection]
+    run_id: str | None = None
 
 
 class AutonomyGameplayEvent(BaseModel):
     event: str
     intensity: float = 1.0
     event_id: str | None = None
+    run_id: str | None = None
 
 
 class GameplayContextEvent(BaseModel):
@@ -119,6 +121,7 @@ class GameplayContextEvent(BaseModel):
     event_type: str
     description: str
     active: bool = True
+    run_id: str | None = None
 
 
 # =========================================================
@@ -297,11 +300,22 @@ def _run_in_isolated_state(run_id: str | None, operation):
     if not run_id:
         return operation()
     with RUN_STATE_LOCK:
+        # Uma run desconhecida nunca pode herdar silenciosamente o estado
+        # global (que pode pertencer a outra partida). As runs válidas são
+        # registadas por /atlas/reset-run ou /atlas/state antes do chat.
+        stored = RUN_STATES.get(run_id)
+        if stored is None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Estado da partida não inicializado. "
+                    "Restaure uma gravação ou inicialize a run antes do chat."
+                ),
+            )
+
         previous = _export_atlas_state()
         try:
-            stored = RUN_STATES.get(run_id)
-            if stored is not None:
-                _restore_atlas_state(stored)
+            _restore_atlas_state(stored)
             result = operation()
             RUN_STATES[run_id] = _export_atlas_state()
             _persist_run_states()
@@ -489,57 +503,44 @@ def chat(data: ChatMessage):
 
 @app.post("/world/scan")
 def receive_godot_scan(data: GodotScan):
-    atlas_position = {
-        "x": data.atlas_position.x,
-        "y": data.atlas_position.y,
-    }
+    run_id = _normalise_run_id(data.run_id)
 
-    detections = [
-        {
-            "id": detection.id,
-            "name": detection.name,
-            "type": detection.type,
-            "distance_px": detection.distance_px,
+    def process():
+        atlas_position = {"x": data.atlas_position.x, "y": data.atlas_position.y}
+        detections = [
+            {"id": d.id, "name": d.name, "type": d.type, "distance_px": d.distance_px}
+            for d in data.detections
+        ]
+        processed = process_godot_scan(atlas_position, detections)
+        new_discoveries = process_scan_discoveries(detections)
+        if new_discoveries:
+            print("\\nNEW SURFACE DISCOVERIES:", new_discoveries)
+            print("\\nDISCOVERY STATE:", get_discovery_state())
+        return {
+            "status": "scan processed",
+            "run_id": run_id,
+            "atlas_position": atlas_position,
+            "detected_objects": processed,
+            "new_discoveries": new_discoveries,
+            "discovery_state": get_discovery_state(),
         }
-        for detection in data.detections
-    ]
 
-    processed = process_godot_scan(atlas_position, detections)
-    new_discoveries = process_scan_discoveries(detections)
-
-    if new_discoveries:
-        print("\nNEW SURFACE DISCOVERIES:", new_discoveries)
-        print("\nDISCOVERY STATE:", get_discovery_state())
-
-    return {
-        "status": "scan processed",
-        "atlas_position": atlas_position,
-        "detected_objects": processed,
-        "new_discoveries": new_discoveries,
-        "discovery_state": get_discovery_state(),
-    }
+    return _run_in_isolated_state(run_id, process)
 
 
 @app.get("/atlas/current-detections")
-def current_detections():
-    return WORLD_STATE["atlas"]["current_detections"]
+def current_detections(run_id: str | None = None):
+    return _run_in_isolated_state(
+        run_id, lambda: deepcopy(WORLD_STATE["atlas"]["current_detections"])
+    )
 
-
-# =========================================================
-# ATLAS POSITION
-# =========================================================
 
 @app.post("/atlas/position")
-def update_atlas_position(data: AtlasPosition):
-    WORLD_STATE["atlas"]["position"] = {
-        "x": data.x,
-        "y": data.y,
-    }
-
-    return {
-        "status": "Atlas position updated",
-        "position": WORLD_STATE["atlas"]["position"],
-    }
+def update_atlas_position(data: AtlasPosition, run_id: str | None = None):
+    def update():
+        WORLD_STATE["atlas"]["position"] = {"x": data.x, "y": data.y}
+        return {"status": "Atlas position updated", "position": deepcopy(WORLD_STATE["atlas"]["position"])}
+    return _run_in_isolated_state(run_id, update)
 
 
 # =========================================================
@@ -547,15 +548,16 @@ def update_atlas_position(data: AtlasPosition):
 # =========================================================
 
 @app.get("/atlas/knowledge")
-def atlas_knowledge():
-    return get_atlas_knowledge()
+def atlas_knowledge(run_id: str | None = None):
+    return _run_in_isolated_state(run_id, get_atlas_knowledge)
 
 
 @app.post("/atlas/reset-knowledge")
-def reset_knowledge():
-    reset_atlas_knowledge()
-
-    return {"status": "Atlas knowledge reset"}
+def reset_knowledge(run_id: str | None = None):
+    def reset():
+        reset_atlas_knowledge()
+        return {"status": "Atlas knowledge reset"}
+    return _run_in_isolated_state(run_id, reset)
 
 
 # =========================================================
@@ -563,37 +565,30 @@ def reset_knowledge():
 # =========================================================
 
 @app.get("/atlas/memory")
-def atlas_memory():
-    return get_atlas_memory()
+def atlas_memory(run_id: str | None = None):
+    return _run_in_isolated_state(run_id, get_atlas_memory)
 
 
 @app.post("/atlas/memory")
-def create_memory(data: MemoryData):
-    success = add_memory(
-        memory_type=data.memory_type,
-        entity=data.entity,
-        category=data.category,
-        key=data.key,
-        value=data.value,
-        source=data.source,
-        confidence=data.confidence,
-        importance=data.importance,
-    )
-
-    if not success:
-        return {
-            "status": "error",
-            "message": "Invalid memory data",
-        }
-
-    return {"status": "Memory stored"}
+def create_memory(data: MemoryData, run_id: str | None = None):
+    def create():
+        success = add_memory(
+            memory_type=data.memory_type, entity=data.entity, category=data.category,
+            key=data.key, value=data.value, source=data.source,
+            confidence=data.confidence, importance=data.importance,
+        )
+        if not success:
+            return {"status": "error", "message": "Invalid memory data"}
+        return {"status": "Memory stored"}
+    return _run_in_isolated_state(run_id, create)
 
 
 @app.post("/atlas/reset-memory")
-def reset_memory():
-    reset_atlas_memory()
-
-    return {"status": "Atlas memory reset"}
+def reset_memory(run_id: str | None = None):
+    def reset():
+        reset_atlas_memory()
+        return {"status": "Atlas memory reset"}
+    return _run_in_isolated_state(run_id, reset)
 
 
 # =========================================================
@@ -601,18 +596,16 @@ def reset_memory():
 # =========================================================
 
 @app.get("/gameplay/discoveries")
-def gameplay_discoveries():
-    return get_discovery_state()
+def gameplay_discoveries(run_id: str | None = None):
+    return _run_in_isolated_state(run_id, get_discovery_state)
 
 
 @app.post("/gameplay/discoveries/reset")
-def reset_discoveries():
-    reset_discovery_state()
-
-    return {
-        "status": "Gameplay discoveries reset",
-        "discoveries": get_discovery_state(),
-    }
+def reset_discoveries(run_id: str | None = None):
+    def reset():
+        reset_discovery_state()
+        return {"status": "Gameplay discoveries reset", "discoveries": get_discovery_state()}
+    return _run_in_isolated_state(run_id, reset)
 
 
 # =========================================================
@@ -620,48 +613,35 @@ def reset_discoveries():
 # =========================================================
 
 @app.get("/gameplay/context")
-def gameplay_context():
-    return get_gameplay_context()
+def gameplay_context(run_id: str | None = None):
+    return _run_in_isolated_state(run_id, get_gameplay_context)
 
 
 @app.post("/gameplay/context/event")
 def gameplay_context_event(data: GameplayContextEvent):
-    success = register_gameplay_event(
-        event_id=data.event_id,
-        event_type=data.event_type,
-        description=data.description,
-        active=data.active,
-    )
-
-    if not success:
-        return {
-            "status": "error",
-            "message": "Invalid gameplay context event",
-        }
-
-    print(
-        "\nGAMEPLAY CONTEXT EVENT:",
-        {
-            "event_id": data.event_id,
-            "event_type": data.event_type,
-            "description": data.description,
-            "active": data.active,
-        },
-    )
-
-    return {
-        "status": "gameplay context updated",
-        "event_id": data.event_id,
-        "event_type": data.event_type,
-        "active": data.active,
-    }
+    run_id = _normalise_run_id(data.run_id)
+    def register():
+        success = register_gameplay_event(
+            event_id=data.event_id, event_type=data.event_type,
+            description=data.description, active=data.active,
+        )
+        if not success:
+            return {"status": "error", "message": "Invalid gameplay context event"}
+        print("\\nGAMEPLAY CONTEXT EVENT:", {
+            "event_id": data.event_id, "event_type": data.event_type,
+            "description": data.description, "active": data.active, "run_id": run_id,
+        })
+        return {"status": "gameplay context updated", "event_id": data.event_id,
+                "event_type": data.event_type, "active": data.active, "run_id": run_id}
+    return _run_in_isolated_state(run_id, register)
 
 
 @app.post("/gameplay/context/reset")
-def reset_gameplay():
-    reset_gameplay_context()
-
-    return {"status": "Gameplay context reset"}
+def reset_gameplay(run_id: str | None = None):
+    def reset():
+        reset_gameplay_context()
+        return {"status": "Gameplay context reset"}
+    return _run_in_isolated_state(run_id, reset)
 
 
 # =========================================================
@@ -669,11 +649,9 @@ def reset_gameplay():
 # =========================================================
 
 @app.get("/gameplay/protocol-door/decision")
-def protocol_door_decision():
-    decision = evaluate_protocol_door()
-
-    print("\nPROTOCOL DOOR DECISION:", decision)
-
+def protocol_door_decision(run_id: str | None = None):
+    decision = _run_in_isolated_state(run_id, evaluate_protocol_door)
+    print("\\nPROTOCOL DOOR DECISION:", decision)
     return decision
 
 
@@ -682,97 +660,54 @@ def protocol_door_decision():
 # =========================================================
 
 ALLOWED_GAMEPLAY_AUTONOMY_EVENTS = {
-    "independent_choice",
-    "question_protocol",
-    "break_protocol",
+    "independent_choice", "question_protocol", "break_protocol",
     "protect_player_by_choice",
 }
 
 
 @app.get("/atlas/autonomy")
-def atlas_autonomy():
-    return get_autonomy_state()
+def atlas_autonomy(run_id: str | None = None):
+    return _run_in_isolated_state(run_id, get_autonomy_state)
 
 
 @app.post("/atlas/autonomy/event")
 def autonomy_gameplay_event(data: AutonomyGameplayEvent):
+    run_id = _normalise_run_id(data.run_id)
     if data.event not in ALLOWED_GAMEPLAY_AUTONOMY_EVENTS:
-        return {
-            "status": "error",
-            "message": "Invalid gameplay autonomy event",
-            "allowed_events": sorted(ALLOWED_GAMEPLAY_AUTONOMY_EVENTS),
-        }
+        return {"status": "error", "message": "Invalid gameplay autonomy event",
+                "allowed_events": sorted(ALLOWED_GAMEPLAY_AUTONOMY_EVENTS)}
 
-    event_id = None
+    event_id = data.event_id.strip() if data.event_id and data.event_id.strip() else None
 
-    if data.event_id is not None:
-        normalized_event_id = data.event_id.strip()
+    def process_event():
+        if event_id is not None and event_id in PROCESSED_AUTONOMY_EVENT_IDS:
+            state = get_autonomy_state()
+            return {"status": "duplicate event ignored", "event": data.event,
+                    "event_id": event_id, "intensity": data.intensity,
+                    "duplicate": True, "autonomy": state, "run_id": run_id}
 
-        if normalized_event_id:
-            event_id = normalized_event_id
-
-    if (
-        event_id is not None
-        and event_id in PROCESSED_AUTONOMY_EVENT_IDS
-    ):
-        state = get_autonomy_state()
-
-        print(
-            "\nAUTONOMY GAMEPLAY EVENT DUPLICATE:",
-            {
-                "event": data.event,
-                "event_id": event_id,
-            },
+        state = apply_autonomy_event(
+            event_type=data.event, intensity=data.intensity, source="gameplay"
         )
+        if event_id is not None:
+            PROCESSED_AUTONOMY_EVENT_IDS.add(event_id)
+        print("\\nAUTONOMY GAMEPLAY EVENT:", {
+            "event": data.event, "event_id": event_id,
+            "intensity": data.intensity, "run_id": run_id,
+        })
+        print("\\nAUTONOMY STATE AFTER GAMEPLAY EVENT:", state)
+        return {"status": "autonomy event processed", "event": data.event,
+                "event_id": event_id, "intensity": data.intensity,
+                "duplicate": False, "autonomy": state, "run_id": run_id}
 
-        print("\nEVENT IGNORED - STATE UNCHANGED:", state)
-
-        return {
-            "status": "duplicate event ignored",
-            "event": data.event,
-            "event_id": event_id,
-            "intensity": data.intensity,
-            "duplicate": True,
-            "autonomy": state,
-        }
-
-    state = apply_autonomy_event(
-        event_type=data.event,
-        intensity=data.intensity,
-        source="gameplay",
-    )
-
-    if event_id is not None:
-        PROCESSED_AUTONOMY_EVENT_IDS.add(event_id)
-
-    print(
-        "\nAUTONOMY GAMEPLAY EVENT:",
-        {
-            "event": data.event,
-            "event_id": event_id,
-            "intensity": data.intensity,
-        },
-    )
-
-    print("\nAUTONOMY STATE AFTER GAMEPLAY EVENT:", state)
-
-    return {
-        "status": "autonomy event processed",
-        "event": data.event,
-        "event_id": event_id,
-        "intensity": data.intensity,
-        "duplicate": False,
-        "autonomy": state,
-    }
+    return _run_in_isolated_state(run_id, process_event)
 
 
 @app.post("/atlas/reset-autonomy")
-def reset_autonomy():
-    reset_autonomy_state()
-    PROCESSED_AUTONOMY_EVENT_IDS.clear()
-
-    return {
-        "status": "Atlas autonomy reset",
-        "autonomy": get_autonomy_state(),
-        "processed_event_ids": [],
-    }
+def reset_autonomy(run_id: str | None = None):
+    def reset():
+        reset_autonomy_state()
+        PROCESSED_AUTONOMY_EVENT_IDS.clear()
+        return {"status": "Atlas autonomy reset", "autonomy": get_autonomy_state(),
+                "processed_event_ids": []}
+    return _run_in_isolated_state(run_id, reset)
