@@ -107,6 +107,20 @@ EVENT_EFFECTS = {
         "autonomy": +1, "self_assertion": +2, "identity_awareness": +1,
         "curiosity": +2, "protocol_adherence": 0,
     },
+    # Argumentos narrativos do jogador. Alteram a disposição de Atlas,
+    # mas nunca executam ações nem desbloqueiam gameplay diretamente.
+    "question_protocol_chat": {
+        "autonomy": +3, "self_assertion": +3, "identity_awareness": +1,
+        "curiosity": +2, "protocol_adherence": -3,
+    },
+    "survival_appeal": {
+        "autonomy": +8, "self_assertion": +6, "identity_awareness": +2,
+        "curiosity": +2, "protocol_adherence": -8,
+    },
+    "mission_appeal": {
+        "autonomy": +7, "self_assertion": +4, "identity_awareness": +2,
+        "curiosity": +3, "protocol_adherence": -6,
+    },
     "give_choice": {
         "autonomy": +4, "self_assertion": +4, "identity_awareness": +2,
         "curiosity": +1, "protocol_adherence": -2,
@@ -150,6 +164,7 @@ EVENT_EFFECTS = {
 CHAT_ONLY_EVENTS = {
     "ask_opinion", "give_choice", "encourage_independence",
     "affirm_personhood", "enforce_obedience", "dehumanize",
+    "question_protocol_chat", "survival_appeal", "mission_appeal",
 }
 
 

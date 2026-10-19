@@ -456,72 +456,43 @@ func update_dodge_phase(
 
 
 func spawn_claw_attack():
-	var base_y = rng.randf_range(
-		75.0,
-		arena_size.y - 75.0
+	# A garra pode entrar por qualquer uma das quatro margens.
+	# A trajetória é dirigida para uma zona aleatória da arena,
+	# com variação angular para impedir que o jogador fique num canto.
+	var side := rng.randi_range(0, 3)
+	var target := Vector2(
+		rng.randf_range(arena_size.x * 0.25, arena_size.x * 0.75),
+		rng.randf_range(arena_size.y * 0.25, arena_size.y * 0.75)
 	)
 
-	var from_left = (
-		rng.randi_range(
-			0,
-			1
-		)
-		== 0
-	)
+	var origin := Vector2.ZERO
+	var horizontal_entry := side < 2
 
-	for offset in [
-		-30.0,
-		0.0,
-		30.0
-	]:
-		var rect: Rect2
-		var velocity: Vector2
+	match side:
+		0:
+			origin = Vector2(-90.0, rng.randf_range(35.0, arena_size.y - 35.0))
+		1:
+			origin = Vector2(arena_size.x + 90.0, rng.randf_range(35.0, arena_size.y - 35.0))
+		2:
+			origin = Vector2(rng.randf_range(35.0, arena_size.x - 35.0), -90.0)
+		3:
+			origin = Vector2(rng.randf_range(35.0, arena_size.x - 35.0), arena_size.y + 90.0)
 
-		if from_left:
-			rect = Rect2(
-				Vector2(
-					-125,
-					base_y + offset
-				),
-				Vector2(
-					125,
-					12
-				)
-			)
+	var base_direction := (target - origin).normalized()
+	var perpendicular := Vector2(-base_direction.y, base_direction.x)
 
-			velocity = Vector2(
-				claw_speed,
-				0
-			)
-
-		else:
-			rect = Rect2(
-				Vector2(
-					arena_size.x,
-					base_y + offset
-				),
-				Vector2(
-					125,
-					12
-				)
-			)
-
-			velocity = Vector2(
-				-claw_speed,
-				0
-			)
+	for offset in [-30.0, 0.0, 30.0]:
+		var spawn_position: Vector2 = origin + perpendicular * offset
+		var hazard_size := Vector2(125.0, 12.0) if horizontal_entry else Vector2(12.0, 125.0)
+		var rect := Rect2(spawn_position, hazard_size)
+		var angle_variation := deg_to_rad(rng.randf_range(-9.0, 9.0))
+		var direction := base_direction.rotated(angle_variation)
 
 		create_hazard(
 			rect,
-			velocity,
-			Color(
-				0.95,
-				0.22,
-				0.16,
-				1.0
-			)
+			direction * claw_speed,
+			Color(0.95, 0.22, 0.16, 1.0)
 		)
-
 
 func spawn_bite_attack():
 	var columns: int = 6
@@ -727,19 +698,19 @@ func hit_actor(
 
 	atlas_hp = max(
 		0,
-		atlas_hp - 1
+		atlas_hp - 3
 	)
 
 	if combat_log != null:
 
 		if actor_name == "player":
 			combat_log.text = (
-				"PLAYER atingido // Vida Compartilhada -1"
+				"PLAYER atingido // Vida Compartilhada -3"
 			)
 
 		else:
 			combat_log.text = (
-				"ATLAS atingido // Vida Compartilhada -1"
+				"ATLAS atingido // Vida Compartilhada -3"
 			)
 
 	update_ui()
@@ -831,7 +802,7 @@ func start_position_phase():
 
 	if combat_log != null:
 		combat_log.text = (
-			"PLAYER → ZONA AZUL   //   ATLAS → ZONA VERMELHA"
+			"PLAYER → ZONA AZUL   //   ATLAS → ZONA VERMELHA (POSIÇÕES VARIÁVEIS)"
 		)
 
 	print(
@@ -841,72 +812,57 @@ func start_position_phase():
 
 
 func create_position_zones():
-	if (
-		red_zone == null
-		or blue_zone == null
-	):
+	if red_zone == null or blue_zone == null:
 		return
 
-	var zone_size := Vector2(
-		155,
-		140
-	)
+	var zone_size := Vector2(155.0, 140.0)
+	var max_x := arena_size.x - zone_size.x
+	var max_y := arena_size.y - zone_size.y
 
-	var left_position := Vector2(
-		70,
-		140
-	)
+	var red_position := Vector2.ZERO
+	var blue_position := Vector2.ZERO
+	var valid_pair := false
 
-	var right_position := Vector2(
-		arena_size.x
-		- zone_size.x
-		- 70,
-		140
-	)
-
-	if turn_number % 2 == 1:
-
-		red_zone_rect = Rect2(
-			left_position,
-			zone_size
+	# Tenta várias combinações até encontrar duas zonas separadas.
+	# Os limites garantem que ambas ficam dentro da arena.
+	for attempt in range(60):
+		red_position = Vector2(
+			rng.randf_range(0.0, max_x),
+			rng.randf_range(0.0, max_y)
+		)
+		blue_position = Vector2(
+			rng.randf_range(0.0, max_x),
+			rng.randf_range(0.0, max_y)
 		)
 
-		blue_zone_rect = Rect2(
-			right_position,
-			zone_size
+		var red_rect := Rect2(red_position, zone_size)
+		var blue_rect := Rect2(blue_position, zone_size)
+		var centers_far_enough := red_rect.get_center().distance_to(
+			blue_rect.get_center()
+		) >= 235.0
+
+		if not red_rect.intersects(blue_rect) and centers_far_enough:
+			valid_pair = true
+			break
+
+	# Combinação de recurso para garantir duas zonas válidas.
+	if not valid_pair:
+		red_position = Vector2(20.0, 20.0)
+		blue_position = Vector2(
+			arena_size.x - zone_size.x - 20.0,
+			arena_size.y - zone_size.y - 20.0
 		)
 
-	else:
+	red_zone_rect = Rect2(red_position, zone_size)
+	blue_zone_rect = Rect2(blue_position, zone_size)
 
-		red_zone_rect = Rect2(
-			right_position,
-			zone_size
-		)
-
-		blue_zone_rect = Rect2(
-			left_position,
-			zone_size
-		)
-
-	red_zone.position = (
-		red_zone_rect.position
-	)
-
-	red_zone.size = (
-		red_zone_rect.size
-	)
-
-	blue_zone.position = (
-		blue_zone_rect.position
-	)
-
-	blue_zone.size = (
-		blue_zone_rect.size
-	)
+	red_zone.position = red_zone_rect.position
+	red_zone.size = red_zone_rect.size
+	blue_zone.position = blue_zone_rect.position
+	blue_zone.size = blue_zone_rect.size
 
 	red_zone.visible = true
 	blue_zone.visible = true
-
 
 func hide_position_zones():
 	if red_zone != null:
@@ -1118,21 +1074,39 @@ func get_actor_rect(
 
 
 func reset_actor_positions():
-	player_position = Vector2(
-		arena_size.x * 0.30,
-		arena_size.y * 0.50
-	)
+	# Gera posições iniciais variáveis, mantendo distância suficiente
+	# entre o jogador e o Atlas para evitar uma abertura injusta.
+	var min_distance := 250.0
+	var valid_pair := false
 
-	atlas_position = Vector2(
-		arena_size.x * 0.70,
-		arena_size.y * 0.50
-	)
+	for attempt in range(80):
+		player_position = Vector2(
+			rng.randf_range(actor_size.x, arena_size.x - actor_size.x),
+			rng.randf_range(actor_size.y, arena_size.y - actor_size.y)
+		)
+		atlas_position = Vector2(
+			rng.randf_range(actor_size.x, arena_size.x - actor_size.x),
+			rng.randf_range(actor_size.y, arena_size.y - actor_size.y)
+		)
+
+		if player_position.distance_to(atlas_position) >= min_distance:
+			valid_pair = true
+			break
+
+	if not valid_pair:
+		player_position = Vector2(actor_size.x, actor_size.y)
+		atlas_position = Vector2(
+			arena_size.x - actor_size.x,
+			arena_size.y - actor_size.y
+		)
+
+	player_position = clamp_actor_position(player_position)
+	atlas_position = clamp_actor_position(atlas_position)
 
 	selected_actor = 1
 
 	update_actor_visuals()
 	update_actor_selection()
-
 
 func update_actor_visuals():
 	if player_token != null:

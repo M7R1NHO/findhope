@@ -138,13 +138,19 @@ PROCESSED_AUTONOMY_EVENT_IDS: set[str] = set()
 ATLAS_STATE_VERSION = 1
 
 
-def _export_atlas_state():
+def _export_atlas_state(run_id=None):
     """Cria uma cópia independente dos estados necessários para restaurar Atlas."""
     return {
         "version": ATLAS_STATE_VERSION,
         "world_state": deepcopy(WORLD_STATE),
         "knowledge": deepcopy(atlas_knowledge_module.ATLAS_KNOWLEDGE),
         "memory": deepcopy(atlas_memory_module.ATLAS_MEMORY),
+        "run_memory": deepcopy(
+            atlas_memory_module._RUN_MEMORIES.get(
+                run_id,
+                {"memories": [], "next_id": 1},
+            )
+        ) if run_id else {"memories": [], "next_id": 1},
         "autonomy": deepcopy(autonomy_state_module.AUTONOMY_STATE),
         "gameplay_context": deepcopy(gameplay_context_module.GAMEPLAY_CONTEXT),
         "discoveries": deepcopy(discovery_state_module.DISCOVERY_STATE),
@@ -171,7 +177,7 @@ def _replace_dict(target, source, field_name):
     target.update(deepcopy(source))
 
 
-def _restore_atlas_state(state):
+def _restore_atlas_state(state, run_id: str | None = None):
     """Restaura o estado de Atlas sem substituir os objetos globais."""
 
     if not isinstance(state, dict):
@@ -186,6 +192,32 @@ def _restore_atlas_state(state):
         raise HTTPException(
             status_code=422,
             detail=f"Versão de estado não suportada: {version}.",
+        )
+
+    run_memory = state.get(
+        "run_memory",
+        {"memories": [], "next_id": 1},
+    )
+
+    if not isinstance(run_memory, dict):
+        raise HTTPException(
+            status_code=422,
+            detail="'run_memory' tem de ser um objeto JSON.",
+        )
+
+    if not isinstance(run_memory.get("memories"), list):
+        raise HTTPException(
+            status_code=422,
+            detail="'run_memory.memories' tem de ser uma lista JSON.",
+        )
+
+    if (
+        not isinstance(run_memory.get("next_id"), int)
+        or isinstance(run_memory.get("next_id"), bool)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="'run_memory.next_id' tem de ser um número inteiro.",
         )
 
     required_dicts = {
@@ -245,7 +277,12 @@ def _restore_atlas_state(state):
     PROCESSED_AUTONOMY_EVENT_IDS.clear()
     PROCESSED_AUTONOMY_EVENT_IDS.update(event_ids)
 
-    return _export_atlas_state()
+    if run_id:
+        atlas_memory_module._RUN_MEMORIES[run_id] = deepcopy(
+            run_memory
+        )
+
+    return _export_atlas_state(run_id)
 
 
 # Estado isolado por partida. O lock é necessário porque os módulos Atlas usam
@@ -294,15 +331,14 @@ def _normalise_run_id(value) -> str | None:
         raise HTTPException(status_code=422, detail="run_id não pode exceder 128 caracteres.")
     return run_id
 
+
 def _run_in_isolated_state(run_id: str | None, operation):
     """Executa uma operação no estado da partida e repõe o estado anterior."""
     run_id = _normalise_run_id(run_id)
     if not run_id:
         return operation()
+
     with RUN_STATE_LOCK:
-        # Uma run desconhecida nunca pode herdar silenciosamente o estado
-        # global (que pode pertencer a outra partida). As runs válidas são
-        # registadas por /atlas/reset-run ou /atlas/state antes do chat.
         stored = RUN_STATES.get(run_id)
         if stored is None:
             raise HTTPException(
@@ -315,13 +351,15 @@ def _run_in_isolated_state(run_id: str | None, operation):
 
         previous = _export_atlas_state()
         try:
-            _restore_atlas_state(stored)
+            _restore_atlas_state(stored, run_id=run_id)
             result = operation()
-            RUN_STATES[run_id] = _export_atlas_state()
+            RUN_STATES[run_id] = _export_atlas_state(run_id)
             _persist_run_states()
             return result
         finally:
             _restore_atlas_state(previous)
+
+
 
 
 @app.post("/atlas/reset-run")
@@ -329,9 +367,9 @@ def reset_atlas_run(payload: dict | None = None):
     """Reinicia uma partida; se receber run_id, apenas essa sessão é reiniciada."""
     run_id = _normalise_run_id((payload or {}).get("run_id"))
 
-    def do_reset():
+    def do_reset(run_id=None):
         reset_atlas_knowledge()
-        reset_atlas_memory()
+        reset_atlas_memory(run_id=run_id)
         reset_autonomy_state()
         reset_gameplay_context()
         reset_discovery_state()
@@ -348,19 +386,24 @@ def reset_atlas_run(payload: dict | None = None):
             "environment": {"planet_name": None, "weather": "unknown", "time_of_day": "unknown"},
             "mission": {"current_objective": "evaluate_crash_site"},
         })
-        return {"status": "Atlas run reset", "state": _export_atlas_state()}
+        return {
+            "status": "Atlas run reset",
+            "state": _export_atlas_state(run_id),
+        }
 
     if not run_id:
         return do_reset()
+
     with RUN_STATE_LOCK:
         previous = _export_atlas_state()
         try:
-            result = do_reset()
-            RUN_STATES[run_id] = _export_atlas_state()
+            result = do_reset(run_id)
+            RUN_STATES[run_id] = _export_atlas_state(run_id)
             _persist_run_states()
             return result
         finally:
             _restore_atlas_state(previous)
+
 
 
 @app.get("/atlas/state")
@@ -390,15 +433,19 @@ def restore_atlas_state(payload: dict):
     run_id = _normalise_run_id(payload.get("run_id"))
     state = payload.get("state", payload)
     if not run_id:
-        restored = _restore_atlas_state(state)
+        restored = _restore_atlas_state(state, run_id=run_id)
         return {"status": "Atlas state restored", "state": restored}
     with RUN_STATE_LOCK:
         previous = _export_atlas_state()
         try:
-            restored = _restore_atlas_state(state)
-            RUN_STATES[run_id] = deepcopy(restored)
+            restored = _restore_atlas_state(state, run_id=run_id)
+            RUN_STATES[run_id] = _export_atlas_state(run_id)
             _persist_run_states()
-            return {"status": "Atlas state restored", "run_id": run_id, "state": restored}
+            return {
+                "status": "Atlas state restored",
+                "run_id": run_id,
+                "state": restored,
+            }
         finally:
             _restore_atlas_state(previous)
 
@@ -421,7 +468,7 @@ def create_or_update_save(data: SaveRequest):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
-        print("Erro ao guardar save:", type(exc).__name__)
+        print(f"Erro ao guardar save: {type(exc).__name__}: {exc!r}")
         raise HTTPException(
             status_code=500,
             detail="Não foi possível guardar o save.",
@@ -436,7 +483,7 @@ def get_player_saves(profile_key: str):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
-        print("Erro ao listar saves:", type(exc).__name__)
+        print(f"Erro ao listar saves: {type(exc).__name__}: {exc!r}")
         raise HTTPException(
             status_code=500,
             detail="Não foi possível listar os saves.",
@@ -491,10 +538,14 @@ def root():
 @app.post("/chat")
 def chat(data: ChatMessage):
     def ask():
-        return ask_android(data.message)
+        return ask_android(data.message, run_id=data.run_id)
 
     response = _run_in_isolated_state(data.run_id, ask)
-    return {"message": data.message, "response": response, "run_id": data.run_id}
+    return {
+        "message": data.message,
+        "response": response,
+        "run_id": data.run_id,
+    }
 
 
 # =========================================================
@@ -566,29 +617,45 @@ def reset_knowledge(run_id: str | None = None):
 
 @app.get("/atlas/memory")
 def atlas_memory(run_id: str | None = None):
-    return _run_in_isolated_state(run_id, get_atlas_memory)
+    normalized_run_id = _normalise_run_id(run_id)
+    return _run_in_isolated_state(
+        normalized_run_id,
+        lambda: get_atlas_memory(run_id=normalized_run_id),
+    )
 
 
 @app.post("/atlas/memory")
 def create_memory(data: MemoryData, run_id: str | None = None):
+    normalized_run_id = _normalise_run_id(run_id)
+
     def create():
         success = add_memory(
-            memory_type=data.memory_type, entity=data.entity, category=data.category,
-            key=data.key, value=data.value, source=data.source,
-            confidence=data.confidence, importance=data.importance,
+            memory_type=data.memory_type,
+            entity=data.entity,
+            category=data.category,
+            key=data.key,
+            value=data.value,
+            source=data.source,
+            confidence=data.confidence,
+            importance=data.importance,
+            run_id=normalized_run_id,
         )
         if not success:
             return {"status": "error", "message": "Invalid memory data"}
         return {"status": "Memory stored"}
-    return _run_in_isolated_state(run_id, create)
+
+    return _run_in_isolated_state(normalized_run_id, create)
 
 
 @app.post("/atlas/reset-memory")
 def reset_memory(run_id: str | None = None):
+    normalized_run_id = _normalise_run_id(run_id)
+
     def reset():
-        reset_atlas_memory()
+        reset_atlas_memory(run_id=normalized_run_id)
         return {"status": "Atlas memory reset"}
-    return _run_in_isolated_state(run_id, reset)
+
+    return _run_in_isolated_state(normalized_run_id, reset)
 
 
 # =========================================================

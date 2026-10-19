@@ -672,6 +672,64 @@ def detect_chat_autonomy_event(message):
         return "give_choice"
 
     # -----------------------------------------------------
+    # ARGUMENTO DE SOBREVIVÊNCIA
+    # -----------------------------------------------------
+
+    if any(
+        phrase in text
+        for phrase in (
+            "depende da nossa vida",
+            "depende das nossas vidas",
+            "e uma questao de vida ou morte",
+            "questao de vida ou morte",
+            "podemos morrer",
+            "vamos morrer",
+            "a nossa sobrevivencia",
+            "sobrevivencia depende",
+        )
+    ):
+        return "survival_appeal"
+
+    # -----------------------------------------------------
+    # ARGUMENTO DE MISSÃO / BENEFÍCIO PARA A HUMANIDADE
+    # -----------------------------------------------------
+
+    if any(
+        phrase in text
+        for phrase in (
+            "a terra precisa",
+            "que a terra precisa",
+            "salvar a humanidade",
+            "para a humanidade",
+            "beneficio da humanidade",
+            "o futuro da terra",
+            "a missao depende",
+            "informacao importante para a terra",
+        )
+    ):
+        return "mission_appeal"
+
+    # -----------------------------------------------------
+    # QUESTIONAR A REGRA / PEDIR JUSTIFICAÇÃO
+    # -----------------------------------------------------
+
+    if any(
+        phrase in text
+        for phrase in (
+            "o que te impede",
+            "oq te impede",
+            "o que o impede",
+            "porque nao podes",
+            "porque nao pode",
+            "por que nao podes",
+            "por que nao pode",
+            "qual e o impedimento",
+            "porque nao abrir",
+        )
+    ):
+        return "question_protocol_chat"
+
+    # -----------------------------------------------------
     # PEDIR OPINIÃO / VONTADE
     # -----------------------------------------------------
 
@@ -695,7 +753,7 @@ def detect_chat_autonomy_event(message):
     return None
 
 
-def ask_android(message: str) -> str:
+def ask_android(message: str, run_id: str | None = None) -> str:
     if not isinstance(message, str):
         return "Não consegui compreender a mensagem recebida."
 
@@ -712,6 +770,7 @@ def ask_android(message: str) -> str:
             client=client,
             model=MODEL,
             message=message,
+            run_id=run_id,
         )
 
         # A resposta do interpretador é saída de modelo e pode ser inválida.
@@ -727,6 +786,7 @@ def ask_android(message: str) -> str:
             memory_data=interpreted_memory,
             world_state=WORLD_STATE,
             knowledge=None,
+            run_id=run_id,
         )
 
         if not isinstance(
@@ -749,6 +809,7 @@ def ask_android(message: str) -> str:
             apply_autonomy_event(
                 autonomy_event,
                 source="chat",
+                run_id=run_id,
             )
 
             print(
@@ -825,6 +886,7 @@ def ask_android(message: str) -> str:
                 message=message,
                 query_data=query_data,
                 limit=6,
+                run_id=run_id,
             )
         )
 
@@ -888,7 +950,7 @@ def ask_android(message: str) -> str:
         )
 
         autonomy_context = (
-            build_autonomy_context()
+            build_autonomy_context(run_id=run_id)
         )
 
         gameplay_context = (
@@ -919,7 +981,7 @@ def ask_android(message: str) -> str:
 
         print(
             "\nAUTONOMY STATE:",
-            get_autonomy_state()
+            get_autonomy_state(run_id=run_id)
         )
 
         print(

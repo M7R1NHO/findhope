@@ -11,6 +11,7 @@ config_version=5
 [application]
 
 config/name="Find Hope"
+run/main_scene="uid://du4rktewgxl5l"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [autoload]
