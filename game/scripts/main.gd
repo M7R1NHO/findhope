@@ -131,21 +131,42 @@ func _ready():
 		)
 
 
+
 func _input(event):
+	# ATALHO DE TESTE: entrar diretamente no subterraneo.
+	if (
+		event is InputEventKey
+		and event.pressed
+		and not event.echo
+		and event.keycode == KEY_U
+		and event.ctrl_pressed
+		and event.shift_pressed
+	):
+		if protocol_door != null:
+			if protocol_door.has_method("enter_underground"):
+				protocol_door.enter_underground()
+				print("ATALHO DE TESTE: entrada no subterraneo.")
+			else:
+				push_warning(
+					"ProtocolDoor nao tem enter_underground()."
+				)
+		return
+
+	# Comportamento original: retirar o foco do chat ao clicar fora.
 	if (
 		event is InputEventMouseButton
 		and event.button_index == MOUSE_BUTTON_LEFT
 		and event.pressed
 	):
 		var mouse_position = (
-			get_viewport()
-			.get_mouse_position()
+			get_viewport().get_mouse_position()
 		)
 
 		if not chat_input.get_global_rect().has_point(
 			mouse_position
 		):
 			chat_input.release_focus()
+
 
 
 func _on_chat_input_submitted(
@@ -385,7 +406,12 @@ func send_autonomy_event(
 		"Content-Type: application/json"
 	]
 
+	var run_id = str(
+		SaveManager.active_run_data.get("run_id", "")
+	)
+
 	var body = JSON.stringify({
+		"run_id": run_id,
 		"event": event_name,
 		"event_id": event_id,
 		"intensity": intensity
@@ -536,7 +562,12 @@ func send_gameplay_context_event(
 		"Content-Type: application/json"
 	]
 
+	var run_id = str(
+		SaveManager.active_run_data.get("run_id", "")
+	)
+
 	var body = JSON.stringify({
+		"run_id": run_id,
 		"event_id": event_id,
 		"event_type": event_type,
 		"description": description,
@@ -652,8 +683,17 @@ func check_protocol_door_decision():
 	protocol_request_in_progress = true
 	protocol_api_mode = "autonomy_check"
 
+	var run_id = str(
+		SaveManager.active_run_data.get("run_id", "")
+	)
+
+	var request_url = AUTONOMY_STATE_URL
+
+	if not run_id.is_empty():
+		request_url += "?run_id=" + run_id.uri_encode()
+
 	var error = protocol_api.request(
-		AUTONOMY_STATE_URL
+		request_url
 	)
 
 	if error != OK:

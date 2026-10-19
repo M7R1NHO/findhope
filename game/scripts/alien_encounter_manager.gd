@@ -3344,14 +3344,16 @@ func get_destination_for_side(
 		)
 
 
-		var direction = (
+		@warning_ignore("confusable_local_declaration")
+		var run_direction = (
 			last - previous
 		).normalized()
 
 
-		var destination_local = (
+		@warning_ignore("confusable_local_declaration")
+		var run_destination_local = (
 			last
-			+ direction
+			+ run_direction
 			* run_room_offset
 		)
 
@@ -3359,7 +3361,7 @@ func get_destination_for_side(
 		return {
 			"destination":
 				underground_root.to_global(
-					destination_local
+					run_destination_local
 				),
 
 			"destination_side":

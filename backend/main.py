@@ -151,7 +151,7 @@ def _export_atlas_state(run_id=None):
                 {"memories": [], "next_id": 1},
             )
         ) if run_id else {"memories": [], "next_id": 1},
-        "autonomy": deepcopy(autonomy_state_module.AUTONOMY_STATE),
+        "autonomy": deepcopy(autonomy_state_module.get_autonomy_state(run_id=run_id)),
         "gameplay_context": deepcopy(gameplay_context_module.GAMEPLAY_CONTEXT),
         "discoveries": deepcopy(discovery_state_module.DISCOVERY_STATE),
         "narrative": deepcopy(narrative_state_module.NARRATIVE_STATE),
@@ -269,6 +269,15 @@ def _restore_atlas_state(state, run_id: str | None = None):
         if field_name in state:
             _replace_dict(target, state[field_name], field_name)
 
+    # A autonomia mantém um dicionário por run além do estado global legado.
+    # Sincroniza ambos ao restaurar uma gravação/estado isolado.
+    if "autonomy" in state:
+        autonomy_key = str(run_id) if run_id is not None else "default"
+        if autonomy_key == "default":
+            autonomy_state_module.AUTONOMY_STATES["default"] = autonomy_state_module.AUTONOMY_STATE
+        else:
+            autonomy_state_module.AUTONOMY_STATES[autonomy_key] = deepcopy(state["autonomy"])
+
     conversation_context_module.CONVERSATION_HISTORY.clear()
     conversation_context_module.CONVERSATION_HISTORY.extend(
         deepcopy(history)
@@ -370,7 +379,7 @@ def reset_atlas_run(payload: dict | None = None):
     def do_reset(run_id=None):
         reset_atlas_knowledge()
         reset_atlas_memory(run_id=run_id)
-        reset_autonomy_state()
+        reset_autonomy_state(run_id=run_id)
         reset_gameplay_context()
         reset_discovery_state()
         narrative_state_module.reset_narrative_state()
@@ -734,7 +743,11 @@ ALLOWED_GAMEPLAY_AUTONOMY_EVENTS = {
 
 @app.get("/atlas/autonomy")
 def atlas_autonomy(run_id: str | None = None):
-    return _run_in_isolated_state(run_id, get_autonomy_state)
+    normalized_run_id = _normalise_run_id(run_id)
+    return _run_in_isolated_state(
+        normalized_run_id,
+        lambda: get_autonomy_state(run_id=normalized_run_id),
+    )
 
 
 @app.post("/atlas/autonomy/event")
@@ -748,13 +761,16 @@ def autonomy_gameplay_event(data: AutonomyGameplayEvent):
 
     def process_event():
         if event_id is not None and event_id in PROCESSED_AUTONOMY_EVENT_IDS:
-            state = get_autonomy_state()
+            state = get_autonomy_state(run_id=run_id)
             return {"status": "duplicate event ignored", "event": data.event,
                     "event_id": event_id, "intensity": data.intensity,
                     "duplicate": True, "autonomy": state, "run_id": run_id}
 
         state = apply_autonomy_event(
-            event_type=data.event, intensity=data.intensity, source="gameplay"
+            event_type=data.event,
+            intensity=data.intensity,
+            source="gameplay",
+            run_id=run_id,
         )
         if event_id is not None:
             PROCESSED_AUTONOMY_EVENT_IDS.add(event_id)
@@ -773,8 +789,8 @@ def autonomy_gameplay_event(data: AutonomyGameplayEvent):
 @app.post("/atlas/reset-autonomy")
 def reset_autonomy(run_id: str | None = None):
     def reset():
-        reset_autonomy_state()
+        reset_autonomy_state(run_id=run_id)
         PROCESSED_AUTONOMY_EVENT_IDS.clear()
-        return {"status": "Atlas autonomy reset", "autonomy": get_autonomy_state(),
+        return {"status": "Atlas autonomy reset", "autonomy": get_autonomy_state(run_id=run_id),
                 "processed_event_ids": []}
     return _run_in_isolated_state(run_id, reset)

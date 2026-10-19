@@ -318,9 +318,15 @@ func start_hack(
 
 	create_base_ui()
 
+	# Hacks normais iniciam diretamente um unico minijogo sorteado.
+	# A sobrecarga so pode ser iniciada explicitamente durante RUN,
+	# passando-a como unico hack permitido.
+	var selected_hack := get_random_hack(custom_hacks)
+	current_hack = selected_hack
 
-	show_hack_choices(
-		custom_hacks
+	call_deferred(
+		"launch_selected_hack",
+		selected_hack
 	)
 
 
@@ -450,6 +456,40 @@ func create_base_ui():
 	margin.add_child(
 		content
 	)
+
+
+# =========================================================
+# SORTEAR UM UNICO MINIGAME
+# =========================================================
+
+func get_random_hack(
+	custom_hacks: Array = []
+) -> int:
+
+	var pool: Array = []
+
+	if not custom_hacks.is_empty():
+		for hack_id in custom_hacks:
+			if (
+				hack_id in implemented_hacks
+				and hack_id not in pool
+			):
+				pool.append(hack_id)
+
+	# A sobrecarga nao aparece em sorteios normais.
+	# So e permitida quando pedida explicitamente e isolada.
+	if pool.size() != 1 or pool[0] != HACK_SOBRECARGA:
+		pool.erase(HACK_SOBRECARGA)
+
+	if pool.is_empty():
+		pool = implemented_hacks.duplicate()
+		pool.erase(HACK_SOBRECARGA)
+
+	if pool.is_empty():
+		push_error("HackManager: nao existem minijogos disponiveis.")
+		return HACK_DIRECOES
+
+	return pool[rng.randi_range(0, pool.size() - 1)]
 
 
 # =========================================================
