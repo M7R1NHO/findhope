@@ -29,6 +29,7 @@
 [ext_resource type="Script" uid="uid://bb4eqrrbhkvug" path="res://scripts/facility_progression_manager.gd" id="23_vxglm"]
 [ext_resource type="Script" uid="uid://cds65rw5i74tv" path="res://scripts/security_access_terminal.gd" id="24_2f3dj"]
 [ext_resource type="Script" uid="uid://cfh7aoywgfdci" path="res://scripts/run_state.gd" id="26_2wyq8"]
+[ext_resource type="Script" uid="uid://dgdp0m5yos6ij" path="res://scripts/phase3_layout.gd" id="30_fv21b"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
 size = Vector2(652, 250)
@@ -800,8 +801,8 @@ position = Vector2(5000, 0)
 
 [node name="Ground" type="Polygon2D" parent="UndergroundRoot" unique_id=1495629326]
 z_index = -10
-position = Vector2(-639.999, -2386.7532)
-scale = Vector2(1.2698088, 1.5618575)
+position = Vector2(1199.987, -2386.7532)
+scale = Vector2(2.2226758, 1.5618575)
 color = Color(0, 0, 0, 1)
 polygon = PackedVector2Array(-1931, -2231, -1904, 1752, 3424, 1752, 3441.4063, -293.36572, 3458, -2243)
 
@@ -2464,3 +2465,7 @@ main_menu_scene_path = "uid://du4rktewgxl5l"
 
 [node name="RunState" type="Node" parent="." unique_id=347757290]
 script = ExtResource("26_2wyq8")
+
+[node name="Endgame" type="Node2D" parent="." unique_id=1794400448]
+position = Vector2(9764, -2761)
+script = ExtResource("30_fv21b")

@@ -1,0 +1,30 @@
+[33me8ecbb9[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Integrar correcoes do professor
+[33m52ffa75[m começo phase 3
+[33mb1f0e8e[m atalho para subterraneo
+[33m37cea97[m[33m ([m[1;35mrefs/stash[m[33m)[m On main: .
+[33m11bf584[m index on main: 99d0177 6 estagios de atlas
+[33mcf5ca07[m Tentar corrigir persistencia do estado do Atlas
+[33m0b4c650[m Atlas 2.0 v1
+[33mc1673e1[m testes de saves
+[33m64a6b48[m Meta: Saves funcionais
+[33m4f3b5c2[m postgresql x atlas
+[33m99d0177[m 6 estagios de atlas
+[33m917c223[m Merge branch 'main' of https://github.com/M7R1NHO/findhope
+[33m0dcce8d[m não sei qual foi o progresso
+[33me4f5fe8[m versões de descoberta diferente do atlas
+[33mfb680ce[m começo do atlas 2.0
+[33mbcee65f[m Intro 50% antes do Atlas 2.0
+[33m240d90e[m fundo diferente
+[33mc1732f2[m concluir HIDE e melhorar textura da Superfície
+[33m38309fd[m sla
+[33m9c2fad5[m siga-me ATLAS
+[33m9747cd3[m energia
+[33mdab5eaa[m Implementa sistema de saves e persistencia da superficie
+[33m95337ce[m Conclui progressao da fase 2 e desbloqueia fase 3
+[33mc49f71c[m Adiciona progresso atual do subterraneo
+[33m8206b78[m Implementa manutencao e suporte termico no subterraneo
+[33m07fe15b[m Implementa menu principal e pausa, combate sonoro, equipamento e sala de energia
+[33m80ab2b5[m Menu
+[33m4b29a19[m Implementa encontros alienigenas, sistema de fuga, esconderijo, combate e portas do subterraneo
+[33m1046348[m Integra sistema de hacking nas portas subterraneas e porta de protocolo
+[33mea8f716[m Adiciona layout subterraneo, paredes, portas e sistema inicial de hacking
