@@ -15,6 +15,13 @@ var submenu_layer: CanvasLayer = null
 
 func _ready():
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	SaveManager.save_failed.connect(_on_save_failed)
+
+
+func _on_save_failed(message: String):
+	if pause_open:
+		close_submenu()
+		set_status(message)
 
 
 func _unhandled_input(event):
@@ -520,6 +527,7 @@ func save_to_slot(
 		return
 
 	save_in_progress = true
+	set_status("A guardar…")
 
 	var success = (
 		await SaveManager.save_manual_slot(
@@ -533,7 +541,7 @@ func save_to_slot(
 		close_submenu()
 
 		set_status(
-			"Não foi possível salvar o jogo."
+			SaveManager.last_error
 		)
 
 		return
@@ -543,7 +551,7 @@ func save_to_slot(
 	set_status(
 		"Jogo salvo no Slot "
 		+ str(slot)
-		+ "."
+		+ " no dispositivo. Sincronização remota em segundo plano."
 	)
 
 
@@ -792,26 +800,18 @@ func load_slot(
 		close_submenu()
 
 		set_status(
-			"Não foi possível preparar o save."
+			SaveManager.last_error
 		)
 
 		return
-
-	close_submenu()
-
-	pause_open = false
-
-	get_tree().paused = false
 
 	# Sem cena de fallback, um snapshot sem scene_path falhava em silêncio.
 	var fallback_scene: String = ""
 	if get_tree().current_scene != null:
 		fallback_scene = get_tree().current_scene.scene_file_path
 
-	SaveManager.call_deferred(
-		"load_prepared_scene",
-		fallback_scene
-	)
+	set_status("A carregar…")
+	await SaveManager.load_prepared_scene(fallback_scene)
 
 func open_options():
 	close_submenu()
@@ -1161,7 +1161,7 @@ func open_delete_all_saves_confirmation():
 	buttons.add_child(confirm)
 
 func confirm_delete_all_manual_saves():
-	var success = SaveManager.delete_all_manual_slots()
+	var success = await SaveManager.delete_all_manual_slots()
 
 	close_submenu()
 

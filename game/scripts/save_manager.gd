@@ -6,6 +6,7 @@ signal load_prepared(save_type: String, slot: int)
 signal load_applied
 signal save_failed(reason: String)
 signal profile_changed
+signal remote_saves_updated
 
 
 const SAVE_VERSION: int = 1
@@ -30,9 +31,17 @@ var backend_state_cache: Dictionary = {}
 var backend_request_in_progress: bool = false
 var remote_save_metadata: Array = []
 var remote_save_metadata_loaded: bool = false
+var last_error: String = ""
+var save_in_progress: bool = false
+var load_in_progress: bool = false
+var remote_upload_in_progress: bool = false
+var remote_upload_queue: Dictionary = {}
+var last_snapshot_msec: int = 0
 
 
 func _ready():
+	# Os pedidos HTTP e respetivos timeouts têm de funcionar no menu de pausa.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	load_profile()
 	# Não bloquear a inicialização do autoload à espera da rede.
 	call_deferred("_sync_remote_saves_in_background")
@@ -77,7 +86,7 @@ func default_run_data() -> Dictionary:
 
 
 func load_profile():
-	if not FileAccess.file_exists(PROFILE_PATH):
+	if not FileAccess.file_exists(PROFILE_PATH) and not FileAccess.file_exists(PROFILE_PATH + ".bak"):
 		profile = default_profile()
 		save_profile()
 		return
@@ -94,14 +103,15 @@ func load_profile():
 	for key in loaded.keys():
 		profile[key] = loaded[key]
 
+	var previous_key := str(profile.get("profile_key", ""))
 	ensure_profile_key()
-	if str(profile.get("profile_key", "")).is_empty():
+	if str(profile.get("profile_key", "")) != previous_key:
 		save_profile()
 
 
 func ensure_profile_key() -> void:
 	var existing_key := str(profile.get("profile_key", "")).strip_edges()
-	if existing_key.length() >= 32:
+	if existing_key.length() >= 32 and existing_key.length() <= 128:
 		return
 
 	var crypto := Crypto.new()
@@ -124,31 +134,29 @@ func save_profile():
 	profile_changed.emit()
 
 
-func start_new_run():
-	clear_current_autosave()
-
+func start_new_run() -> bool:
+	if save_in_progress or load_in_progress:
+		return _fail("Aguarda a conclusão da operação em curso.")
+	load_in_progress = true
+	var previous_run := active_run_data.duplicate(true)
+	var previous_cache := backend_state_cache.duplicate(true)
 	active_run_data = default_run_data()
-
 	active_run_data["run_id"] = create_run_id()
 	active_run_data["created_at"] = current_datetime()
 	active_run_data["updated_at"] = current_datetime()
-
-	active_run_data["atlas"] = {
-		"backend_state": {}
-	}
-
 	backend_state_cache.clear()
+	if not await reset_backend_for_new_run():
+		active_run_data = previous_run
+		backend_state_cache = previous_cache
+		load_in_progress = false
+		return _fail("Não foi possível iniciar o Atlas. Liga o backend antes de iniciar uma nova partida.")
+	pending_snapshot.clear()
+	clear_current_autosave()
 	manual_save_blocks.clear()
-
 	profile["has_started_game"] = true
-
 	save_profile()
-
-	print("")
-	print("NEW RUN CREATED")
-	print("Run ID: ", active_run_data["run_id"])
-
-	await reset_backend_for_new_run()
+	load_in_progress = false
+	return true
 
 
 func reset_backend_for_new_run() -> bool:
@@ -158,6 +166,7 @@ func reset_backend_for_new_run() -> bool:
 		return false
 
 	var request := HTTPRequest.new()
+	request.process_mode = Node.PROCESS_MODE_ALWAYS
 	request.timeout = 10.0
 
 	add_child(request)
@@ -182,7 +191,7 @@ func reset_backend_for_new_run() -> bool:
 
 	request.queue_free()
 
-	if int(result[1]) != 200:
+	if int(result[0]) != HTTPRequest.RESULT_SUCCESS or int(result[1]) != 200:
 		push_warning(
 			"O backend não confirmou o reinício de Atlas. HTTP: "
 			+ str(result[1])
@@ -214,15 +223,15 @@ func get_backend_state_url() -> String:
 func capture_backend_state() -> bool:
 	# Dois saves quase simultâneos (duplo clique, autosave + manual) não devem
 	# falhar: o segundo espera pelo primeiro em vez de devolver false.
-	var waited_frames: int = 0
-	while backend_request_in_progress and waited_frames < 1200:
+	var wait_until := Time.get_ticks_msec() + 12000
+	while backend_request_in_progress and Time.get_ticks_msec() < wait_until:
 		await get_tree().process_frame
-		waited_frames += 1
 
 	if backend_request_in_progress:
 		return false
 
 	var state_url := get_backend_state_url()
+	var requested_run_id := str(active_run_data.get("run_id", ""))
 	if state_url.is_empty():
 		push_warning("Não foi possível obter o estado do Atlas: run_id vazio.")
 		return false
@@ -230,6 +239,7 @@ func capture_backend_state() -> bool:
 	backend_request_in_progress = true
 
 	var request := HTTPRequest.new()
+	request.process_mode = Node.PROCESS_MODE_ALWAYS
 	request.timeout = 10.0
 
 	add_child(request)
@@ -253,7 +263,7 @@ func capture_backend_state() -> bool:
 	request.queue_free()
 	backend_request_in_progress = false
 
-	if int(result[1]) != 200:
+	if int(result[0]) != HTTPRequest.RESULT_SUCCESS or int(result[1]) != 200:
 		push_warning(
 			"Falha ao obter o estado do backend. HTTP: "
 			+ str(result[1])
@@ -270,7 +280,9 @@ func capture_backend_state() -> bool:
 		)
 		return false
 
-	if not (parsed.get("state", {}) is Dictionary):
+	if str(parsed.get("run_id", "")) != requested_run_id or str(active_run_data.get("run_id", "")) != requested_run_id:
+		return false
+	if not (parsed.get("state") is Dictionary):
 		push_warning(
 			"O backend devolveu um estado inválido."
 		)
@@ -299,6 +311,7 @@ func restore_backend_state(state: Dictionary) -> bool:
 		return await reset_backend_for_new_run()
 
 	var request := HTTPRequest.new()
+	request.process_mode = Node.PROCESS_MODE_ALWAYS
 	request.timeout = 10.0
 
 	add_child(request)
@@ -328,7 +341,7 @@ func restore_backend_state(state: Dictionary) -> bool:
 
 	request.queue_free()
 
-	if int(result[1]) != 200:
+	if int(result[0]) != HTTPRequest.RESULT_SUCCESS or int(result[1]) != 200:
 		push_warning(
 			"Falha ao restaurar o estado do backend. HTTP: "
 			+ str(result[1])
@@ -336,7 +349,7 @@ func restore_backend_state(state: Dictionary) -> bool:
 		return false
 
 	var response = JSON.parse_string(result[3].get_string_from_utf8())
-	if not (response is Dictionary) or not (response.get("state", {}) is Dictionary):
+	if not (response is Dictionary) or not (response.get("state") is Dictionary):
 		push_warning("O backend não devolveu o estado restaurado de Atlas.")
 		return false
 	if str(response.get("run_id", "")) != run_id:
@@ -354,6 +367,7 @@ func restore_backend_state(state: Dictionary) -> bool:
 
 func reset_active_run():
 	clear_current_autosave()
+	save_profile()
 
 	active_run_data = {}
 	pending_snapshot = {}
@@ -386,6 +400,7 @@ func save_snapshot_remote(snapshot: Dictionary, save_type: String, slot: int) ->
 	})
 
 	var request := HTTPRequest.new()
+	request.process_mode = Node.PROCESS_MODE_ALWAYS
 	request.timeout = 15.0
 	add_child(request)
 
@@ -404,7 +419,7 @@ func save_snapshot_remote(snapshot: Dictionary, save_type: String, slot: int) ->
 	var result = await request.request_completed
 	request.queue_free()
 
-	if int(result[1]) != 200:
+	if int(result[0]) != HTTPRequest.RESULT_SUCCESS or int(result[1]) != 200:
 		push_warning("O save ficou guardado localmente, mas a sincronização falhou. HTTP: " + str(result[1]))
 		return false
 
@@ -418,14 +433,28 @@ func save_snapshot_remote(snapshot: Dictionary, save_type: String, slot: int) ->
 
 
 func _sync_snapshot_remote_background(snapshot: Dictionary, save_type: String, slot: int) -> void:
-	var remote_ok: bool = await save_snapshot_remote(snapshot, save_type, slot)
-	if not remote_ok:
-		push_warning("Save local concluído; a sincronização remota falhou para " + save_type + " " + str(slot) + ".")
+	if not validate_snapshot(snapshot):
+		return
+	var queue_key := save_type + ":" + str(slot)
+	if remote_upload_queue.has(queue_key):
+		var queued: Dictionary = remote_upload_queue[queue_key]["snapshot"]
+		if _prefer_local_snapshot(queued, snapshot):
+			return
+	remote_upload_queue[queue_key] = {
+		"snapshot": snapshot.duplicate(true), "save_type": save_type, "slot": slot
+	}
+	if remote_upload_in_progress:
+		return
+	remote_upload_in_progress = true
+	while not remote_upload_queue.is_empty():
+		var key = remote_upload_queue.keys()[0]
+		var item: Dictionary = remote_upload_queue[key]
+		remote_upload_queue.erase(key)
+		var remote_ok := await save_snapshot_remote(item["snapshot"], item["save_type"], item["slot"])
+		if not remote_ok:
+			push_warning("Save local concluído; sincronização remota pendente para " + str(key) + ".")
+	remote_upload_in_progress = false
 
-
-# =========================================================
-# CARREGAMENTO REMOTO (SUPABASE) + FALLBACK LOCAL
-# =========================================================
 
 func fetch_remote_snapshot(save_type: String, slot: int) -> Dictionary:
 	var profile_key := str(profile.get("profile_key", "")).strip_edges()
@@ -438,6 +467,7 @@ func fetch_remote_snapshot(save_type: String, slot: int) -> Dictionary:
 	var url := SAVES_API_URL + "/" + profile_key + "/" + slot_type + "/" + str(slot_number)
 
 	var request := HTTPRequest.new()
+	request.process_mode = Node.PROCESS_MODE_ALWAYS
 	request.timeout = 15.0
 	add_child(request)
 	var error := request.request(url)
@@ -448,7 +478,7 @@ func fetch_remote_snapshot(save_type: String, slot: int) -> Dictionary:
 
 	var result = await request.request_completed
 	request.queue_free()
-	if int(result[1]) != 200:
+	if int(result[0]) != HTTPRequest.RESULT_SUCCESS or int(result[1]) != 200:
 		if int(result[1]) != 404:
 			push_warning("Falha ao carregar save remoto. HTTP: " + str(result[1]))
 		return {}
@@ -467,18 +497,11 @@ func fetch_remote_snapshot(save_type: String, slot: int) -> Dictionary:
 
 func prepare_snapshot_for_load(snapshot: Dictionary, save_type: String, slot: int) -> bool:
 	if not validate_snapshot(snapshot):
-		return false
-
+		return _fail("A gravação selecionada está incompleta ou pertence a outra versão.")
 	pending_snapshot = snapshot.duplicate(true)
-	active_run_data = snapshot.get("run_data", default_run_data()).duplicate(true)
-	var run_data_atlas = active_run_data.get("atlas", {})
-	if not (run_data_atlas is Dictionary):
-		run_data_atlas = {}
-	var state = snapshot.get("atlas_backend_state", run_data_atlas.get("backend_state", {}))
-	if not (state is Dictionary):
-		state = {}
-	backend_state_cache = state.duplicate(true)
-	manual_save_blocks.clear()
+	# A seleção do slot não altera a partida que ainda está no ecrã.
+	pending_snapshot["save_type"] = save_type
+	pending_snapshot["slot"] = slot
 	load_prepared.emit(save_type, slot)
 	return true
 
@@ -488,51 +511,13 @@ func _snapshot_saved_at(snapshot: Dictionary) -> String:
 
 
 func prepare_current_run_load_any() -> bool:
-	# Lê as duas cópias e escolhe a mais recente. A API pode ainda conter uma
-	# versão antiga se a sincronização em segundo plano não tiver terminado.
-	var local_snapshot := read_json_file(CURRENT_RUN_PATH)
-	var remote_snapshot := await fetch_remote_snapshot("autosave", 0)
-
-	if not local_snapshot.is_empty() and not remote_snapshot.is_empty():
-		var local_time := _snapshot_saved_at(local_snapshot)
-		var remote_time := _snapshot_saved_at(remote_snapshot)
-		if not local_time.is_empty() and local_time >= remote_time:
-			call_deferred("_sync_snapshot_remote_background", local_snapshot.duplicate(true), "autosave", 0)
-			return prepare_snapshot_for_load(local_snapshot, "autosave", 0)
-
-	if not remote_snapshot.is_empty():
-		if not write_json_file(CURRENT_RUN_PATH, remote_snapshot):
-			push_warning("O autosave remoto foi carregado, mas não foi possível atualizar a cópia local.")
-		return prepare_snapshot_for_load(remote_snapshot, "autosave", 0)
-
-	if local_snapshot.is_empty():
-		return false
-	return prepare_snapshot_for_load(local_snapshot, "autosave", 0)
+	return await _prepare_slot_load("autosave", 0, CURRENT_RUN_PATH)
 
 
 func prepare_manual_slot_load_any(slot: int) -> bool:
 	if not is_valid_slot(slot):
-		return false
-
-	var local_path := get_manual_slot_path(slot)
-	var local_snapshot := read_json_file(local_path)
-	var remote_snapshot := await fetch_remote_snapshot("manual", slot)
-
-	if not local_snapshot.is_empty() and not remote_snapshot.is_empty():
-		var local_time := _snapshot_saved_at(local_snapshot)
-		var remote_time := _snapshot_saved_at(remote_snapshot)
-		if not local_time.is_empty() and local_time >= remote_time:
-			call_deferred("_sync_snapshot_remote_background", local_snapshot.duplicate(true), "manual", slot)
-			return prepare_snapshot_for_load(local_snapshot, "manual", slot)
-
-	if not remote_snapshot.is_empty():
-		if not write_json_file(local_path, remote_snapshot):
-			push_warning("O slot remoto foi carregado, mas não foi possível atualizar a cópia local.")
-		return prepare_snapshot_for_load(remote_snapshot, "manual", slot)
-
-	if local_snapshot.is_empty():
-		return false
-	return prepare_snapshot_for_load(local_snapshot, "manual", slot)
+		return _fail("O slot selecionado é inválido.")
+	return await _prepare_slot_load("manual", slot, get_manual_slot_path(slot))
 
 
 func list_remote_saves() -> Array:
@@ -540,6 +525,7 @@ func list_remote_saves() -> Array:
 	if profile_key.length() < 32:
 		return []
 	var request := HTTPRequest.new()
+	request.process_mode = Node.PROCESS_MODE_ALWAYS
 	request.timeout = 15.0
 	add_child(request)
 	var error := request.request(SAVES_API_URL + "/" + profile_key)
@@ -549,7 +535,7 @@ func list_remote_saves() -> Array:
 		return []
 	var result = await request.request_completed
 	request.queue_free()
-	if int(result[1]) != 200:
+	if int(result[0]) != HTTPRequest.RESULT_SUCCESS or int(result[1]) != 200:
 		push_warning("Falha ao listar saves remotos. HTTP: " + str(result[1]))
 		return []
 	var parsed = JSON.parse_string(result[3].get_string_from_utf8())
@@ -558,6 +544,7 @@ func list_remote_saves() -> Array:
 	var saves = parsed.get("saves", [])
 	remote_save_metadata = saves.duplicate(true) if saves is Array else []
 	remote_save_metadata_loaded = true
+	remote_saves_updated.emit()
 	return remote_save_metadata.duplicate(true)
 
 
@@ -567,128 +554,16 @@ func sync_remote_saves_to_local() -> void:
 	await list_remote_saves()
 
 
-func autosave(
-	checkpoint_id: String
-) -> bool:
-	if active_run_data.is_empty():
-		push_warning(
-			"Autosave ignorado: nenhuma run ativa."
-		)
-
-		save_failed.emit(
-			"no_active_run"
-		)
-
-		return false
-
-	active_run_data["last_checkpoint"] = checkpoint_id
-	active_run_data["updated_at"] = current_datetime()
-
-	if not await capture_backend_state():
-		save_failed.emit("atlas_state_capture_failed")
-		return false
-
-	var snapshot = create_snapshot(
-		"autosave",
-		0,
-		checkpoint_id
-	)
-
-	var success = write_json_file(
-		CURRENT_RUN_PATH,
-		snapshot
-	)
-
-	if not success:
-		save_failed.emit(
-			"autosave_write_failed"
-		)
-
-		return false
-
-	# O save local já está concluído. Sincronizar em segundo plano para não
-	# bloquear o jogo/menu enquanto o servidor responde.
-	call_deferred("_sync_snapshot_remote_background", snapshot.duplicate(true), "autosave", 0)
-
-	print("")
-	print("AUTOSAVE COMPLETE")
-	print("Checkpoint: ", checkpoint_id)
-
-	save_completed.emit(
-		"autosave",
-		0
-	)
-
-	return true
+func autosave(checkpoint_id: String) -> bool:
+	return await _save_game("autosave", 0, checkpoint_id)
 
 
-func save_manual_slot(
-	slot: int
-) -> bool:
+func save_manual_slot(slot: int) -> bool:
 	if not is_valid_slot(slot):
-		save_failed.emit(
-			"invalid_slot"
-		)
-
-		return false
-
-	if active_run_data.is_empty():
-		save_failed.emit(
-			"no_active_run"
-		)
-
-		return false
-
+		return _fail("O slot selecionado é inválido.")
 	if not can_manual_save():
-		var reason = get_manual_save_block_reason()
-
-		save_failed.emit(
-			"manual_save_blocked:"
-			+ reason
-		)
-
-		return false
-
-	active_run_data["updated_at"] = current_datetime()
-
-	if not await capture_backend_state():
-		save_failed.emit("atlas_state_capture_failed")
-		return false
-
-	var snapshot = create_snapshot(
-		"manual",
-		slot,
-		"manual_save"
-	)
-
-	var path = get_manual_slot_path(slot)
-
-	var success = write_json_file(
-		path,
-		snapshot
-	)
-
-	if not success:
-		save_failed.emit(
-			"manual_save_write_failed"
-		)
-
-		return false
-
-	# O save local já está concluído. A sincronização remota não deve bloquear
-	# o botão Confirmar nem a interface de pausa.
-	call_deferred("_sync_snapshot_remote_background", snapshot.duplicate(true), "manual", slot)
-
-	print("")
-	print("MANUAL SAVE COMPLETE")
-	print("Slot: ", slot)
-
-	save_completed.emit(
-		"manual",
-		slot
-	)
-
-	return true
+		return _fail(get_manual_save_block_reason())
+	return await _save_game("manual", slot, "manual_save")
 
 
 func set_manual_save_block(
@@ -712,7 +587,7 @@ func can_manual_save() -> bool:
 	if active_run_data.is_empty():
 		return false
 
-	return manual_save_blocks.is_empty()
+	return manual_save_blocks.is_empty() and _runtime_save_block_reason().is_empty()
 
 
 func get_manual_save_block_reason() -> String:
@@ -720,7 +595,7 @@ func get_manual_save_block_reason() -> String:
 		return "Nenhuma run ativa."
 
 	if manual_save_blocks.is_empty():
-		return ""
+		return _runtime_save_block_reason()
 
 	var names: Array[String] = []
 
@@ -754,6 +629,28 @@ func get_manual_save_blocks() -> Array:
 	return manual_save_blocks.keys()
 
 
+func _runtime_save_block_reason() -> String:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return "Aguarda a abertura da partida."
+	var checks := {
+		"FightManager": ["fight_active"],
+		"HackManager": ["hack_active"],
+		"UndergroundRoot/AlienEncounterManager": [
+			"encounter_active", "hide_initial_active", "hide_initial_waiting_for_run",
+			"run_minigame_active", "run_closing_active", "hide_event_active"
+		]
+	}
+	for node_path in checks:
+		var node := scene.get_node_or_null(NodePath(node_path))
+		if node == null:
+			continue
+		for property_name in checks[node_path]:
+			if bool(node.get(property_name)):
+				return "Conclui o combate, perseguição ou minijogo antes de guardar."
+	return ""
+
+
 func create_snapshot(
 	save_type: String,
 	slot: int,
@@ -773,6 +670,7 @@ func create_snapshot(
 		"save_type": save_type,
 		"slot": slot,
 		"saved_at": current_datetime(),
+		"saved_at_unix_ms": _next_snapshot_msec(),
 		"scene_path": scene_path,
 		"checkpoint": checkpoint_id,
 		"run_data": active_run_data.duplicate(true),
@@ -862,61 +760,54 @@ func get_pending_scene_path() -> String:
 	)
 
 
-func load_prepared_scene(
-	fallback_scene_path: String = ""
-) -> bool:
-	if pending_snapshot.is_empty():
-		push_warning(
-			"Não existe save preparado para carregar."
-		)
-		return false
-
-	var scene_path = (
-		get_pending_scene_path()
-		.strip_edges()
-	)
-
+func load_prepared_scene(fallback_scene_path: String = "") -> bool:
+	if load_in_progress or save_in_progress:
+		return _fail("Aguarda a conclusão da gravação ou do carregamento em curso.")
+	if not validate_snapshot(pending_snapshot):
+		return _fail("Não existe uma gravação válida preparada para carregar.")
+	var scene_path := get_pending_scene_path().strip_edges()
 	if scene_path.is_empty():
-		scene_path = (
-			fallback_scene_path
-			.strip_edges()
-		)
+		scene_path = fallback_scene_path.strip_edges()
+	if scene_path.is_empty() or not ResourceLoader.exists(scene_path, "PackedScene"):
+		return _fail("A cena desta gravação não existe no projeto.")
 
-	if scene_path.is_empty():
-		push_warning(
-			"O save não possui uma cena válida."
-		)
-		return false
+	load_in_progress = true
+	last_error = ""
+	var was_paused := get_tree().paused
+	var previous_run := active_run_data.duplicate(true)
+	var previous_cache := backend_state_cache.duplicate(true)
+	get_tree().paused = true
+	active_run_data = pending_snapshot["run_data"].duplicate(true)
+	var atlas_data: Dictionary = active_run_data.get("atlas", {})
+	var state: Dictionary = pending_snapshot.get("atlas_backend_state", atlas_data.get("backend_state", {}))
 
-	print("")
-	print("======================================")
-	print("LOADING PREPARED SAVE")
-	print("SCENE: ", scene_path)
-	print("======================================")
+	# Confirmar Atlas antes de destruir a cena atual. Uma falha mantém o jogador no menu.
+	if not await restore_backend_state(state):
+		active_run_data = previous_run
+		backend_state_cache = previous_cache
+		pending_snapshot.clear()
+		get_tree().paused = was_paused
+		load_in_progress = false
+		return _fail("Não foi possível recuperar o Atlas. Confirma que o backend está ligado e volta a carregar.")
 
-	get_tree().paused = false
-
-	var error = (
-		get_tree()
-		.change_scene_to_file(
-			scene_path
-		)
-	)
-
+	var error := get_tree().change_scene_to_file(scene_path)
 	if error != OK:
-		push_warning(
-			"Não foi possível carregar a cena do save."
-		)
-		return false
-
+		active_run_data = previous_run
+		backend_state_cache = previous_cache
+		if not previous_run.is_empty():
+			await restore_backend_state(previous_cache)
+		get_tree().paused = was_paused
+		load_in_progress = false
+		return _fail("Não foi possível abrir a cena da gravação.")
+	while get_tree().current_scene == null or not get_tree().current_scene.is_node_ready():
+		await get_tree().process_frame
+	# Permitir a criação diferida de portas e os resolve_nodes(), sem física em curso.
 	await get_tree().process_frame
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	if not await apply_pending_snapshot():
-		return false
-
-	return true
+	manual_save_blocks.clear()
+	var applied := await apply_pending_snapshot()
+	load_in_progress = false
+	get_tree().paused = false
+	return applied
 
 
 func apply_pending_snapshot() -> bool:
@@ -926,27 +817,6 @@ func apply_pending_snapshot() -> bool:
 	var saved_nodes: Dictionary = (
 		pending_snapshot.get(
 			"nodes",
-			{}
-		)
-	)
-
-	var run_data: Dictionary = pending_snapshot.get(
-		"run_data",
-		{}
-	)
-
-	var atlas_data = run_data.get(
-		"atlas",
-		{}
-	)
-
-	if not (atlas_data is Dictionary):
-		atlas_data = {}
-
-	var saved_backend_state = pending_snapshot.get(
-		"atlas_backend_state",
-		atlas_data.get(
-			"backend_state",
 			{}
 		)
 	)
@@ -973,11 +843,6 @@ func apply_pending_snapshot() -> bool:
 			saved_nodes[save_id]
 		)
 
-	if saved_backend_state is Dictionary:
-		if not await restore_backend_state(saved_backend_state):
-			save_failed.emit("atlas_state_restore_failed")
-			return false
-
 	# Depois de carregar um slot manual, esse estado passa a ser o autosave da
 	# run. Assim CONTINUAR JOGO retoma onde carregaste (local e remoto) e não
 	# um checkpoint antigo.
@@ -985,6 +850,11 @@ func apply_pending_snapshot() -> bool:
 		var as_autosave: Dictionary = pending_snapshot.duplicate(true)
 		as_autosave["save_type"] = "autosave"
 		as_autosave["slot"] = 0
+		as_autosave["saved_at"] = current_datetime()
+		as_autosave["saved_at_unix_ms"] = _next_snapshot_msec()
+		as_autosave["run_data"] = active_run_data.duplicate(true)
+		profile["ignore_remote_autosave"] = false
+		save_profile()
 		if not write_json_file(CURRENT_RUN_PATH, as_autosave):
 			push_warning("Não foi possível atualizar o autosave local após carregar o slot.")
 		call_deferred("_sync_snapshot_remote_background", as_autosave.duplicate(true), "autosave", 0)
@@ -1016,15 +886,20 @@ func find_saveable_node(
 
 
 func has_current_run_save() -> bool:
-	return FileAccess.file_exists(
-		CURRENT_RUN_PATH
-	)
+	if not _read_valid_snapshot(CURRENT_RUN_PATH).is_empty():
+		return true
+	if bool(profile.get("ignore_remote_autosave", false)):
+		return false
+	for entry in remote_save_metadata:
+		if entry is Dictionary and str(entry.get("slot_type", "")) == "auto":
+			return true
+	return false
 
 
 func has_manual_slot(slot: int) -> bool:
 	if not is_valid_slot(slot):
 		return false
-	if FileAccess.file_exists(get_manual_slot_path(slot)):
+	if not _read_valid_snapshot(get_manual_slot_path(slot)).is_empty():
 		return true
 	for entry in remote_save_metadata:
 		if not (entry is Dictionary):
@@ -1038,8 +913,8 @@ func get_manual_slot_info(slot: int) -> Dictionary:
 	if not is_valid_slot(slot):
 		return {}
 	# Preferir o snapshot local, se existir, para mostrar informação detalhada.
-	if FileAccess.file_exists(get_manual_slot_path(slot)):
-		var snapshot: Dictionary = read_json_file(get_manual_slot_path(slot))
+	if has_manual_slot(slot):
+		var snapshot: Dictionary = _read_valid_snapshot(get_manual_slot_path(slot))
 		if not snapshot.is_empty():
 			var run_data: Dictionary = snapshot.get("run_data", {})
 			return {
@@ -1079,35 +954,44 @@ func get_all_manual_slots() -> Array:
 	return slots
 
 func delete_all_manual_slots() -> bool:
-	print("[SAVES] A iniciar eliminação dos slots.")
+	if save_in_progress or load_in_progress:
+		return _fail("Aguarda a conclusão da operação em curso.")
+	load_in_progress = true
+	# Terminar pedidos anteriores antes do DELETE, para não recriarem os slots.
+	while remote_upload_in_progress:
+		await get_tree().process_frame
+	var request := HTTPRequest.new()
+	request.process_mode = Node.PROCESS_MODE_ALWAYS
+	request.timeout = 15.0
+	add_child(request)
+	var error := request.request(
+		SAVES_API_URL + "/" + str(profile.get("profile_key", "")) + "/manual",
+		[], HTTPClient.METHOD_DELETE
+	)
+	if error != OK:
+		request.queue_free()
+		load_in_progress = false
+		return _fail("Não foi possível apagar as cópias remotas. Os slots locais foram preservados.")
+	var result = await request.request_completed
+	request.queue_free()
+	var response = JSON.parse_string(result[3].get_string_from_utf8())
+	if int(result[0]) != HTTPRequest.RESULT_SUCCESS or int(result[1]) != 200 or not (response is Dictionary) or not bool(response.get("success", false)):
+		load_in_progress = false
+		return _fail("Não foi possível apagar as cópias remotas. Os slots locais foram preservados.")
 	var all_deleted := true
-
 	for slot in range(1, SLOT_COUNT + 1):
 		var path := get_manual_slot_path(slot)
-		print("[SAVES] Slot ", slot, ": ", path)
-		print("[SAVES] Existe antes de apagar: ", FileAccess.file_exists(path))
-
-		if not FileAccess.file_exists(path):
-			continue
-
-		var absolute_path := ProjectSettings.globalize_path(path)
-		var error := DirAccess.remove_absolute(absolute_path)
-		print("[SAVES] Resultado da eliminação: ", error)
-		print("[SAVES] Existe depois de apagar: ", FileAccess.file_exists(path))
-
-		if error != OK:
-			all_deleted = false
-			push_warning(
-				"Não foi possível apagar o Slot "
-				+ str(slot)
-				+ ". Erro: "
-				+ str(error)
-			)
-
-	if all_deleted:
-		print("TODOS OS SLOTS MANUAIS FORAM APAGADOS.")
-
+		for candidate in [path, path + ".bak", path + ".tmp"]:
+			if FileAccess.file_exists(candidate):
+				if DirAccess.remove_absolute(ProjectSettings.globalize_path(candidate)) != OK:
+					all_deleted = false
+	remote_save_metadata = remote_save_metadata.filter(
+		func(entry): return entry is Dictionary and str(entry.get("slot_type", "")) != "manual"
+	)
+	load_in_progress = false
+	remote_saves_updated.emit()
 	return all_deleted
+
 
 func set_run_value(
 	section: String,
@@ -1258,55 +1142,36 @@ func get_menu_state() -> String:
 
 
 func clear_current_autosave():
-	if not FileAccess.file_exists(
-		CURRENT_RUN_PATH
-	):
-		return
-
-	var absolute_path = (
-		ProjectSettings.globalize_path(
-			CURRENT_RUN_PATH
-		)
-	)
-
-	var error = DirAccess.remove_absolute(
-		absolute_path
-	)
-
-	if error != OK:
-		push_warning(
-			"Não foi possível apagar o autosave atual."
-		)
+	# Um autosave remoto de uma partida anterior não deve reaparecer em CONTINUAR.
+	profile["ignore_remote_autosave"] = true
+	remote_upload_queue.erase("autosave:0")
+	for path in [CURRENT_RUN_PATH, CURRENT_RUN_PATH + ".bak", CURRENT_RUN_PATH + ".tmp"]:
+		if FileAccess.file_exists(path):
+			if DirAccess.remove_absolute(ProjectSettings.globalize_path(path)) != OK:
+				push_warning("Não foi possível apagar o autosave atual.")
 
 
-func validate_snapshot(
-	snapshot: Dictionary
-) -> bool:
-	if snapshot.is_empty():
+func validate_snapshot(snapshot: Dictionary) -> bool:
+	var version = snapshot.get("save_version")
+	if not (version is int or version is float) or version < 1 or version > SAVE_VERSION or float(int(version)) != version:
 		return false
-
-	if not snapshot.has(
-		"save_version"
-	):
+	var run_data = snapshot.get("run_data")
+	if not (run_data is Dictionary) or str(run_data.get("run_id", "")).strip_edges().is_empty():
 		return false
-
-	if int(
-		snapshot.get(
-			"save_version",
-			0
-		)
-	) > SAVE_VERSION:
-		push_warning(
-			"O save pertence a uma versão mais recente."
-		)
-
+	if not (snapshot.get("scene_path", "") is String):
 		return false
-
-	if not snapshot.has(
-		"run_data"
-	):
+	for key in ["atlas", "story", "player_profile", "stats", "password", "custom"]:
+		if run_data.has(key) and not (run_data[key] is Dictionary):
+			return false
+	var atlas_data: Dictionary = run_data.get("atlas", {})
+	if not (snapshot.get("atlas_backend_state", atlas_data.get("backend_state", {})) is Dictionary):
 		return false
-
+	var nodes = snapshot.get("nodes", {})
+	if not (nodes is Dictionary):
+		return false
+	for value in nodes.values():
+		if not (value is Dictionary):
+			return false
 	return true
 
 
@@ -1344,65 +1209,138 @@ func current_datetime() -> String:
 	return Time.get_datetime_string_from_system()
 
 
-func write_json_file(
-	path: String,
-	data: Dictionary
-) -> bool:
-	var file = FileAccess.open(
-		path,
-		FileAccess.WRITE
-	)
-
+func write_json_file(path: String, data: Dictionary) -> bool:
+	# Só substituir a gravação depois de escrever e validar a cópia temporária.
+	var temp_path := path + ".tmp"
+	var file := FileAccess.open(temp_path, FileAccess.WRITE)
 	if file == null:
-		push_warning(
-			"Não foi possível abrir para escrita: "
-			+ path
-		)
-
 		return false
-
-	file.store_string(
-		JSON.stringify(
-			data,
-			"\t"
-		)
-	)
-
+	file.store_string(JSON.stringify(data, "\t"))
+	file.flush()
+	var write_error := file.get_error()
 	file.close()
+	if write_error != OK or _read_json_exact(temp_path).is_empty():
+		return false
+	var previous := _read_json_exact(path)
+	var previous_valid := not previous.is_empty()
+	if path != PROFILE_PATH:
+		previous_valid = validate_snapshot(previous)
+	if previous_valid:
+		var backup_error := DirAccess.copy_absolute(
+			ProjectSettings.globalize_path(path), ProjectSettings.globalize_path(path + ".bak")
+		)
+		if backup_error != OK:
+			return false
+	return DirAccess.rename_absolute(
+		ProjectSettings.globalize_path(temp_path), ProjectSettings.globalize_path(path)
+	) == OK
 
+
+func read_json_file(path: String) -> Dictionary:
+	var result := _read_json_exact(path)
+	if result.is_empty():
+		result = _read_json_exact(path + ".bak")
+	return result
+
+
+func _read_json_exact(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {}
+	var parser := JSON.new()
+	var error := parser.parse(file.get_as_text())
+	file.close()
+	if error != OK or not (parser.data is Dictionary):
+		return {}
+	return parser.data
+
+
+func _read_valid_snapshot(path: String) -> Dictionary:
+	var snapshot := _read_json_exact(path)
+	if validate_snapshot(snapshot):
+		return snapshot
+	snapshot = _read_json_exact(path + ".bak")
+	return snapshot if validate_snapshot(snapshot) else {}
+
+
+func _prefer_local_snapshot(local: Dictionary, remote: Dictionary) -> bool:
+	if not validate_snapshot(local):
+		return false
+	if not validate_snapshot(remote):
+		return true
+	if local.has("saved_at_unix_ms") and remote.has("saved_at_unix_ms"):
+		return int(local["saved_at_unix_ms"]) >= int(remote["saved_at_unix_ms"])
+	return _snapshot_saved_at(local) >= _snapshot_saved_at(remote)
+
+
+func _prepare_slot_load(save_type: String, slot: int, path: String) -> bool:
+	if load_in_progress or save_in_progress:
+		return _fail("Aguarda a conclusão da operação em curso.")
+	load_in_progress = true
+	last_error = ""
+	var local := _read_valid_snapshot(path)
+	var remote: Dictionary = {}
+	if save_type != "autosave" or not bool(profile.get("ignore_remote_autosave", false)):
+		remote = await fetch_remote_snapshot(save_type, slot)
+	# Pode ter chegado uma gravação ao disco durante o pedido de rede.
+	local = _read_valid_snapshot(path)
+	load_in_progress = false
+	var chosen: Dictionary = local if _prefer_local_snapshot(local, remote) else remote
+	if chosen.is_empty():
+		return _fail("Não foi encontrada uma cópia válida desta gravação. Confirma a ligação ao backend.")
+	if chosen == remote and remote != local:
+		if not write_json_file(path, chosen):
+			push_warning("Não foi possível atualizar a cópia local da gravação remota.")
+	return prepare_snapshot_for_load(chosen, save_type, slot)
+
+
+func _next_snapshot_msec() -> int:
+	last_snapshot_msec = maxi(last_snapshot_msec + 1, int(Time.get_unix_time_from_system() * 1000.0))
+	return last_snapshot_msec
+
+
+func _save_game(save_type: String, slot: int, checkpoint_id: String) -> bool:
+	if active_run_data.is_empty():
+		return _fail("Não existe uma partida ativa para guardar.")
+	if load_in_progress or has_pending_load():
+		return _fail("Aguarda o carregamento da partida antes de guardar.")
+	var run_id := str(active_run_data.get("run_id", ""))
+	var scene := get_tree().current_scene
+	while save_in_progress:
+		await get_tree().process_frame
+	if load_in_progress or has_pending_load() or run_id != str(active_run_data.get("run_id", "")) or scene != get_tree().current_scene:
+		return _fail("A partida mudou durante a gravação. Tenta guardar novamente.")
+	if save_type == "manual" and not can_manual_save():
+		return _fail(get_manual_save_block_reason())
+	save_in_progress = true
+	last_error = ""
+	if not await capture_backend_state():
+		save_in_progress = false
+		return _fail("Não foi possível obter o estado do Atlas. Confirma que o backend está ligado e tenta novamente.")
+	if not is_instance_valid(scene) or scene != get_tree().current_scene or run_id != str(active_run_data.get("run_id", "")):
+		save_in_progress = false
+		return _fail("A cena mudou antes de terminar a gravação.")
+	active_run_data["updated_at"] = current_datetime()
+	if save_type == "autosave":
+		active_run_data["last_checkpoint"] = checkpoint_id
+	var snapshot := create_snapshot(save_type, slot, checkpoint_id)
+	var path := CURRENT_RUN_PATH if save_type == "autosave" else get_manual_slot_path(slot)
+	var success := write_json_file(path, snapshot)
+	save_in_progress = false
+	if not success:
+		return _fail("Não foi possível escrever a gravação no disco. A cópia anterior foi preservada.")
+	if save_type == "autosave":
+		profile["ignore_remote_autosave"] = false
+		save_profile()
+	call_deferred("_sync_snapshot_remote_background", snapshot.duplicate(true), save_type, slot)
+	save_completed.emit(save_type, slot)
 	return true
 
 
-func read_json_file(
-	path: String
-) -> Dictionary:
-	if not FileAccess.file_exists(path):
-		return {}
-
-	var file = FileAccess.open(
-		path,
-		FileAccess.READ
-	)
-
-	if file == null:
-		return {}
-
-	var content = file.get_as_text()
-
-	file.close()
-
-	var parsed = JSON.parse_string(
-		content
-	)
-
-	if not (
-		parsed is Dictionary
-	):
-		push_warning(
-			"JSON inválido em: "
-			+ path
-		)
-
-		return {}
-
-	return parsed
+func _fail(message: String) -> bool:
+	last_error = message
+	push_warning(message)
+	save_failed.emit(message)
+	return false

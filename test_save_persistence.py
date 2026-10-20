@@ -10,8 +10,8 @@ from backend.database import get_db_connection
 
 
 def main():
-    # A profile_key tem de existir antes de guardar; a persistência não cria
-    # perfis automaticamente para evitar associar saves ao perfil errado.
+    # Usa um perfil isolado de teste. O primeiro save também consegue registar
+    # uma chave nova quando o perfil ainda não existe.
     profile_key = str(uuid.uuid4())
     profile_id = uuid.uuid4()
 
@@ -52,7 +52,8 @@ def main():
             slot_number=1,
         )
 
-        assert loaded == snapshot, "O snapshot recuperado é diferente!"
+        expected = dict(snapshot, run_id="teste-find-hope-123", snapshot_version=2)
+        assert loaded == expected, "O snapshot recuperado é diferente!"
 
         print("SUCESSO: snapshot guardado e recuperado corretamente.")
         print("Lista de saves:", list_saves(profile_key))

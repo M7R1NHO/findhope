@@ -29,7 +29,6 @@
 [ext_resource type="Script" uid="uid://bb4eqrrbhkvug" path="res://scripts/facility_progression_manager.gd" id="23_vxglm"]
 [ext_resource type="Script" uid="uid://cds65rw5i74tv" path="res://scripts/security_access_terminal.gd" id="24_2f3dj"]
 [ext_resource type="Script" uid="uid://cfh7aoywgfdci" path="res://scripts/run_state.gd" id="26_2wyq8"]
-[ext_resource type="Script" uid="uid://dgdp0m5yos6ij" path="res://scripts/phase3_layout.gd" id="30_fv21b"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_l8mnm"]
 size = Vector2(652, 250)
@@ -2465,8 +2464,3 @@ main_menu_scene_path = "uid://du4rktewgxl5l"
 
 [node name="RunState" type="Node" parent="." unique_id=347757290]
 script = ExtResource("26_2wyq8")
-
-[node name="Endgame" type="Node2D" parent="." unique_id=1394734858]
-position = Vector2(10463, -7412)
-script = ExtResource("30_fv21b")
-gerar_layout_agora = true

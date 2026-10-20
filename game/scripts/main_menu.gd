@@ -7,10 +7,13 @@ extends Control
 var root_container: VBoxContainer = null
 var status_label: Label = null
 var modal_layer: CanvasLayer = null
+var continue_button: Button = null
 
 
 func _ready():
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	SaveManager.save_failed.connect(_on_save_failed)
+	SaveManager.remote_saves_updated.connect(_refresh_continue_button)
 	create_menu()
 	# A sincronização remota decorre em segundo plano e não bloqueia o menu.
 	SaveManager.call_deferred("_sync_remote_saves_in_background")
@@ -128,7 +131,7 @@ func create_initial_menu():
 func create_standard_menu(
 	show_diaries: bool
 ):
-	var continue_button = create_menu_button(
+	continue_button = create_menu_button(
 		"CONTINUAR JOGO",
 		continue_game
 	)
@@ -210,7 +213,8 @@ func start_first_game():
 		)
 		return
 
-	await SaveManager.start_new_run()
+	if not await SaveManager.start_new_run():
+		return
 
 	get_tree().change_scene_to_file(
 		game_scene_path
@@ -222,7 +226,7 @@ func continue_game():
 
 	if not prepared:
 		set_status(
-			"Não foi possível preparar o autosave."
+			SaveManager.last_error
 		)
 		return
 
@@ -250,8 +254,8 @@ func start_new_game():
 		)
 		return
 
-	SaveManager.reset_active_run()
-	await SaveManager.start_new_run()
+	if not await SaveManager.start_new_run():
+		return
 
 	get_tree().change_scene_to_file(
 		game_scene_path
@@ -432,10 +436,18 @@ func load_prepared_save():
 		)
 		return
 
-	SaveManager.call_deferred(
-		"load_prepared_scene",
-		scene_path
-	)
+	set_status("A carregar…")
+	await SaveManager.load_prepared_scene(scene_path)
+
+
+func _on_save_failed(message: String):
+	close_modal()
+	set_status(message)
+
+
+func _refresh_continue_button():
+	if is_instance_valid(continue_button):
+		continue_button.disabled = not SaveManager.has_current_run_save()
 
 func open_achievements():
 	close_modal()

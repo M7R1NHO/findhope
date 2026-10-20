@@ -16,6 +16,7 @@ var status_label: Label = null
 
 
 func _ready():
+	add_to_group("saveable")
 	main = get_tree().current_scene
 
 	if main != null:
@@ -433,3 +434,18 @@ func is_player(
 
 func is_station_used() -> bool:
 	return station_used
+
+
+func get_save_id() -> String:
+	return "maintenance_station"
+
+
+func get_save_data() -> Dictionary:
+	return {"station_used": station_used}
+
+
+func load_save_data(data: Dictionary):
+	station_used = bool(data.get("station_used", false))
+	station_visual.color = Color(0.16, 0.18, 0.19, 1.0) if station_used else Color(0.16, 0.36, 0.42, 1.0)
+	status_label.text = "ESTAÇÃO SEM ENERGIA" if station_used else "ESTAÇÃO DE MANUTENÇÃO"
+	update_interaction_text()

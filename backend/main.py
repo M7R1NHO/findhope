@@ -1,5 +1,6 @@
 import json
 import os
+import math
 from copy import deepcopy
 from typing import Literal
 from threading import RLock
@@ -8,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from backend.save_persistence import (
+    delete_manual_saves,
     list_saves,
     load_snapshot,
     save_snapshot,
@@ -177,6 +179,24 @@ def _replace_dict(target, source, field_name):
     target.update(deepcopy(source))
 
 
+def _normalise_memory_store(value, field_name):
+    """Aceita inteiros JSON que o Godot devolve como floats (por ex. 2.0)."""
+    if not isinstance(value, dict) or not isinstance(value.get("memories"), list):
+        raise HTTPException(status_code=422, detail=f"'{field_name}' contém memórias inválidas.")
+    next_id = value.get("next_id")
+    if (
+        isinstance(next_id, bool)
+        or not isinstance(next_id, (int, float))
+        or (isinstance(next_id, float) and not math.isfinite(next_id))
+        or next_id < 1
+        or int(next_id) != next_id
+    ):
+        raise HTTPException(status_code=422, detail=f"'{field_name}.next_id' tem de ser um inteiro positivo.")
+    result = deepcopy(value)
+    result["next_id"] = int(next_id)
+    return result
+
+
 def _restore_atlas_state(state, run_id: str | None = None):
     """Restaura o estado de Atlas sem substituir os objetos globais."""
 
@@ -188,37 +208,16 @@ def _restore_atlas_state(state, run_id: str | None = None):
 
     version = state.get("version", ATLAS_STATE_VERSION)
 
-    if version != ATLAS_STATE_VERSION:
+    if isinstance(version, bool) or version != ATLAS_STATE_VERSION:
         raise HTTPException(
             status_code=422,
             detail=f"Versão de estado não suportada: {version}.",
         )
 
-    run_memory = state.get(
+    run_memory = _normalise_memory_store(state.get(
         "run_memory",
         {"memories": [], "next_id": 1},
-    )
-
-    if not isinstance(run_memory, dict):
-        raise HTTPException(
-            status_code=422,
-            detail="'run_memory' tem de ser um objeto JSON.",
-        )
-
-    if not isinstance(run_memory.get("memories"), list):
-        raise HTTPException(
-            status_code=422,
-            detail="'run_memory.memories' tem de ser uma lista JSON.",
-        )
-
-    if (
-        not isinstance(run_memory.get("next_id"), int)
-        or isinstance(run_memory.get("next_id"), bool)
-    ):
-        raise HTTPException(
-            status_code=422,
-            detail="'run_memory.next_id' tem de ser um número inteiro.",
-        )
+    ), "run_memory")
 
     required_dicts = {
         "world_state": WORLD_STATE,
@@ -239,6 +238,11 @@ def _restore_atlas_state(state, run_id: str | None = None):
                 status_code=422,
                 detail=f"O campo '{field_name}' tem de ser um objeto JSON.",
             )
+
+    # Validar também a memória legada antes de alterar qualquer objeto global.
+    state = dict(state)
+    if "memory" in state:
+        state["memory"] = _normalise_memory_store(state["memory"], "memory")
 
     history = state.get(
         "conversation_history",
@@ -529,6 +533,18 @@ def get_player_save(
         raise HTTPException(status_code=404, detail="Save não encontrado.")
 
     return {"snapshot": snapshot}
+
+
+@app.delete("/saves/{profile_key}/manual")
+def delete_player_manual_saves(profile_key: str):
+    """Só é chamado quando o jogador confirma a eliminação dos slots manuais."""
+    try:
+        return delete_manual_saves(profile_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        print("Erro ao apagar slots manuais:", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Não foi possível apagar os slots manuais.") from exc
 
 
 # =========================================================

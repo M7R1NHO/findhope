@@ -5,13 +5,14 @@ Schema esperado:
 - public.game_saves(profile_id, slot_type, slot_number, run_id, game_state,
   created_at, updated_at)
 
-Não cria perfis automaticamente nem elimina gravações durante a operação normal
- de guardar/carregar. A eliminação de slots manuais só ocorre quando a função
+O primeiro save regista a chave aleatória criada pelo jogo, sem substituir
+perfis existentes. A eliminação de slots manuais só ocorre quando a função
  delete_manual_saves() é chamada explicitamente.
 """
 from __future__ import annotations
 
 import json
+import uuid
 from typing import Any
 
 from backend.database import get_db_connection
@@ -50,18 +51,44 @@ def _validate_slot(
     return "manual", number
 
 
-def _resolve_profile_id(connection, profile_key: str):
+def _resolve_profile_id(connection, profile_key: str, *, create: bool = False):
     """Resolve a chave do jogo para o UUID existente de player_profiles."""
     row = connection.execute(
         "SELECT id FROM public.player_profiles WHERE profile_key = %s LIMIT 1",
         (profile_key,),
     ).fetchone()
-    if not row:
-        raise ValueError(
-            "O perfil do jogo não existe em player_profiles. Não foi criado "
-            "automaticamente para evitar associar gravações ao perfil errado."
-        )
-    return row["id"] if isinstance(row, dict) else row[0]
+    if row:
+        return row["id"] if isinstance(row, dict) else row[0]
+    if not create:
+        return None
+    profile_id = uuid.uuid4()
+    connection.execute(
+        "INSERT INTO public.player_profiles (id, profile_key) VALUES (%s, %s)",
+        (profile_id, profile_key),
+    )
+    return profile_id
+
+
+def _lock_profile(connection, profile_key: str):
+    # Serializa gravações do mesmo perfil, incluindo a criação do primeiro slot.
+    # Funciona também quando ainda não existe uma linha para bloquear.
+    connection.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (profile_key,))
+
+
+def _is_older_snapshot(incoming: dict, existing) -> bool:
+    if isinstance(existing, str):
+        try:
+            existing = json.loads(existing)
+        except json.JSONDecodeError:
+            return False
+    if not isinstance(existing, dict):
+        return False
+    new_time = incoming.get("saved_at_unix_ms")
+    old_time = existing.get("saved_at_unix_ms")
+    return (
+        type(new_time) in (int, float) and type(old_time) in (int, float)
+        and new_time < old_time
+    )
 
 
 def _normalise_snapshot(snapshot: dict[str, Any]) -> tuple[dict[str, Any], str]:
@@ -131,9 +158,10 @@ def save_snapshot(
     payload = json.dumps(normalized_snapshot, ensure_ascii=False, allow_nan=False)
 
     with get_db_connection() as connection:
-        profile_id = _resolve_profile_id(connection, key)
+        _lock_profile(connection, key)
+        profile_id = _resolve_profile_id(connection, key, create=True)
         existing = connection.execute(
-            """SELECT id FROM public.game_saves
+            """SELECT id, game_state FROM public.game_saves
                WHERE profile_id = %s AND slot_type = %s
                  AND slot_number IS NOT DISTINCT FROM %s
                ORDER BY updated_at DESC LIMIT 1""",
@@ -142,6 +170,9 @@ def save_snapshot(
 
         if existing:
             save_id = existing["id"] if isinstance(existing, dict) else existing[0]
+            previous_state = existing["game_state"] if isinstance(existing, dict) else existing[1]
+            if _is_older_snapshot(normalized_snapshot, previous_state):
+                return {"success": True, "stale": True, "slot_type": slot_type, "slot_number": slot_number}
             row = connection.execute(
                 """UPDATE public.game_saves
                    SET run_id = %s, game_state = %s::jsonb, updated_at = NOW()
@@ -176,6 +207,8 @@ def list_saves(profile_key: str) -> list[dict[str, Any]]:
     key = _validate_profile_key(profile_key)
     with get_db_connection() as connection:
         profile_id = _resolve_profile_id(connection, key)
+        if profile_id is None:
+            return []
         rows = connection.execute(
             """SELECT slot_type, slot_number, run_id, created_at, updated_at
                FROM public.game_saves
@@ -212,6 +245,8 @@ def load_snapshot(
     slot_type, slot_number = _validate_slot(slot_type, slot_number)
     with get_db_connection() as connection:
         profile_id = _resolve_profile_id(connection, key)
+        if profile_id is None:
+            return None
         row = connection.execute(
             """SELECT game_state FROM public.game_saves
                WHERE profile_id = %s AND slot_type = %s
@@ -239,7 +274,10 @@ def delete_manual_saves(profile_key: str) -> dict[str, Any]:
     """
     key = _validate_profile_key(profile_key)
     with get_db_connection() as connection:
+        _lock_profile(connection, key)
         profile_id = _resolve_profile_id(connection, key)
+        if profile_id is None:
+            return {"success": True, "deleted": 0}
         rows = connection.execute(
             """DELETE FROM public.game_saves
                WHERE profile_id = %s AND slot_type = 'manual'

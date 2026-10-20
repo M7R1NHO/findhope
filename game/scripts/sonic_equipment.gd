@@ -15,6 +15,7 @@ var interaction_label: Label = null
 
 
 func _ready():
+	add_to_group("saveable")
 	main = get_tree().current_scene
 
 	if main != null:
@@ -236,6 +237,7 @@ func collect_tools():
 		return
 
 	tools_collected = true
+	SaveManager.set_run_value("story", "sonic_tools_collected", true)
 
 	equipment_visual.color = Color(
 		0.35,
@@ -291,6 +293,7 @@ func connect_equipment():
 		return
 
 	equipment_connected = true
+	SaveManager.set_run_value("story", "sonic_equipment_connected", true)
 
 	fight_manager.unlock_combat()
 
@@ -370,3 +373,25 @@ func send_gameplay_context():
 		+ "uma distância segura da zona de emissão.",
 		true
 	)
+
+
+func get_save_id() -> String:
+	return "sonic_equipment"
+
+
+func get_save_data() -> Dictionary:
+	return {"tools_collected": tools_collected, "equipment_connected": equipment_connected}
+
+
+func load_save_data(data: Dictionary):
+	equipment_connected = bool(data.get("equipment_connected", false))
+	tools_collected = equipment_connected or bool(data.get("tools_collected", false))
+	if equipment_connected:
+		equipment_visual.color = Color(0.15, 0.82, 0.68, 1.0)
+		energy_visual.color = Color(0.30, 1.0, 0.82, 1.0)
+		interaction_label.text = "SISTEMA SONORO OPERACIONAL"
+	elif tools_collected:
+		equipment_visual.color = Color(0.35, 0.43, 0.46, 1.0)
+		interaction_label.text = "[E] CONECTAR ATLAS À ENERGIA"
+	else:
+		interaction_label.text = "[E] RECOLHER FERRAMENTAS"

@@ -91,6 +91,10 @@ func _ready():
 	)
 
 	# Verificar se a introdução já foi concluída nesta partida.
+	if SaveManager.has_pending_load():
+		# Os saves antigos podem não ter intro_completed. Não iniciar uma nova
+		# cutscene nem um autosave enquanto se está a repor uma gravação.
+		return
 	var intro_completed: bool = bool(
 		SaveManager.get_run_value(
 			"story",
@@ -100,6 +104,7 @@ func _ready():
 	)
 
 	if not intro_completed:
+		SaveManager.set_manual_save_block("cutscene", true)
 		var intro = preload(
 			"res://scripts/intro_sequence.gd"
 		).new()
@@ -108,6 +113,7 @@ func _ready():
 
 		# Esperar que a cutscene termine antes de guardar.
 		await intro.play()
+		SaveManager.set_manual_save_block("cutscene", false)
 
 		SaveManager.set_run_value(
 			"story",

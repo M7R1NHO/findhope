@@ -34,6 +34,7 @@ var interaction_label: Label = null
 
 
 func _ready():
+	add_to_group("saveable")
 	create_door_nodes()
 	find_hack_manager()
 
@@ -44,6 +45,21 @@ func _ready():
 
 	if DEBUG_DOORS:
 		print("[PORTA] Inicializada: ", door_id)
+
+
+func get_save_id() -> String:
+	return door_id
+
+
+func get_save_data() -> Dictionary:
+	return {"is_open": is_open}
+
+
+func load_save_data(data: Dictionary):
+	hack_in_progress = false
+	is_open = bool(data.get("is_open", false))
+	# A energia e as permissões são repostas pelos gestores da instalação.
+	call_deferred("update_door_state")
 
 
 func create_door_nodes():
