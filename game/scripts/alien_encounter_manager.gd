@@ -3471,8 +3471,11 @@ func start_open_front_door():
 	if run_front_door.has_method(
 		"request_open_hack"
 	):
-
+		reserve_run_overload()
 		run_front_door.request_open_hack()
+	else:
+		clear_run_overload_reservation()
+		push_error("RUN: a porta não tem request_open_hack().")
 
 
 # =========================================================
@@ -3489,8 +3492,33 @@ func start_close_front_door():
 	if run_front_door.has_method(
 		"request_close_hack"
 	):
-
+		# O fecho mantém um minijogo normal sorteado.
+		clear_run_overload_reservation()
 		run_front_door.request_close_hack()
+	else:
+		clear_run_overload_reservation()
+		push_error("RUN: a porta não tem request_close_hack().")
+
+
+# =========================================================
+# RESERVAR SOBRECARGA DURANTE RUN
+# =========================================================
+
+func reserve_run_overload() -> void:
+	if hack_manager == null or not is_instance_valid(hack_manager):
+		return
+
+	if hack_manager.has_method("set_next_hack_override"):
+		# HACK_SOBRECARGA tem o ID 5 no HackManager.
+		hack_manager.set_next_hack_override(5)
+	else:
+		push_warning("RUN: HackManager não suporta reservar a sobrecarga.")
+
+
+func clear_run_overload_reservation() -> void:
+	if hack_manager != null and is_instance_valid(hack_manager):
+		if hack_manager.has_method("clear_next_hack_override"):
+			hack_manager.clear_next_hack_override()
 
 
 # =========================================================
@@ -3887,6 +3915,8 @@ func run_timeout():
 
 	destroy_run_chase_ui()
 
+
+	clear_run_overload_reservation()
 
 	if (
 		hack_manager != null

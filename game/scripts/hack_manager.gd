@@ -89,6 +89,10 @@ var target_node: Node = null
 
 var hack_session_id := 0
 
+# Minijogo reservado para a próxima chamada a start_hack().
+# Usado pelo RUN para iniciar a sobrecarga sem alterar as portas.
+var next_hack_override: int = -1
+
 
 # =========================================================
 # UI
@@ -319,15 +323,35 @@ func start_hack(
 	create_base_ui()
 
 	# Hacks normais iniciam diretamente um unico minijogo sorteado.
-	# A sobrecarga so pode ser iniciada explicitamente durante RUN,
-	# passando-a como unico hack permitido.
-	var selected_hack := get_random_hack(custom_hacks)
+	# O RUN pode reservar a sobrecarga para a próxima chamada a start_hack().
+	var selected_hack: int
+	if next_hack_override in implemented_hacks:
+		selected_hack = next_hack_override
+		next_hack_override = -1
+	else:
+		selected_hack = get_random_hack(custom_hacks)
 	current_hack = selected_hack
 
 	call_deferred(
 		"launch_selected_hack",
 		selected_hack
 	)
+
+
+# =========================================================
+# RESERVAR MINIJOGO PARA O PRÓXIMO HACK
+# =========================================================
+
+func set_next_hack_override(hack_id: int) -> void:
+	if hack_id not in implemented_hacks:
+		push_warning("HackManager: minijogo reservado inválido.")
+		return
+
+	next_hack_override = hack_id
+
+
+func clear_next_hack_override() -> void:
+	next_hack_override = -1
 
 
 # =========================================================
@@ -2615,6 +2639,7 @@ func finish_success():
 
 
 	reset_all_minigame_states()
+	clear_next_hack_override()
 
 
 	get_tree().paused = false
@@ -2676,6 +2701,7 @@ func cancel_hack():
 
 
 	reset_all_minigame_states()
+	clear_next_hack_override()
 
 
 	get_tree().paused = false
