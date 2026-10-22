@@ -2,8 +2,8 @@
 extends CharacterBody2D
 
 @export var speed: float = 200.0
-@export var min_x: float = -2800.0
-@export var max_x: float = 1140.0
+@export var min_x: float = -3400.0
+@export var max_x: float = 1940.0
 @export var min_y: float = -1480.0
 @export var max_y: float = 1400.0
 @export var interaction_range: float = 150.0
@@ -44,17 +44,17 @@ func _physics_process(_delta):
 	velocity = direction * speed
 	move_and_slide()
 
-	global_position.x = clampf(
-		global_position.x,
-		min_x,
-		max_x
-	)
+	#global_position.x = clampf(
+	#	global_position.x,
+	#	min_x,
+	#	max_x
+	#)
 
-	global_position.y = clampf(
-		global_position.y,
-		min_y,
-		max_y
-	)
+	# global_position.y = clampf(
+	#	global_position.y,
+	#	min_y,
+	#	max_y
+	#)
 
 
 func _unhandled_input(event):

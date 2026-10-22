@@ -51,6 +51,17 @@ var protocol_api_mode: String = ""
 
 var visible_messages: Array[String] = []
 
+var surface_recovery_active: bool = false
+var surface_recovery_step: int = 0
+var surface_recovery_questions: Array[String] = [
+	"Consegues ouvir-me?",
+	"Consegues ver-me?",
+	"Sentes alguma dor?",
+	"Consegues mexer os braços e as pernas?",
+	"Consegues levantar-te?"
+]
+var scanner_hint_layer: CanvasLayer
+
 
 func _ready():
 	atlas_api.request_completed.connect(
@@ -92,8 +103,9 @@ func _ready():
 
 	# Verificar se a introdução já foi concluída nesta partida.
 	if SaveManager.has_pending_load():
-		# Os saves antigos podem não ter intro_completed. Não iniciar uma nova
-		# cutscene nem um autosave enquanto se está a repor uma gravação.
+		# Não reiniciar a cutscene durante o restauro. Verificar a recuperação
+		# depois de o carregamento terminar.
+		call_deferred("_resume_surface_recovery_after_load")
 		return
 	var intro_completed: bool = bool(
 		SaveManager.get_run_value(
@@ -113,6 +125,12 @@ func _ready():
 
 		# Esperar que a cutscene termine antes de guardar.
 		await intro.play()
+
+		var player_node = get_node_or_null("Player")
+		if player_node != null and player_node.has_method("set_tutorial_locked"):
+			player_node.set_tutorial_locked(true)
+
+		await _run_surface_recovery()
 		SaveManager.set_manual_save_block("cutscene", false)
 
 		SaveManager.set_run_value(
@@ -132,10 +150,42 @@ func _ready():
 				+ "a conclusão da introdução."
 			)
 	else:
-		print(
-			"INTRODUÇÃO IGNORADA: SAVE JÁ A CONCLUIU."
+		var recovery_completed: bool = bool(
+			SaveManager.get_run_value(
+				"story",
+				"surface_recovery_complete",
+				false
+			)
 		)
+		if not recovery_completed:
+			# Compatibilidade com saves de teste onde a introdução já ficou marcada,
+			# mas as cinco verificações ainda não foram concluídas.
+			SaveManager.set_manual_save_block("cutscene", true)
+			var saved_player = get_node_or_null("Player")
+			if saved_player != null and saved_player.has_method("set_tutorial_locked"):
+				saved_player.set_tutorial_locked(true)
+			await _run_surface_recovery()
+			SaveManager.set_manual_save_block("cutscene", false)
+		else:
+			_create_scanner_hint()
+			print("INTRODUÇÃO IGNORADA: SAVE JÁ A CONCLUIU.")
 
+
+
+func _resume_surface_recovery_after_load() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	if bool(SaveManager.get_run_value("story", "surface_recovery_complete", false)):
+		_create_scanner_hint()
+		return
+
+	SaveManager.set_manual_save_block("cutscene", true)
+	var player_node = get_node_or_null("Player")
+	if player_node != null and player_node.has_method("set_tutorial_locked"):
+		player_node.set_tutorial_locked(true)
+	await _run_surface_recovery()
+	SaveManager.set_manual_save_block("cutscene", false)
 
 
 func _input(event):
@@ -175,6 +225,65 @@ func _input(event):
 
 
 
+func _run_surface_recovery() -> void:
+	if bool(SaveManager.get_run_value("story", "surface_recovery_complete", false)):
+		var saved_player = get_node_or_null("Player")
+		if saved_player != null and saved_player.has_method("set_tutorial_locked"):
+			saved_player.set_tutorial_locked(false)
+		_create_scanner_hint()
+		return
+
+	surface_recovery_active = true
+	surface_recovery_step = 0
+	waiting_for_atlas = false
+	chat_input.editable = true
+	chat_input.placeholder_text = "Responde a Atlas..."
+	add_chat_message("ATLAS", "Fica quieto por um momento. Preciso de confirmar o teu estado.")
+	add_chat_message("ATLAS", surface_recovery_questions[0])
+
+	# Mantém a sequência obrigatória ativa até o jogador responder às cinco perguntas.
+	while surface_recovery_active:
+		await get_tree().process_frame
+
+func _advance_surface_recovery() -> void:
+	surface_recovery_step += 1
+	if surface_recovery_step < surface_recovery_questions.size():
+		add_chat_message("ATLAS", surface_recovery_questions[surface_recovery_step])
+		return
+
+	surface_recovery_active = false
+	SaveManager.set_run_value("story", "surface_recovery_complete", true)
+	var player_node = get_node_or_null("Player")
+	if player_node != null and player_node.has_method("set_tutorial_locked"):
+		player_node.set_tutorial_locked(false)
+	_create_scanner_hint()
+	chat_input.placeholder_text = NORMAL_PLACEHOLDER
+	add_chat_message("ATLAS", "Verificação concluída. Consegues levantar-te. Vou manter-me atento.")
+
+func _create_scanner_hint() -> void:
+	if is_instance_valid(scanner_hint_layer):
+		return
+	scanner_hint_layer = CanvasLayer.new()
+	scanner_hint_layer.name = "ScannerHintLayer"
+	scanner_hint_layer.layer = 20
+	add_child(scanner_hint_layer)
+	var hint := Label.new()
+	hint.name = "ScannerHint"
+	hint.text = "[SPACE] SCAN"
+	hint.add_theme_font_size_override("font_size", 16)
+	hint.add_theme_color_override("font_color", Color(0.55, 0.9, 1.0))
+	hint.add_theme_color_override("font_shadow_color", Color.BLACK)
+	hint.add_theme_constant_override("shadow_offset_x", 1)
+	hint.add_theme_constant_override("shadow_offset_y", 1)
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.text = "[SPACE] SCAN"
+	hint.size = Vector2(160, 30)
+	scanner_hint_layer.add_child(hint)
+	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	hint.position = Vector2(24, -48)
+	hint.z_index = 100
+
+
 func _on_chat_input_submitted(
 	message: String
 ):
@@ -193,10 +302,15 @@ func _on_chat_input_submitted(
 
 	chat_input.clear()
 
+	# As cinco respostas iniciais não passam pelo backend livre do Atlas.
+	# Isto evita duas respostas por mensagem e reduz o consumo de tokens.
+	if surface_recovery_active:
+		_advance_surface_recovery()
+		return
+
 	send_message_to_atlas(
 		message
-	)
-
+)
 
 func send_message_to_atlas(
 	message: String
@@ -366,9 +480,10 @@ func _on_atlas_api_request_completed(
 	)
 
 	add_chat_message(
-		"ANDROID",
-		atlas_response
+		"ATLAS",
+		str(atlas_response)
 	)
+
 
 
 func finish_waiting_state():

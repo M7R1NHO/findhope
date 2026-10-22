@@ -527,14 +527,14 @@ script = ExtResource("1_sugp2")
 
 [node name="Ground" type="Polygon2D" parent="." unique_id=1191058292]
 texture_repeat = 2
-position = Vector2(495.06366, -346.33853)
-scale = Vector2(1.5029359, 1.5523736)
+position = Vector2(126.838135, -346.33853)
+scale = Vector2(1.4176773, 1.5523736)
 color = Color(0.89568764, 0.84647185, 0.56997126, 1)
 texture = ExtResource("2_yq6so")
 texture_offset = Vector2(3006.75, 898.01)
 texture_scale = Vector2(2.35, 2.35)
 texture_rotation = 6.2831855
-polygon = PackedVector2Array(499.64627, -2760.715, 908.18005, -892.6083, 908.18005, 1640.9313, -4277.005, 1714.3672, -4318.923, -2583.5671)
+polygon = PackedVector2Array(757.80774, -2792.2798, 1079.1787, -1075.5538, 1084.5016, -535.7354, 1135.0693, 1789.0916, -4277.005, 1714.3672, -4318.923, -2583.5671)
 
 [node name="Ship" type="StaticBody2D" parent="." unique_id=202784240 groups=["detectable", "interactable"]]
 position = Vector2(243.69, -150)
@@ -599,7 +599,6 @@ zoom = Vector2(1.6, 1.6)
 [node name="Atlas" type="CharacterBody2D" parent="." unique_id=1792037986]
 position = Vector2(120, 0)
 script = ExtResource("2_0wfyh")
-scan_cooldown = 5.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Atlas" unique_id=1310704851]
 shape = SubResource("CircleShape2D_jyhfs")
@@ -801,7 +800,7 @@ position = Vector2(5000, 0)
 
 [node name="Ground" type="Polygon2D" parent="UndergroundRoot" unique_id=1495629326]
 z_index = -10
-position = Vector2(718.70886, -2374.0002)
+position = Vector2(694.9999, -2370.0002)
 scale = Vector2(2.3468199, 1.5618575)
 color = Color(0, 0, 0, 1)
 polygon = PackedVector2Array(-1931, -2231, -1904, 1752, 857.45435, 2426.5981, 3424, 1752, 3441.4063, -293.36572, 3458, -2243)

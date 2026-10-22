@@ -60,6 +60,12 @@ func play() -> void:
 	await _play_wake_up()
 	await _play_movement_tutorial()
 	await _play_panel_tutorial()
+	var form = preload(
+		"res://scripts/project_find_hope_form.gd"
+	).new()
+
+	add_child(form)
+	var answers: Dictionary = await form.play()
 
 	if player != null and is_instance_valid(player):
 		if player.has_method("clear_tutorial_interaction_target"):

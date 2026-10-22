@@ -24,7 +24,7 @@ var password_feedback: Label = null
 const PASSWORD_WORDS: Array[String] = ["ECO", "SOM", "NAVE", "ESPAÇO", "ANDROID", "HUMANO", "VIDA", "MORTE", "ESPERANÇA", "DESTINO"]
 const PASSWORD_SAVE_KEY := "main_core_password_word"
 const PASSWORD_SOLVED_KEY := "main_core_password_solved"
-const PHASE3_SPAWN_POSITION := Vector2(9764.0, -3861.0)
+const PHASE3_SPAWN_POSITION := Vector2(8540.0, -3803.0)
 
 
 func _ready():
@@ -592,7 +592,15 @@ func teleport_to_phase3() -> void:
 
 	player_node.global_position = PHASE3_SPAWN_POSITION
 	if player_node is CharacterBody2D:
+		player_node.set_movement_bounds(
+			9000.0,
+			12500.0,
+			-4500.0,
+			-2000.0
+		)
 		player_node.velocity = Vector2.ZERO
+
+	player_node.global_position = PHASE3_SPAWN_POSITION
 
 	if main != null:
 		var atlas_node := main.get_node_or_null("Atlas")
