@@ -143,7 +143,8 @@ func is_player(body: Node) -> bool:
 	return body.name == "Player" or body.is_in_group("player")
 
 
-func _unhandled_input(event):
+
+func _unhandled_input(event: InputEvent) -> void:
 	if not player_nearby:
 		return
 
@@ -160,7 +161,21 @@ func _unhandled_input(event):
 		return
 
 	get_viewport().set_input_as_handled()
-	request_open_hack()
+
+	if is_main_core_corridor():
+		open_door()
+	else:
+		request_open_hack()
+
+
+func is_main_core_corridor() -> bool:
+	var corridor_id := str(get_meta("corridor_id", ""))
+
+	return (
+		corridor_id == "Laboratory_MainCore"
+		or corridor_id == "Sanctuary_MainCore"
+	)
+
 
 
 func request_open_hack():

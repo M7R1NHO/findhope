@@ -3236,10 +3236,32 @@ func get_run_traversal_data() -> Dictionary:
 			run_forced_destination_side
 		)
 
-
 	# -----------------------------------------------------
 	# RUN/FIGHT NORMAL NO CORREDOR
 	# -----------------------------------------------------
+	
+	
+	if current_corridor_id == "Archives_Sanctuary":
+		var sanctuary_trigger_position: Vector2 = current_trigger.global_position
+		var sanctuary_entry: Vector2 = underground_root.to_global(
+		Vector2(-1650, -3475)
+		)
+		var archives_entry: Vector2 = underground_root.to_global(
+		Vector2(-1100, -2975)
+		)
+
+		var distance_to_archives: float = sanctuary_trigger_position.distance_to(
+		archives_entry
+		)
+		var distance_to_sanctuary: float = sanctuary_trigger_position.distance_to(
+		sanctuary_entry
+		)
+
+		if distance_to_archives < distance_to_sanctuary:
+			return get_destination_for_side(path, "A")
+		else:
+			return get_destination_for_side(path, "B")
+
 
 	var first: Vector2 = (
 		path[0]

@@ -21,6 +21,7 @@ var player: CharacterBody2D
 var is_following: bool = false
 var scripted_move_active: bool = false
 var scripted_move_target: Vector2 = Vector2.ZERO
+var facility_progression_manager: Node = null
 
 var scan_request: HTTPRequest
 
@@ -41,6 +42,7 @@ func _ready():
 	)
 
 	load_surface_discoveries()
+	resolve_facility_progression_manager()
 
 	scan_request = HTTPRequest.new()
 	scan_request.name = "ScanRequest"
@@ -677,3 +679,47 @@ func get_article_and_name(
 		)
 
 	return object_name
+
+
+func resolve_facility_progression_manager() -> void:
+	var current_scene := get_tree().current_scene
+
+	if current_scene == null:
+		push_warning("Atlas: a cena principal ainda não está disponível.")
+		return
+
+	var underground_root := current_scene.get_node_or_null(
+		"UndergroundRoot"
+	)
+
+	if underground_root == null:
+		push_warning("Atlas: UndergroundRoot não foi encontrado.")
+		return
+
+	facility_progression_manager = underground_root.get_node_or_null(
+		"FacilityProgressionManager"
+	)
+
+	if facility_progression_manager == null:
+		push_warning(
+			"Atlas: FacilityProgressionManager não foi encontrado."
+		)
+
+func register_facility_clue_analyzed(clue_id: String) -> bool:
+	if facility_progression_manager == null:
+		resolve_facility_progression_manager()
+
+	if facility_progression_manager == null:
+		return false
+
+	if not facility_progression_manager.has_method(
+		"register_clue_analyzed"
+	):
+		push_warning(
+			"Atlas: o gestor não disponibiliza register_clue_analyzed()."
+		)
+		return false
+
+	return bool(
+		facility_progression_manager.register_clue_analyzed(clue_id)
+	)

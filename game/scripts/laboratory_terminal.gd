@@ -651,6 +651,7 @@ func process_stage_three():
 	processing = false
 
 	revelation_complete = true
+	register_facility_clue()
 
 	terminal_visual.color = Color(
 		0.55,
@@ -755,3 +756,25 @@ func is_player(
 
 func is_revelation_complete() -> bool:
 	return revelation_complete
+
+
+func register_facility_clue() -> void:
+	var current_scene := get_tree().current_scene
+	if current_scene == null:
+		push_warning("Laboratório: cena atual não encontrada.")
+		return
+
+	var underground := current_scene.get_node_or_null("UndergroundRoot")
+	if underground == null:
+		push_warning("Laboratório: UndergroundRoot não encontrado.")
+		return
+
+	var manager := underground.get_node_or_null("FacilityProgressionManager")
+	if manager == null:
+		push_warning("Laboratório: FacilityProgressionManager não encontrado.")
+		return
+
+	if manager.has_method("register_clue_analyzed"):
+		manager.register_clue_analyzed("laboratory")
+	else:
+		push_warning("Laboratório: método register_clue_analyzed não encontrado.")

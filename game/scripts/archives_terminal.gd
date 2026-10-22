@@ -565,6 +565,7 @@ func recover_access_fragment():
 
 	archive_stage = 2
 	fragment_recovered = true
+	register_facility_clue()
 
 	if underground_root != null:
 		underground_root.set_meta(
@@ -675,3 +676,25 @@ func is_player(
 
 func has_access_fragment() -> bool:
 	return fragment_recovered
+
+
+func register_facility_clue() -> void:
+	var current_scene := get_tree().current_scene
+	if current_scene == null:
+		push_warning("Arquivos: cena atual não encontrada.")
+		return
+
+	var underground := current_scene.get_node_or_null("UndergroundRoot")
+	if underground == null:
+		push_warning("Arquivos: UndergroundRoot não encontrado.")
+		return
+
+	var manager := underground.get_node_or_null("FacilityProgressionManager")
+	if manager == null:
+		push_warning("Arquivos: FacilityProgressionManager não encontrado.")
+		return
+
+	if manager.has_method("register_clue_analyzed"):
+		manager.register_clue_analyzed("archives")
+	else:
+		push_warning("Arquivos: método register_clue_analyzed não encontrado.")

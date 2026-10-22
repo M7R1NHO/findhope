@@ -18,6 +18,13 @@ var terminal_layer: CanvasLayer = null
 var status_label: Label = null
 var data_label: Label = null
 var action_button: Button = null
+var password_input: LineEdit = null
+var password_feedback: Label = null
+
+const PASSWORD_WORDS: Array[String] = ["ECO", "SOM", "NAVE", "ESPAÇO", "ANDROID", "HUMANO", "VIDA", "MORTE", "ESPERANÇA", "DESTINO"]
+const PASSWORD_SAVE_KEY := "main_core_password_word"
+const PASSWORD_SOLVED_KEY := "main_core_password_solved"
+const PHASE3_SPAWN_POSITION := Vector2(9764.0, -3861.0)
 
 
 func _ready():
@@ -25,6 +32,7 @@ func _ready():
 
 	main = get_tree().current_scene
 	underground_root = get_parent()
+	load_or_create_password()
 
 	collision_layer = 0
 	collision_mask = 0xFFFFFFFF
@@ -368,6 +376,23 @@ func create_terminal_ui():
 		data_label
 	)
 
+	password_input = LineEdit.new()
+	password_input.name = "PasswordInput"
+	password_input.placeholder_text = "Introduz a palavra-passe..."
+	password_input.custom_minimum_size = Vector2(0, 48)
+	password_input.max_length = 40
+	password_input.add_theme_font_size_override("font_size", 19)
+	password_input.process_mode = Node.PROCESS_MODE_ALWAYS
+	password_input.text_submitted.connect(_on_password_submitted)
+	container.add_child(password_input)
+
+	password_feedback = Label.new()
+	password_feedback.name = "PasswordFeedback"
+	password_feedback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	password_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	password_feedback.add_theme_font_size_override("font_size", 16)
+	container.add_child(password_feedback)
+
 
 	action_button = Button.new()
 
@@ -422,185 +447,168 @@ func create_terminal_ui():
 
 
 func update_terminal_content():
-	if status_label == null:
+	if status_label == null or data_label == null or action_button == null:
 		return
 
-	if data_label == null:
-		return
-
-	if action_button == null:
-		return
-
-
-	var archive_fragment = has_archive_fragment()
-	var sanctuary_fragment = has_sanctuary_fragment()
-
-
-	if core_unlocked:
-		status_label.text = (
-			"ACESSO PROFUNDO LIBERADO"
-		)
-
-		data_label.text = (
-			"AUTORIZAÇÃO DO NÚCLEO: VÁLIDA\n\n"
-			+ "Uma rota de acesso foi identificada "
-			+ "abaixo da instalação principal.\n\n"
-			+ "A estrutura encontrada não corresponde "
-			+ "integralmente aos padrões arquitetónicos "
-			+ "observados neste complexo.\n\n"
-			+ "ORIGEM: NÃO DETERMINADA\n"
-			+ "ESTADO: ACESSÍVEL\n\n"
-			+ "Atlas não possui dados suficientes "
-			+ "para identificar o que existe além deste ponto."
-		)
-
-		action_button.visible = false
-
-		return
-
-
-	status_label.text = (
-		"AUTORIZAÇÃO NECESSÁRIA"
-	)
-
-
-	var archive_text = (
-		"CONFIRMADO"
-		if archive_fragment
-		else "AUSENTE"
-	)
-
-	var sanctuary_text = (
-		"CONFIRMADO"
-		if sanctuary_fragment
-		else "AUSENTE"
-	)
-
-
-	data_label.text = (
-		"FRAGMENTO A // ARQUIVOS: "
-		+ archive_text
-		+ "\n"
-		+ "FRAGMENTO B // SANTUÁRIO: "
-		+ sanctuary_text
-		+ "\n\n"
-	)
-
-
-	if (
-		archive_fragment
-		and sanctuary_fragment
-	):
-		data_label.text += (
-			"As duas partes da autorização "
-			+ "foram localizadas.\n\n"
-			+ "O sistema pode reconstruir "
-			+ "a credencial de acesso."
-		)
-
-		action_button.text = (
-			"RECONSTRUIR AUTORIZAÇÃO"
-		)
-
+	if is_password_solved():
+		status_label.text = "PALAVRA-PASSE ACEITE"
+		data_label.text = "Autenticação concluída. O acesso profundo foi autorizado."
+		action_button.text = "AVANÇAR PARA A ÁREA SEGUINTE"
 		action_button.visible = true
+		action_button.disabled = false
+		if password_input != null:
+			password_input.visible = false
+		if password_feedback != null:
+			password_feedback.text = ""
+		return
 
-	else:
-		data_label.text += (
-			"A autorização permanece incompleta.\n\n"
-			+ "É necessário recuperar os dois "
-			+ "fragmentos de acesso."
-		)
-
-		action_button.visible = false
+	status_label.text = "AUTENTICAÇÃO SEMÂNTICA // NÚCLEO PRINCIPAL"
+	data_label.text = "Interpreta as pistas do Laboratório, dos Arquivos e do Santuário. Introduz a palavra que as liga. A palavra-passe é uma das dez palavras possíveis."
+	action_button.text = "VALIDAR PALAVRA-PASSE"
+	action_button.visible = true
+	action_button.disabled = false
+	if password_input != null:
+		password_input.visible = true
+		password_input.editable = true
+	if password_feedback != null:
+		password_feedback.text = ""
 
 
 func on_action_pressed():
 	if processing:
 		return
+	if is_password_solved():
+		teleport_to_phase3()
+	else:
+		validate_password()
 
-	if core_unlocked:
+
+func validate_password():
+	if password_input == null:
+		return
+	var submitted := normalize_password(password_input.text)
+	if submitted.is_empty():
+		show_password_feedback("Introduz uma palavra-passe.")
+		return
+	if submitted != normalize_password(get_selected_password()):
+		show_password_feedback("Palavra-passe incorreta. Reinterpreta as três pistas e tenta novamente.")
+		password_input.select_all()
+		password_input.grab_focus()
 		return
 
-	if not (
-		has_archive_fragment()
-		and has_sanctuary_fragment()
-	):
-		return
-
-	reconstruct_authorization()
-
-
-func reconstruct_authorization():
 	processing = true
-
 	action_button.disabled = true
+	password_input.editable = false
+	status_label.text = "PALAVRA-PASSE ACEITE"
+	show_password_feedback("Autenticação concluída. Acesso autorizado.")
+	await get_tree().create_timer(1.0, true).timeout
 
-	status_label.text = (
-		"RECONSTRUINDO AUTORIZAÇÃO..."
-	)
-
-	data_label.text = (
-		"Combinando Fragmento A e Fragmento B.\n\n"
-		+ "Validando assinatura de segurança.\n"
-		+ "Acessando controlo central."
-	)
-
-	await get_tree().create_timer(
-		1.6,
-		true
-	).timeout
-
-
-	status_label.text = (
-		"AUTORIZAÇÃO ACEITE"
-	)
-
-	data_label.text = (
-		"Credencial reconstruída com sucesso.\n\n"
-		+ "Pesquisando rotas restritas..."
-	)
-
-	await get_tree().create_timer(
-		1.2,
-		true
-	).timeout
-
-
-	discover_deep_access()
-
-
-func discover_deep_access():
 	core_unlocked = true
 	deep_access_discovered = true
 	processing = false
-
+	save_password_solved()
 	if underground_root != null:
-
-		underground_root.set_meta(
-			"main_core_unlocked",
-			true
-		)
-
-		underground_root.set_meta(
-			"phase3_unlocked",
-			true
-		)
-
-
-	terminal_visual.color = Color(
-		0.15,
-		0.62,
-		0.52,
-		1.0
-	)
-
-	interaction_label.text = (
-		"[E] REABRIR NÚCLEO"
-	)
-
-	update_terminal_content()
-
+		underground_root.set_meta("main_core_unlocked", true)
+		underground_root.set_meta("phase3_unlocked", true)
+	if terminal_visual != null:
+		terminal_visual.color = Color(0.15, 0.62, 0.52, 1.0)
+	if interaction_label != null:
+		interaction_label.text = "[E] REABRIR NÚCLEO"
 	register_discovery()
+	teleport_to_phase3()
+
+
+func show_password_feedback(message: String) -> void:
+	if password_feedback != null:
+		password_feedback.text = message
+
+
+func normalize_password(value: String) -> String:
+	var result := value.strip_edges().to_upper()
+	for pair in [["Á", "A"], ["À", "A"], ["Â", "A"], ["Ã", "A"], ["É", "E"], ["Ê", "E"], ["Í", "I"], ["Ó", "O"], ["Ô", "O"], ["Õ", "O"], ["Ú", "U"], ["Ç", "C"]]:
+		result = result.replace(pair[0], pair[1])
+	return result.replace(" ", "")
+
+
+func load_or_create_password() -> void:
+	var saved := ""
+	var manager := get_node_or_null("/root/SaveManager")
+	if manager != null and manager.has_method("get_run_value"):
+		saved = str(manager.get_run_value("world", PASSWORD_SAVE_KEY, ""))
+	if saved in PASSWORD_WORDS:
+		return
+
+	var chosen := PASSWORD_WORDS[randi_range(0, PASSWORD_WORDS.size() - 1)]
+	if manager != null and manager.has_method("set_run_value"):
+		manager.set_run_value("world", PASSWORD_SAVE_KEY, chosen)
+	elif underground_root != null:
+		underground_root.set_meta(PASSWORD_SAVE_KEY, chosen)
+
+
+func get_selected_password() -> String:
+	var manager := get_node_or_null("/root/SaveManager")
+	if manager != null and manager.has_method("get_run_value"):
+		var saved := str(manager.get_run_value("world", PASSWORD_SAVE_KEY, ""))
+		if saved in PASSWORD_WORDS:
+			return saved
+	if underground_root != null:
+		var stored := str(underground_root.get_meta(PASSWORD_SAVE_KEY, ""))
+		if stored in PASSWORD_WORDS:
+			return stored
+	return PASSWORD_WORDS[0]
+
+
+func is_password_solved() -> bool:
+	var manager := get_node_or_null("/root/SaveManager")
+	if manager != null and manager.has_method("get_run_value"):
+		if bool(manager.get_run_value("world", PASSWORD_SOLVED_KEY, false)):
+			return true
+	return underground_root != null and bool(underground_root.get_meta(PASSWORD_SOLVED_KEY, false))
+
+
+func save_password_solved() -> void:
+	var manager := get_node_or_null("/root/SaveManager")
+	if manager != null and manager.has_method("set_run_value"):
+		manager.set_run_value("world", PASSWORD_SOLVED_KEY, true)
+	if underground_root != null:
+		underground_root.set_meta(PASSWORD_SOLVED_KEY, true)
+
+
+func _on_password_submitted(_value: String) -> void:
+	validate_password()
+
+
+func teleport_to_phase3() -> void:
+	if not is_password_solved():
+		push_warning("MainCore: teletransporte bloqueado; palavra-passe não validada.")
+		return
+	var player_node: Node = null
+	if main != null:
+		player_node = main.get_node_or_null("Player")
+	if player_node == null:
+		push_error("MainCore: não foi possível encontrar Main/Player.")
+		show_password_feedback("Palavra-passe aceite, mas o jogador não foi encontrado.")
+		return
+
+	player_node.global_position = PHASE3_SPAWN_POSITION
+	if player_node is CharacterBody2D:
+		player_node.velocity = Vector2.ZERO
+
+	if main != null:
+		var atlas_node := main.get_node_or_null("Atlas")
+		if atlas_node is Node2D:
+			atlas_node.global_position = PHASE3_SPAWN_POSITION + Vector2(80.0, 0.0)
+		if atlas_node is CharacterBody2D:
+			atlas_node.velocity = Vector2.ZERO
+	if underground_root != null:
+		underground_root.set_meta("main_core_unlocked", true)
+		underground_root.set_meta("phase3_unlocked", true)
+
+	terminal_open = false
+	destroy_terminal_ui()
+	get_tree().paused = false
+	print("MAIN CORE PASSWORD: ACCEPTED")
+	print("PHASE 3 TELEPORT: ", PHASE3_SPAWN_POSITION)
 
 
 func register_discovery():
@@ -698,6 +706,8 @@ func destroy_terminal_ui():
 	status_label = null
 	data_label = null
 	action_button = null
+	password_input = null
+	password_feedback = null
 
 
 func is_player(
