@@ -60,6 +60,8 @@ var encounter_intro_done: bool = false
 
 func _ready() -> void:
 	if not Engine.is_editor_hint():
+		# A revelação já vista continua vista depois de carregar um save.
+		twist_stage = int(SaveManager.get_run_value("world", "phase3_twist_stage", 0))
 		rebuild_layout()
 		create_interaction_prompt()
 
@@ -651,6 +653,7 @@ func _on_twist_dialogue_button_pressed() -> void:
 		return
 
 	twist_stage = max(twist_stage, dialogue_final_stage)
+	SaveManager.set_run_value("world", "phase3_twist_stage", twist_stage)
 	if dialogue_layer != null and is_instance_valid(dialogue_layer):
 		dialogue_layer.queue_free()
 	dialogue_layer = null

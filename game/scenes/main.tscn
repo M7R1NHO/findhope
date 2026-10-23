@@ -2405,6 +2405,7 @@ script = ExtResource("11_eb6dy")
 
 [node name="AlienEncounterManager" type="Node" parent="UndergroundRoot" unique_id=724079665]
 script = ExtResource("12_trceg")
+base_encounter_chance = 1.0
 run_required_presses = 5
 
 [node name="FacilityMapTerminal" type="Area2D" parent="UndergroundRoot" unique_id=795860082]

@@ -3,7 +3,7 @@
 from copy import deepcopy
 from typing import Any
 
-MAX_GAMEPLAY_EVENTS = 20
+MAX_GAMEPLAY_EVENTS = 40
 
 
 def _new_state() -> dict:

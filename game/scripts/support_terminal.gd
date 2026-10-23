@@ -1,5 +1,7 @@
 extends Area2D
 
+const UIStyle := preload("res://scripts/ui_style.gd")
+
 
 var player_nearby: bool = false
 var terminal_read: bool = false
@@ -263,6 +265,7 @@ func create_terminal_ui():
 	terminal_layer.add_child(
 		background
 	)
+	UIStyle.apply(background)
 
 
 	var center = CenterContainer.new()
@@ -291,6 +294,7 @@ func create_terminal_ui():
 	center.add_child(
 		container
 	)
+	UIStyle.frame(container)
 
 
 	var title = Label.new()
@@ -308,6 +312,7 @@ func create_terminal_ui():
 		28
 	)
 
+	UIStyle.title(title)
 	container.add_child(
 		title
 	)

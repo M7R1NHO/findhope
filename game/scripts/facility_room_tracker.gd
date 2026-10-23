@@ -240,6 +240,11 @@ func _on_room_body_entered(
 
 	refresh_current_location_context()
 
+	# Atlas 2.0: salas visitadas (exploração observada pelo Atlas).
+	var main := get_tree().current_scene
+	if main != null and main.has_method("register_behavior"):
+		main.register_behavior("room_entered", get_current_room_name())
+
 
 func _on_room_body_exited(
 	body: Node,

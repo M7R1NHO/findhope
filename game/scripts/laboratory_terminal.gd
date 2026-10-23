@@ -1,5 +1,7 @@
 extends Area2D
 
+const MainCoreClues := preload("res://scripts/main_core_clues.gd")
+const UIStyle := preload("res://scripts/ui_style.gd")
 
 var player_nearby: bool = false
 var terminal_open: bool = false
@@ -35,6 +37,7 @@ func _ready():
 	create_collision()
 	create_world_visual()
 	create_interaction_label()
+	restore_saved_stage()
 
 	body_entered.connect(
 		on_body_entered
@@ -280,6 +283,7 @@ func create_terminal_ui():
 	terminal_layer.add_child(
 		background
 	)
+	UIStyle.apply(background)
 
 
 	var center = CenterContainer.new()
@@ -308,6 +312,7 @@ func create_terminal_ui():
 	center.add_child(
 		container
 	)
+	UIStyle.frame(container)
 
 
 	var title = Label.new()
@@ -325,6 +330,7 @@ func create_terminal_ui():
 		28
 	)
 
+	UIStyle.title(title)
 	container.add_child(
 		title
 	)
@@ -523,7 +529,11 @@ func update_terminal_content():
 				+ "ou encontra-se corrompida.\n\n"
 				+ "Não existem dados suficientes neste terminal "
 				+ "para identificar quem realizou o procedimento, "
-				+ "o objetivo da experiência ou a origem do sujeito."
+				+ "o objetivo da experiência ou a origem do sujeito.\n\n"
+				+ "ANEXO // AUTENTICAÇÃO DO NÚCLEO PRINCIPAL:\n"
+				+ MainCoreClues.get_clue("laboratory")
+				+ "\n\nPISTAS RECUPERADAS: "
+				+ str(MainCoreClues.count_found()) + "/3"
 			)
 
 			action_button.visible = false
@@ -565,6 +575,7 @@ func process_stage_one():
 	).timeout
 
 	analysis_stage = 1
+	MainCoreClues.save_stage("laboratory", analysis_stage)
 
 	processing = false
 
@@ -606,6 +617,7 @@ func process_stage_two():
 	).timeout
 
 	analysis_stage = 2
+	MainCoreClues.save_stage("laboratory", analysis_stage)
 
 	processing = false
 
@@ -637,7 +649,7 @@ func process_stage_three():
 	)
 
 	data_label.text = (
-		"Decodificando fragmentos disponíveis.\n"
+		"Descodificando blocos disponíveis.\n"
 		+ "Integridade do arquivo comprometida."
 	)
 
@@ -647,22 +659,14 @@ func process_stage_three():
 	).timeout
 
 	analysis_stage = 3
+	MainCoreClues.save_stage("laboratory", analysis_stage)
 
 	processing = false
 
 	revelation_complete = true
 	register_facility_clue()
 
-	terminal_visual.color = Color(
-		0.55,
-		0.16,
-		0.20,
-		1.0
-	)
-
-	interaction_label.text = (
-		"[E] REABRIR REGISTO"
-	)
+	apply_completed_visual()
 
 	update_terminal_content()
 
@@ -681,7 +685,9 @@ func register_revelation():
 			"Agora temos confirmação. "
 			+ "A criatura que encontrámos não nasceu daquela forma. "
 			+ "Ela era humana. "
-			+ "Alguém provocou esta transformação."
+			+ "Alguém provocou esta transformação. "
+			+ "O registo tem também um anexo sobre a autenticação "
+			+ "do Núcleo Principal. Pode ser uma das pistas."
 		)
 
 
@@ -719,9 +725,18 @@ func send_gameplay_context():
 		+ "Os dados disponíveis não revelam quem realizou "
 		+ "a experiência, qual era o objetivo do procedimento "
 		+ "nem como o sujeito humano chegou à instalação. "
-		+ "Essas informações permanecem desconhecidas.",
+		+ "Essas informações permanecem desconhecidas. "
+		+ "O registo tinha um anexo que serve de pista para "
+		+ "a palavra-passe do Núcleo Principal: \""
+		+ MainCoreClues.get_clue("laboratory") + "\" "
+		+ "Atlas pode ajudar a interpretar a pista, "
+		+ "mas não sabe a palavra e não a deve afirmar.",
 		true
 	)
+
+	# Atlas 2.0: o Atlas reage por iniciativa própria.
+	if main.has_method("request_atlas_spontaneous"):
+		main.request_atlas_spontaneous("lab_human_revelation")
 
 
 func destroy_terminal_ui():
@@ -756,6 +771,28 @@ func is_player(
 
 func is_revelation_complete() -> bool:
 	return revelation_complete
+
+
+func restore_saved_stage() -> void:
+	analysis_stage = MainCoreClues.load_stage("laboratory")
+	revelation_complete = analysis_stage >= 3
+	if revelation_complete:
+		apply_completed_visual()
+
+
+func apply_completed_visual() -> void:
+	if terminal_visual != null:
+		terminal_visual.color = Color(
+			0.55,
+			0.16,
+			0.20,
+			1.0
+		)
+
+	if interaction_label != null:
+		interaction_label.text = (
+			"[E] REABRIR REGISTO"
+		)
 
 
 func register_facility_clue() -> void:

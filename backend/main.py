@@ -20,15 +20,15 @@ from backend import (
     atlas_knowledge as atlas_knowledge_module,
     atlas_memory as atlas_memory_module,
     autonomy_state as autonomy_state_module,
+    behavior_state as behavior_state_module,
     conversation_context as conversation_context_module,
     discovery_state as discovery_state_module,
     gameplay_context as gameplay_context_module,
     narrative_state as narrative_state_module,
     relationship_engine as relationship_engine_module,
-    social_state as social_state_module,
 )
 from backend.sensors import process_godot_scan
-from backend.ia import ask_android
+from backend.ia import ask_android, atlas_spontaneous_message
 
 from backend.atlas_knowledge import (
     get_atlas_knowledge,
@@ -56,6 +56,7 @@ from backend.gameplay_context import (
 from backend.discovery_state import (
     process_scan_discoveries,
     get_discovery_state,
+    get_protocol_evidence,
     reset_discovery_state,
 )
 
@@ -72,6 +73,30 @@ app = FastAPI(title="Find Hope")
 class ChatMessage(BaseModel):
     message: str
     run_id: str | None = None
+    # Localização enviada pelo jogo (main.gd); antes era ignorada.
+    current_room: str | None = None
+    current_room_map_info: str | None = None
+    facility_map_acquired: bool = False
+
+    def location(self):
+        return {
+            "current_room": self.current_room,
+            "current_room_map_info": self.current_room_map_info,
+            "facility_map_acquired": self.facility_map_acquired,
+        }
+
+
+class BehaviorEvent(BaseModel):
+    event: str
+    run_id: str | None = None
+    event_id: str | None = None
+    room: str | None = None
+
+
+class SpontaneousRequest(BaseModel):
+    trigger: str
+    run_id: str | None = None
+    current_room: str | None = None
 
 
 class SaveRequest(BaseModel):
@@ -158,7 +183,7 @@ def _export_atlas_state(run_id=None):
         "discoveries": deepcopy(discovery_state_module.DISCOVERY_STATE),
         "narrative": deepcopy(narrative_state_module.NARRATIVE_STATE),
         "relationship": deepcopy(relationship_engine_module.RELATIONSHIP_STATE),
-        "social": deepcopy(social_state_module.SOCIAL_STATE),
+        "behavior": deepcopy(behavior_state_module.BEHAVIOR_STATE),
         "conversation_history": deepcopy(
             conversation_context_module.CONVERSATION_HISTORY
         ),
@@ -228,8 +253,10 @@ def _restore_atlas_state(state, run_id: str | None = None):
         "discoveries": discovery_state_module.DISCOVERY_STATE,
         "narrative": narrative_state_module.NARRATIVE_STATE,
         "relationship": relationship_engine_module.RELATIONSHIP_STATE,
-        "social": social_state_module.SOCIAL_STATE,
+        "behavior": behavior_state_module.BEHAVIOR_STATE,
     }
+    # Nota: saves antigos podem trazer o campo "social" (social_state.py,
+    # que nunca era usado). É ignorado; a irritação vive em "relationship".
 
     # Validar antes de alterar qualquer estado.
     for field_name in required_dicts:
@@ -272,6 +299,11 @@ def _restore_atlas_state(state, run_id: str | None = None):
     for field_name, target in required_dicts.items():
         if field_name in state:
             _replace_dict(target, state[field_name], field_name)
+
+    # Saves anteriores ao Atlas 2.0 não têm "behavior": começam a zero em
+    # vez de herdarem os contadores de outra partida.
+    if "behavior" not in state:
+        behavior_state_module.reset_behavior_state()
 
     # A autonomia mantém um dicionário por run além do estado global legado.
     # Sincroniza ambos ao restaurar uma gravação/estado isolado.
@@ -388,7 +420,7 @@ def reset_atlas_run(payload: dict | None = None):
         reset_discovery_state()
         narrative_state_module.reset_narrative_state()
         relationship_engine_module.reset_relationship_state()
-        social_state_module.reset_social_state()
+        behavior_state_module.reset_behavior_state()
         conversation_context_module.reset_conversation_context()
         PROCESSED_AUTONOMY_EVENT_IDS.clear()
         WORLD_STATE.clear()
@@ -563,7 +595,11 @@ def root():
 @app.post("/chat")
 def chat(data: ChatMessage):
     def ask():
-        return ask_android(data.message, run_id=data.run_id)
+        return ask_android(
+            data.message,
+            run_id=data.run_id,
+            location=data.location(),
+        )
 
     response = _run_in_isolated_state(data.run_id, ask)
     return {
@@ -589,9 +625,11 @@ def receive_godot_scan(data: GodotScan):
         ]
         processed = process_godot_scan(atlas_position, detections)
         new_discoveries = process_scan_discoveries(detections)
+        if new_discoveries and get_protocol_evidence()["ready"]:
+            narrative_state_module.register_narrative_milestone("surface_evidence_discovered")
         if new_discoveries:
-            print("\\nNEW SURFACE DISCOVERIES:", new_discoveries)
-            print("\\nDISCOVERY STATE:", get_discovery_state())
+            print("\nNEW SURFACE DISCOVERIES:", new_discoveries)
+            print("\nDISCOVERY STATE:", get_discovery_state())
         return {
             "status": "scan processed",
             "run_id": run_id,
@@ -709,6 +747,24 @@ def gameplay_context(run_id: str | None = None):
     return _run_in_isolated_state(run_id, get_gameplay_context)
 
 
+# Eventos de gameplay que confirmam um marco narrativo do Atlas.
+# O estágio só avança por factos enviados pelo jogo, nunca pelo chat.
+GAMEPLAY_EVENT_MILESTONES = {
+    "intro_route_deviation": "route_deviation_detected",
+    "underground_door_01_opened": "protocol_door_opened",
+    "hide_initial_started": "first_creature_observed",
+    "hide_initial_completed": "hide_initial_complete",
+    "creature_human_origin_confirmed": "lab_clue_analyzed",
+}
+
+# Eventos graves: nas respostas seguintes o Atlas não faz humor.
+GRAVE_GAMEPLAY_EVENTS = {
+    "hide_initial_started": 3,
+    "alien_life_01_confirmed": 2,
+    "creature_human_origin_confirmed": 3,
+}
+
+
 @app.post("/gameplay/context/event")
 def gameplay_context_event(data: GameplayContextEvent):
     run_id = _normalise_run_id(data.run_id)
@@ -719,7 +775,13 @@ def gameplay_context_event(data: GameplayContextEvent):
         )
         if not success:
             return {"status": "error", "message": "Invalid gameplay context event"}
-        print("\\nGAMEPLAY CONTEXT EVENT:", {
+        milestone = GAMEPLAY_EVENT_MILESTONES.get(data.event_id)
+        if milestone:
+            narrative_state_module.register_narrative_milestone(milestone)
+        grave_turns = GRAVE_GAMEPLAY_EVENTS.get(data.event_id)
+        if grave_turns:
+            narrative_state_module.set_grave_moment(grave_turns)
+        print("\nGAMEPLAY CONTEXT EVENT:", {
             "event_id": data.event_id, "event_type": data.event_type,
             "description": data.description, "active": data.active, "run_id": run_id,
         })
@@ -743,7 +805,7 @@ def reset_gameplay(run_id: str | None = None):
 @app.get("/gameplay/protocol-door/decision")
 def protocol_door_decision(run_id: str | None = None):
     decision = _run_in_isolated_state(run_id, evaluate_protocol_door)
-    print("\\nPROTOCOL DOOR DECISION:", decision)
+    print("\nPROTOCOL DOOR DECISION:", decision)
     return decision
 
 
@@ -790,11 +852,11 @@ def autonomy_gameplay_event(data: AutonomyGameplayEvent):
         )
         if event_id is not None:
             PROCESSED_AUTONOMY_EVENT_IDS.add(event_id)
-        print("\\nAUTONOMY GAMEPLAY EVENT:", {
+        print("\nAUTONOMY GAMEPLAY EVENT:", {
             "event": data.event, "event_id": event_id,
             "intensity": data.intensity, "run_id": run_id,
         })
-        print("\\nAUTONOMY STATE AFTER GAMEPLAY EVENT:", state)
+        print("\nAUTONOMY STATE AFTER GAMEPLAY EVENT:", state)
         return {"status": "autonomy event processed", "event": data.event,
                 "event_id": event_id, "intensity": data.intensity,
                 "duplicate": False, "autonomy": state, "run_id": run_id}
@@ -810,3 +872,144 @@ def reset_autonomy(run_id: str | None = None):
         return {"status": "Atlas autonomy reset", "autonomy": get_autonomy_state(run_id=run_id),
                 "processed_event_ids": []}
     return _run_in_isolated_state(run_id, reset)
+
+
+# =========================================================
+# ATLAS 2.0 - COMPORTAMENTO OBSERVADO
+# =========================================================
+
+@app.post("/atlas/behavior/event")
+def behavior_event(data: BehaviorEvent):
+    """Regista um comportamento do jogador confirmado pelo jogo."""
+    run_id = _normalise_run_id(data.run_id)
+    event = str(data.event or "").strip()
+    if event not in behavior_state_module.ALLOWED_BEHAVIOR_EVENTS:
+        return {
+            "status": "error",
+            "message": "Invalid behavior event",
+            "allowed_events": sorted(behavior_state_module.ALLOWED_BEHAVIOR_EVENTS),
+        }
+    event_id = data.event_id.strip()[:128] if data.event_id and data.event_id.strip() else None
+
+    def process():
+        if behavior_state_module.is_duplicate_event(event_id):
+            return {"status": "duplicate event ignored", "event": event,
+                    "duplicate": True, "run_id": run_id,
+                    "behavior": behavior_state_module.get_behavior_state(),
+                    "suggested_trigger": None}
+
+        accepted, relationship_effect = behavior_state_module.register_behavior_event(
+            event, room=data.room, event_id=event_id,
+        )
+        if accepted and relationship_effect:
+            relationship_event, intensity = relationship_effect
+            relationship_engine_module.apply_relationship_event(
+                relationship_event, intensity=intensity,
+            )
+
+        return {
+            "status": "behavior event processed" if accepted else "ignored",
+            "event": event,
+            "duplicate": False,
+            "run_id": run_id,
+            "behavior": behavior_state_module.get_behavior_state(),
+            "suggested_trigger": _suggest_trigger(event) if accepted else None,
+        }
+
+    return _run_in_isolated_state(run_id, process)
+
+
+# =========================================================
+# ATLAS 2.0 - MENSAGENS ESPONTÂNEAS
+# =========================================================
+
+# Só estes gatilhos existem. O texto é o facto que o jogo confirmou;
+# o Atlas decide apenas como reage. "once" = uma vez por partida.
+SPONTANEOUS_TRIGGERS = {
+    "hide_initial_completed": {
+        "once": True,
+        "grave": True,
+        "text": "A criatura afastou-se. Foi o primeiro encontro com ela e Atlas e o jogador sobreviveram.",
+    },
+    "fight_won_first": {
+        "once": True,
+        "grave": False,
+        "text": "Atlas acabou de afastar a criatura com o equipamento sonoro pela primeira vez. A criatura recuou, mas não foi destruída.",
+    },
+    "run_streak": {
+        "once": False,
+        "grave": False,
+        "text": "Atlas e o jogador acabaram de fugir outra vez da criatura. Foi a fuga número {run_streak} seguida sem a enfrentarem.",
+    },
+    "sonic_equipment_connected": {
+        "once": True,
+        "grave": False,
+        "text": "O equipamento sonoro do Armazém acabou de ser ligado ao Atlas. A partir de agora podem enfrentar a criatura em vez de só fugir.",
+    },
+    "lab_human_revelation": {
+        "once": True,
+        "grave": True,
+        "text": "Os registos do Laboratório acabaram de confirmar que a criatura era originalmente humana e foi transformada.",
+    },
+    "clues_complete": {
+        "once": True,
+        "grave": False,
+        "text": "As pistas do Laboratório, dos Arquivos e do Santuário foram todas analisadas. Atlas já pode autenticar a porta do MainCore; a palavra-senha ainda tem de ser deduzida pelo jogador.",
+    },
+    "maintenance_used": {
+        "once": True,
+        "grave": False,
+        "text": "O jogador acabou de usar a estação de Manutenção e recuperou VIDA. Só pode ser usada uma vez.",
+    },
+}
+
+RUN_STREAK_TRIGGER_EVERY = 3
+
+
+def _suggest_trigger(event):
+    """Gatilho espontâneo sugerido por um comportamento (o jogo decide pedir)."""
+    behavior = behavior_state_module.get_behavior_state()
+    if event == "fight_won" and behavior["counters"]["fights_won"] == 1:
+        return "fight_won_first"
+    streak = behavior["run_streak"]
+    if event == "run_escaped" and streak > 0 and streak % RUN_STREAK_TRIGGER_EVERY == 0:
+        return "run_streak"
+    if event == "maintenance_used" and not behavior_state_module.was_spontaneous_used("maintenance_used"):
+        return "maintenance_used"
+    return None
+
+
+@app.post("/atlas/spontaneous")
+def atlas_spontaneous(data: SpontaneousRequest):
+    """O Atlas fala sem o jogador escrever, depois de um gatilho do jogo."""
+    run_id = _normalise_run_id(data.run_id)
+    trigger = str(data.trigger or "").strip()
+    spec = SPONTANEOUS_TRIGGERS.get(trigger)
+    if spec is None:
+        return {"status": "error", "message": "Invalid trigger",
+                "allowed_triggers": sorted(SPONTANEOUS_TRIGGERS)}
+
+    def speak():
+        if spec["once"] and behavior_state_module.was_spontaneous_used(trigger):
+            return {"status": "skipped", "reason": "already_used",
+                    "trigger": trigger, "response": None}
+
+        behavior = behavior_state_module.get_behavior_state()
+        text = spec["text"].format(run_streak=behavior["run_streak"])
+        if spec["grave"]:
+            narrative_state_module.set_grave_moment(2)
+
+        response = atlas_spontaneous_message(
+            text,
+            run_id=run_id,
+            location={"current_room": data.current_room},
+        )
+        if response is None:
+            # Falhou o modelo: não gastar o gatilho, o jogo pode tentar outra vez.
+            return {"status": "skipped", "reason": "no_response",
+                    "trigger": trigger, "response": None}
+
+        behavior_state_module.mark_spontaneous_used(trigger, spec["once"])
+        return {"status": "ok", "trigger": trigger, "response": response}
+
+    return _run_in_isolated_state(run_id, speak)

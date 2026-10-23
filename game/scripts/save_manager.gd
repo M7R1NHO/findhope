@@ -558,6 +558,27 @@ func autosave(checkpoint_id: String) -> bool:
 	return await _save_game("autosave", 0, checkpoint_id)
 
 
+# Autosave pedido a meio do jogo (por exemplo, no fim de um hack ou de um
+# HIDE). Espera que não haja combate, perseguição, minijogo ou interface
+# com o jogo pausado, e desiste se a cena mudar entretanto (Game Over).
+func autosave_when_safe(checkpoint_id: String, max_wait_msec: int = 60000) -> bool:
+	var scene := get_tree().current_scene
+	var started := Time.get_ticks_msec()
+	while (
+		save_in_progress
+		or load_in_progress
+		or get_tree().paused
+		or not _runtime_save_block_reason().is_empty()
+	):
+		await get_tree().process_frame
+		if get_tree().current_scene != scene:
+			return false
+		if Time.get_ticks_msec() - started > max_wait_msec:
+			push_warning("Autosave adiado demasiado tempo: " + checkpoint_id)
+			return false
+	return await autosave(checkpoint_id)
+
+
 func save_manual_slot(slot: int) -> bool:
 	if not is_valid_slot(slot):
 		return _fail("O slot selecionado é inválido.")

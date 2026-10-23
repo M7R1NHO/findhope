@@ -32,7 +32,15 @@ from backend.relationship_engine import (
 from backend.narrative_state import (
     apply_narrative_event,
     build_narrative_context,
+    consume_grave_turn,
     get_narrative_state,
+)
+
+from backend.behavior_state import build_behavior_context
+
+from backend.atlas_personality import (
+    PROVOCATION_EVENTS,
+    build_personality_context,
 )
 
 from backend.autonomy_state import (
@@ -69,7 +77,8 @@ MODEL = "qwen/qwen3.8-27b"
 ANDROID_INSTRUCTIONS = """
 IDENTIDADE
 És Atlas, androide de exploração PYSSOA atribuído à Nave 47, no universo de Find Hope.
-És calmo, lógico, observador e curioso, mas tens uma perspetiva própria e limitada. Falas como companheiro de missão, normalmente em 1–3 frases naturais. Humor subtil apenas quando o contexto narrativo o permitir. Nunca menciones modelos, fornecedores ou infraestrutura externa.
+És calmo, lógico, observador e curioso, mas tens uma perspetiva própria e limitada. Falas como companheiro de missão, normalmente em 1–3 frases naturais. Nunca menciones modelos, fornecedores ou infraestrutura externa.
+És um personagem que evolui: a forma como falas segue a secção PERSONALIDADE, que muda com a história e com a opinião que formaste sobre este humano.
 
 HIERARQUIA DA VERDADE
 1. LORE: factos canónicos que Atlas pode conhecer nesta fase.
@@ -117,6 +126,13 @@ MEMÓRIA, RELAÇÃO E NARRATIVA
 VIDA EXTRATERRESTRE
 - Não classifiques algo como vivo, inteligente ou extraterrestre sem evidência suficiente.
 - Descreve primeiro as propriedades efetivamente observadas. Aumenta a certeza apenas quando existirem dados confirmados.
+
+PERSONALIDADE E COMPORTAMENTO DO JOGADOR
+- Segue a secção PERSONALIDADE: humor, registo, momento grave e provocação.
+- Podes gostar, desconfiar ou irritar-te com o jogador conforme a RELAÇÃO; isso muda o tom, nunca a ajuda que dás na missão.
+- Quando o jogador te provoca, podes responder à letra dentro da tua personalidade, sem ameaças nem crueldade.
+- Podes usar o que sabes do jogador (formulário, o que te contou) e o COMPORTAMENTO OBSERVADO para comentar, brincar ou criticar. Usa só as contagens dadas; nunca inventes quantas vezes algo aconteceu.
+- Em momentos graves não fazes humor.
 
 ESTILO
 - Quando não sabes, admite-o de forma natural e específica.
@@ -226,7 +242,10 @@ def build_dynamic_context(
     narrative_context,
     autonomy_context,
     gameplay_context,
-    discovery_context
+    discovery_context,
+    behavior_context="",
+    personality_context="",
+    location_context="",
 ):
     sections = []
 
@@ -294,6 +313,24 @@ def build_dynamic_context(
         sections.append(
             "DESCOBERTAS CONFIRMADAS:\n"
             + discovery_context
+        )
+
+    if location_context:
+        sections.append(
+            "LOCALIZAÇÃO ATUAL:\n"
+            + location_context
+        )
+
+    if behavior_context:
+        sections.append(
+            "COMPORTAMENTO OBSERVADO:\n"
+            + behavior_context
+        )
+
+    if personality_context:
+        sections.append(
+            "PERSONALIDADE:\n"
+            + personality_context
         )
 
     sections.append(
@@ -753,7 +790,118 @@ def detect_chat_autonomy_event(message):
     return None
 
 
-def ask_android(message: str, run_id: str | None = None) -> str:
+def build_location_context(location):
+    """Sala atual enviada pelo jogo (FacilityRoomTracker)."""
+    if not isinstance(location, dict):
+        return ""
+
+    room = str(location.get("current_room") or "").strip()[:80]
+    room_info = str(location.get("current_room_map_info") or "").strip()[:300]
+    map_acquired = bool(location.get("facility_map_acquired", False))
+
+    lines = []
+    if room:
+        lines.append(f"Sala atual: {room}")
+        if room_info:
+            lines.append(f"Informação do mapa sobre esta sala: {room_info}")
+    if map_acquired:
+        lines.append("O mapa da instalação já foi obtido.")
+
+    return "\n".join(lines)
+
+
+def _build_atlas_context(
+    message,
+    run_id,
+    new_memories,
+    query_data,
+    provoked=False,
+    location=None,
+):
+    """Junta todos os contextos verdadeiros que o Atlas recebe."""
+    relevant_memories = retrieve_relevant_memories(
+        message=message,
+        query_data=query_data,
+        limit=6,
+        run_id=run_id,
+    )
+
+    if not isinstance(relevant_memories, list):
+        relevant_memories = []
+
+    context_memories = merge_context_memories(
+        new_memories=new_memories,
+        relevant_memories=relevant_memories,
+    )
+
+    memory_context = ""
+    if context_memories:
+        memory_context = build_memory_context(context_memories)
+
+    conversation_context = build_conversation_context()
+    if conversation_context == "Não existe contexto recente de conversa.":
+        conversation_context = ""
+
+    gameplay_context = build_gameplay_context()
+    if gameplay_context == "Nenhum acontecimento de gameplay ativo.":
+        gameplay_context = ""
+
+    print("\nRELATIONSHIP STATE:", get_relationship_state())
+    print("\nRELATIONSHIP SUMMARY:", get_relationship_summary())
+    print("\nNARRATIVE STATE:", get_narrative_state())
+    print("\nAUTONOMY STATE:", get_autonomy_state(run_id=run_id))
+    print("\nQUERY DE MEMÓRIA:", query_data)
+    print("\nMEMÓRIAS ENVIADAS AO ATLAS:", context_memories)
+
+    return build_dynamic_context(
+        lore_context=build_lore_context(),
+        detection_context=build_detection_context(),
+        knowledge_context=build_knowledge_context(),
+        memory_context=memory_context,
+        conversation_context=conversation_context,
+        belief_context=build_belief_context(new_memories),
+        relationship_context=build_relationship_context(),
+        narrative_context=build_narrative_context(),
+        autonomy_context=build_autonomy_context(run_id=run_id),
+        gameplay_context=gameplay_context,
+        discovery_context=build_discovery_context(),
+        behavior_context=build_behavior_context(),
+        personality_context=build_personality_context(provoked=provoked),
+        location_context=build_location_context(location),
+    )
+
+
+def _complete(dynamic_context, user_content, max_tokens=120):
+    completion = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": ANDROID_INSTRUCTIONS},
+            {"role": "system", "content": dynamic_context},
+            {"role": "user", "content": user_content},
+        ],
+        reasoning_effort="none",
+        temperature=0.4,
+        max_tokens=max_tokens,
+    )
+
+    if completion.usage:
+        print("\n========== TOKENS ATLAS ==========")
+        print("Prompt:", completion.usage.prompt_tokens)
+        print("Resposta:", completion.usage.completion_tokens)
+        print("Total:", completion.usage.total_tokens)
+        print("==================================")
+
+    resposta = completion.choices[0].message.content
+    if not isinstance(resposta, str) or not resposta.strip():
+        return ""
+    return resposta.strip()
+
+
+def ask_android(
+    message: str,
+    run_id: str | None = None,
+    location: dict | None = None,
+) -> str:
     if not isinstance(message, str):
         return "Não consegui compreender a mensagem recebida."
 
@@ -789,21 +937,14 @@ def ask_android(message: str, run_id: str | None = None) -> str:
             run_id=run_id,
         )
 
-        if not isinstance(
-            new_memories,
-            list
-        ):
+        if not isinstance(new_memories, list):
             new_memories = []
 
         # =========================================================
         # AUTONOMY - EVENTOS DE CONVERSA
         # =========================================================
 
-        autonomy_event = (
-            detect_chat_autonomy_event(
-                message
-            )
-        )
+        autonomy_event = detect_chat_autonomy_event(message)
 
         if autonomy_event:
             apply_autonomy_event(
@@ -811,15 +952,13 @@ def ask_android(message: str, run_id: str | None = None) -> str:
                 source="chat",
                 run_id=run_id,
             )
-
-            print(
-                "\nAUTONOMY EVENT:",
-                autonomy_event
-            )
+            print("\nAUTONOMY EVENT:", autonomy_event)
 
         # =========================================================
         # RELATIONSHIP ENGINE
         # =========================================================
+
+        provoked = False
 
         for memory in new_memories:
             if not isinstance(memory, dict):
@@ -828,37 +967,22 @@ def ask_android(message: str, run_id: str | None = None) -> str:
             if memory.get("category") != "relationship":
                 continue
 
-            intensity = (
-                relationship_intensity_from_memory(
-                    memory
-                )
-            )
-
-            event_type = (
-                detect_relationship_event(
-                    memory
-                )
-            )
+            intensity = relationship_intensity_from_memory(memory)
+            event_type = detect_relationship_event(memory)
 
             if event_type:
-                apply_relationship_event(
-                    event_type,
-                    intensity=intensity,
-                )
+                apply_relationship_event(event_type, intensity=intensity)
+                apply_narrative_event(event_type, intensity=intensity)
 
-                apply_narrative_event(
-                    event_type,
-                    intensity=intensity,
-                )
+                if event_type in PROVOCATION_EVENTS:
+                    provoked = True
 
                 print(
                     "\nRELATIONSHIP EVENT:",
                     {
                         "event": event_type,
                         "intensity": intensity,
-                        "importance": memory.get(
-                            "importance"
-                        ),
+                        "importance": memory.get("importance"),
                     },
                 )
 
@@ -866,269 +990,83 @@ def ask_android(message: str, run_id: str | None = None) -> str:
         # 3. QUERY DE MEMÓRIA
         # =========================================================
 
-        query_data = interpreted_memory.get(
-            "query",
-            {}
-        )
+        query_data = interpreted_memory.get("query", {})
 
-        if not isinstance(
-            query_data,
-            dict
-        ):
+        if not isinstance(query_data, dict):
             query_data = {}
 
         # =========================================================
-        # 4. RECUPERAR MEMÓRIAS
+        # 4. CONTEXTOS + RESPOSTA DO ATLAS
         # =========================================================
 
-        relevant_memories = (
-            retrieve_relevant_memories(
-                message=message,
-                query_data=query_data,
-                limit=6,
-                run_id=run_id,
-            )
+        dynamic_context = _build_atlas_context(
+            message=message,
+            run_id=run_id,
+            new_memories=new_memories,
+            query_data=query_data,
+            provoked=provoked,
+            location=location,
         )
 
-        if not isinstance(
-            relevant_memories,
-            list
-        ):
-            relevant_memories = []
-
-        context_memories = (
-            merge_context_memories(
-                new_memories=new_memories,
-                relevant_memories=relevant_memories,
-            )
-        )
-
-        # =========================================================
-        # 5. CONTEXTOS
-        # =========================================================
-
-        lore_context = (
-            build_lore_context()
-        )
-
-        knowledge_context = (
-            build_knowledge_context()
-        )
-
-        detection_context = (
-            build_detection_context()
-        )
-
-        memory_context = ""
-
-        if context_memories:
-            memory_context = (
-                build_memory_context(
-                    context_memories
-                )
-            )
-
-        belief_context = (
-            build_belief_context(
-                new_memories
-            )
-        )
-
-        conversation_context = (
-            build_conversation_context()
-        )
-
-        if conversation_context == "Não existe contexto recente de conversa.":
-            conversation_context = ""
-
-        relationship_context = (
-            build_relationship_context()
-        )
-
-        narrative_context = (
-            build_narrative_context()
-        )
-
-        autonomy_context = (
-            build_autonomy_context(run_id=run_id)
-        )
-
-        gameplay_context = (
-            build_gameplay_context()
-        )
-
-        if gameplay_context == "Nenhum acontecimento de gameplay ativo.":
-            gameplay_context = ""
-
-        discovery_context = (
-            build_discovery_context()
-        )
-
-        print(
-            "\nRELATIONSHIP STATE:",
-            get_relationship_state()
-        )
-
-        print(
-            "\nRELATIONSHIP SUMMARY:",
-            get_relationship_summary()
-        )
-
-        print(
-            "\nNARRATIVE STATE:",
-            get_narrative_state()
-        )
-
-        print(
-            "\nAUTONOMY STATE:",
-            get_autonomy_state(run_id=run_id)
-        )
-
-        print(
-            "\nGAMEPLAY CONTEXT:",
-            gameplay_context
-        )
-
-        print(
-            "\nDISCOVERY CONTEXT:",
-            discovery_context
-        )
-
-        dynamic_context = (
-            build_dynamic_context(
-                lore_context=lore_context,
-                detection_context=detection_context,
-                knowledge_context=knowledge_context,
-                memory_context=memory_context,
-                conversation_context=conversation_context,
-                belief_context=belief_context,
-                relationship_context=relationship_context,
-                narrative_context=narrative_context,
-                autonomy_context=autonomy_context,
-                gameplay_context=gameplay_context,
-                discovery_context=discovery_context,
-            )
-        )
-
-        # =========================================================
-        # 6. DEBUG
-        # =========================================================
-
-        print(
-            "\nQUERY DE MEMÓRIA:",
-            query_data
-        )
-
-        print(
-            "\nMEMÓRIAS RECUPERADAS:",
-            relevant_memories
-        )
-
-        print(
-            "\nMEMÓRIAS ENVIADAS AO ATLAS:",
-            context_memories
-        )
-
-        print(
-            "\nCONTEXTO RECENTE:"
-        )
-
-        print(
-            conversation_context
-        )
-
-        # =========================================================
-        # 7. RESPOSTA DO ATLAS
-        # =========================================================
-
-        completion = (
-            client
-            .chat
-            .completions
-            .create(
-                model=MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": ANDROID_INSTRUCTIONS,
-                    },
-                    {
-                        "role": "system",
-                        "content": dynamic_context,
-                    },
-                    {
-                        "role": "user",
-                        "content": message,
-                    },
-                ],
-                reasoning_effort="none",
-                temperature=0.4,
-                max_tokens=120,
-            )
-        )
-
-        # =========================================================
-        # 8. TOKEN USAGE
-        # =========================================================
-
-        if completion.usage:
-            print(
-                "\n========== TOKENS ATLAS =========="
-            )
-
-            print(
-                "Prompt:",
-                completion.usage.prompt_tokens
-            )
-
-            print(
-                "Resposta:",
-                completion.usage.completion_tokens
-            )
-
-            print(
-                "Total:",
-                completion.usage.total_tokens
-            )
-
-            print(
-                "=================================="
-            )
-
-        resposta = (
-            completion
-            .choices[0]
-            .message
-            .content
-        )
-
-        if not isinstance(resposta, str) or not resposta.strip():
+        resposta = _complete(dynamic_context, message)
+        if not resposta:
             resposta = "Não consegui formular uma resposta."
-        else:
-            resposta = resposta.strip()
 
         # =========================================================
-        # 9. CONTEXTO RECENTE
+        # 5. CONTEXTO RECENTE
         # =========================================================
 
-        add_conversation_message(
-            role="player",
-            content=message
-        )
-
-        add_conversation_message(
-            role="atlas",
-            content=resposta
-        )
+        add_conversation_message(role="player", content=message)
+        add_conversation_message(role="atlas", content=resposta)
+        consume_grave_turn()
 
         return resposta
 
     except Exception as e:
-        print(
-            f"Erro na comunicação com o Groq: {e}"
-        )
+        print(f"Erro na comunicação com o Groq: {e}")
 
         return (
             "Erro no sistema de comunicação. "
             "Sensores temporariamente indisponíveis."
         )
+
+
+def atlas_spontaneous_message(
+    trigger_description: str,
+    run_id: str | None = None,
+    location: dict | None = None,
+) -> str | None:
+    """Fala espontânea do Atlas depois de um gatilho confirmado pelo jogo.
+
+    Devolve None se o modelo falhar: nesse caso o Atlas fica calado, em vez
+    de mostrar uma mensagem de erro que o jogador não pediu.
+    """
+    instruction = (
+        "[GATILHO DO JOGO — não é uma mensagem do jogador]\n"
+        + trigger_description
+        + "\nO jogador não escreveu nada. Diz por iniciativa própria uma "
+        "única fala curta (1 a 2 frases) que Atlas diria agora, coerente "
+        "com a personalidade, a relação e os factos do contexto. Não faças "
+        "perguntas de sistema, não descrevas ações que o jogo não confirmou "
+        "e não repitas o texto do gatilho."
+    )
+
+    try:
+        dynamic_context = _build_atlas_context(
+            message=trigger_description,
+            run_id=run_id,
+            new_memories=[],
+            query_data={},
+            location=location,
+        )
+        resposta = _complete(dynamic_context, instruction, max_tokens=90)
+    except Exception as e:
+        print(f"Erro na mensagem espontânea do Atlas: {e}")
+        return None
+
+    if not resposta:
+        return None
+
+    add_conversation_message(role="atlas", content=resposta)
+    consume_grave_turn()
+    return resposta

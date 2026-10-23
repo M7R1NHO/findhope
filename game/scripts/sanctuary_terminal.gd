@@ -1,5 +1,7 @@
 extends Area2D
 
+const MainCoreClues := preload("res://scripts/main_core_clues.gd")
+const UIStyle := preload("res://scripts/ui_style.gd")
 
 var player_nearby: bool = false
 var terminal_open: bool = false
@@ -35,6 +37,7 @@ func _ready():
 	create_collision()
 	create_world_visual()
 	create_interaction_label()
+	restore_saved_stage()
 
 	body_entered.connect(
 		on_body_entered
@@ -269,6 +272,7 @@ func create_terminal_ui():
 	terminal_layer.add_child(
 		background
 	)
+	UIStyle.apply(background)
 
 
 	var center = CenterContainer.new()
@@ -297,6 +301,7 @@ func create_terminal_ui():
 	center.add_child(
 		container
 	)
+	UIStyle.frame(container)
 
 
 	var title = Label.new()
@@ -314,6 +319,7 @@ func create_terminal_ui():
 		28
 	)
 
+	UIStyle.title(title)
 	container.add_child(
 		title
 	)
@@ -456,21 +462,20 @@ func update_terminal_content():
 
 		1:
 			status_label.text = (
-				"FRAGMENTOS DE EMERGÊNCIA RECUPERADOS"
+				"REGISTOS DE EMERGÊNCIA RECUPERADOS"
 			)
 
 			data_label.text = (
 				"REGISTO PARCIAL:\n\n"
 				+ "\"O setor de contenção já não responde.\"\n\n"
 				+ "\"Não deixem ninguém entrar no corredor principal.\"\n\n"
-				+ "\"O acesso ao Núcleo foi dividido. "
-				+ "Nenhuma autorização isolada deve permitir entrada.\"\n\n"
-				+ "Existe uma chave parcial armazenada neste terminal.\n\n"
-				+ "IDENTIFICAÇÃO: FRAGMENTO B"
+				+ "\"A palavra do Núcleo nunca foi escrita por inteiro. "
+				+ "Deixámos apenas pistas.\"\n\n"
+				+ "Existe uma inscrição gravada neste terminal."
 			)
 
 			action_button.text = (
-				"RECUPERAR FRAGMENTO B"
+				"LER INSCRIÇÃO"
 			)
 
 			action_button.visible = true
@@ -478,29 +483,16 @@ func update_terminal_content():
 
 		2:
 			status_label.text = (
-				"FRAGMENTO B RECUPERADO"
+				"INSCRIÇÃO RECUPERADA"
 			)
 
-			var archive_found = has_archive_fragment()
-
-			if archive_found:
-				data_label.text = (
-					"Fragmento B armazenado.\n\n"
-					+ "FRAGMENTO A: CONFIRMADO\n"
-					+ "FRAGMENTO B: CONFIRMADO\n\n"
-					+ "AUTORIZAÇÃO DO NÚCLEO PRINCIPAL:\n"
-					+ "RECONSTRUÍDA\n\n"
-					+ "Os dois fragmentos necessários "
-					+ "já estão disponíveis."
-				)
-
-			else:
-				data_label.text = (
-					"Fragmento B armazenado.\n\n"
-					+ "FRAGMENTO B: CONFIRMADO\n"
-					+ "FRAGMENTO A: AUSENTE\n\n"
-					+ "A autorização permanece incompleta."
-				)
+			data_label.text = (
+				MainCoreClues.get_clue("sanctuary")
+				+ "\n\nA inscrição é uma das três pistas "
+				+ "para a palavra do Núcleo Principal.\n\n"
+				+ "PISTAS RECUPERADAS: "
+				+ str(MainCoreClues.count_found()) + "/3"
+			)
 
 			action_button.visible = false
 
@@ -536,6 +528,7 @@ func recover_emergency_logs():
 	).timeout
 
 	sanctuary_stage = 1
+	MainCoreClues.save_stage("sanctuary", sanctuary_stage)
 
 	processing = false
 	action_button.disabled = false
@@ -563,12 +556,12 @@ func recover_access_fragment():
 	action_button.disabled = true
 
 	status_label.text = (
-		"RECUPERANDO FRAGMENTO..."
+		"A LER INSCRIÇÃO..."
 	)
 
 	data_label.text = (
-		"Validando chave parcial.\n"
-		+ "Reconstruindo assinatura de autorização."
+		"Reconstruindo caracteres danificados.\n"
+		+ "Recuperando o texto gravado."
 	)
 
 	await get_tree().create_timer(
@@ -578,77 +571,20 @@ func recover_access_fragment():
 
 	sanctuary_stage = 2
 	fragment_recovered = true
+	MainCoreClues.save_stage("sanctuary", sanctuary_stage)
 	register_facility_clue()
-
-	if underground_root != null:
-		underground_root.set_meta(
-			"sanctuary_access_fragment",
-			true
-		)
-
-	update_main_core_access_state()
 
 	processing = false
 
-	terminal_visual.color = Color(
-		0.48,
-		0.42,
-		0.16,
-		1.0
-	)
-
-	interaction_label.text = (
-		"[E] REABRIR REGISTOS"
-	)
+	apply_completed_visual()
 
 	update_terminal_content()
 
 	register_fragment()
 
 
-func update_main_core_access_state():
-	if underground_root == null:
-		return
-
-	var archive_found = bool(
-		underground_root.get_meta(
-			"archive_access_fragment",
-			false
-		)
-	)
-
-	var sanctuary_found = bool(
-		underground_root.get_meta(
-			"sanctuary_access_fragment",
-			false
-		)
-	)
-
-	var ready = (
-		archive_found
-		and sanctuary_found
-	)
-
-	underground_root.set_meta(
-		"main_core_access_ready",
-		ready
-	)
-
-
-func has_archive_fragment() -> bool:
-	if underground_root == null:
-		return false
-
-	return bool(
-		underground_root.get_meta(
-			"archive_access_fragment",
-			false
-		)
-	)
-
-
 func register_fragment():
-	var archive_found = has_archive_fragment()
+	var found := MainCoreClues.count_found()
 
 	if (
 		main != null
@@ -656,47 +592,33 @@ func register_fragment():
 			"add_chat_message"
 		)
 	):
-
-		if archive_found:
+		if found >= 3:
 			main.add_chat_message(
 				"ANDROID",
-				"Temos os dois fragmentos. "
-				+ "O Fragmento A dos Arquivos "
-				+ "e o Fragmento B deste setor "
-				+ "formam uma autorização completa. "
-				+ "O acesso ao Núcleo Principal "
-				+ "deve agora ser possível."
+				"Temos as três pistas. "
+				+ "Juntas devem apontar para uma única palavra. "
+				+ "O terminal do Núcleo Principal está à espera dela."
 			)
 
 		else:
 			main.add_chat_message(
 				"ANDROID",
-				"Fragmento B recuperado. "
-				+ "Ainda falta a outra parte "
-				+ "da autorização."
+				"Esta inscrição descreve a palavra do Núcleo "
+				+ "sem a dizer. Ainda nos faltam pistas."
 			)
 
-	send_gameplay_context(
-		archive_found
-	)
+	send_gameplay_context()
 
 
 	print("")
 	print("======================================")
 	print("SANCTUARY COMPLETE")
-	print("ACCESS FRAGMENT B: RECOVERED")
-
-	if archive_found:
-		print("MAIN CORE ACCESS: READY")
-	else:
-		print("MAIN CORE ACCESS: INCOMPLETE")
-
+	print("MAIN CORE CLUE (SANCTUARY): RECOVERED")
+	print("CLUES FOUND: ", found, "/3")
 	print("======================================")
 
 
-func send_gameplay_context(
-	archive_found: bool
-):
+func send_gameplay_context():
 	if main == null:
 		return
 
@@ -705,33 +627,20 @@ func send_gameplay_context(
 	):
 		return
 
-	var description = (
+	main.send_gameplay_context_event(
+		"sanctuary_main_core_clue_recovered",
+		"main_core_clue_recovered",
 		"Atlas e o jogador recuperaram registos de emergência "
 		+ "no Santuário da instalação subterrânea. "
 		+ "Os dados indicam que este setor serviu como refúgio "
 		+ "durante uma falha de contenção. "
-		+ "Os registos também mostram que a autorização "
-		+ "do Núcleo Principal foi deliberadamente dividida "
-		+ "em duas partes. "
-		+ "O Fragmento de Acesso B foi recuperado."
-	)
-
-	if archive_found:
-		description += (
-			" O Fragmento A já tinha sido recuperado nos Arquivos. "
-			+ "Com os Fragmentos A e B, a autorização "
-			+ "do Núcleo Principal está agora completa."
-		)
-
-	else:
-		description += (
-			" A segunda parte da autorização ainda não foi encontrada."
-		)
-
-	main.send_gameplay_context_event(
-		"sanctuary_access_fragment_recovered",
-		"sanctuary_access_fragment_recovered",
-		description,
+		+ "Uma inscrição serve de pista para a palavra-passe "
+		+ "do Núcleo Principal: \""
+		+ MainCoreClues.get_clue("sanctuary") + "\" "
+		+ "A palavra-passe é uma única palavra e deduz-se juntando "
+		+ "as pistas do Laboratório, dos Arquivos e do Santuário. "
+		+ "Atlas pode ajudar a interpretar a pista, "
+		+ "mas não sabe a palavra e não a deve afirmar.",
 		true
 	)
 
@@ -768,6 +677,28 @@ func is_player(
 
 func has_access_fragment() -> bool:
 	return fragment_recovered
+
+
+func restore_saved_stage() -> void:
+	sanctuary_stage = MainCoreClues.load_stage("sanctuary")
+	fragment_recovered = sanctuary_stage >= 2
+	if fragment_recovered:
+		apply_completed_visual()
+
+
+func apply_completed_visual() -> void:
+	if terminal_visual != null:
+		terminal_visual.color = Color(
+			0.48,
+			0.42,
+			0.16,
+			1.0
+		)
+
+	if interaction_label != null:
+		interaction_label.text = (
+			"[E] REABRIR REGISTOS"
+		)
 
 
 func register_facility_clue() -> void:

@@ -1,5 +1,7 @@
 extends Area2D
 
+const MainCoreClues := preload("res://scripts/main_core_clues.gd")
+const UIStyle := preload("res://scripts/ui_style.gd")
 
 var player_nearby: bool = false
 var terminal_open: bool = false
@@ -35,6 +37,7 @@ func _ready():
 	create_collision()
 	create_world_visual()
 	create_interaction_label()
+	restore_saved_stage()
 
 	body_entered.connect(
 		on_body_entered
@@ -265,6 +268,7 @@ func create_terminal_ui():
 	terminal_layer.add_child(
 		background
 	)
+	UIStyle.apply(background)
 
 
 	var center = CenterContainer.new()
@@ -293,6 +297,7 @@ func create_terminal_ui():
 	center.add_child(
 		container
 	)
+	UIStyle.frame(container)
 
 
 	var title = Label.new()
@@ -310,6 +315,7 @@ func create_terminal_ui():
 		28
 	)
 
+	UIStyle.title(title)
 	container.add_child(
 		title
 	)
@@ -463,13 +469,12 @@ func update_terminal_content():
 				+ "e contenção de organismos.\n\n"
 				+ "Vários registos relacionados com sujeitos "
 				+ "experimentais foram eliminados.\n\n"
-				+ "Existe também um fragmento de autorização "
-				+ "ligado ao Núcleo Principal.\n\n"
-				+ "Identificação: FRAGMENTO A"
+				+ "Existe também um registo cifrado "
+				+ "ligado à autenticação do Núcleo Principal."
 			)
 
 			action_button.text = (
-				"RECUPERAR FRAGMENTO DE ACESSO"
+				"DECIFRAR REGISTO DO NÚCLEO"
 			)
 
 			action_button.visible = true
@@ -477,15 +482,16 @@ func update_terminal_content():
 
 		2:
 			status_label.text = (
-				"FRAGMENTO A RECUPERADO"
+				"PISTA DO NÚCLEO PRINCIPAL RECUPERADA"
 			)
 
 			data_label.text = (
-				"Fragmento de autorização armazenado.\n\n"
-				+ "DESTINO: NÚCLEO PRINCIPAL\n"
-				+ "ESTADO: INCOMPLETO\n\n"
-				+ "O fragmento isolado não permite acesso total.\n"
-				+ "Existe pelo menos uma segunda parte necessária."
+				"REGISTO DECIFRADO:\n\n"
+				+ MainCoreClues.get_clue("archives")
+				+ "\n\nA autenticação do Núcleo usa uma única palavra. "
+				+ "Este registo é uma das três pistas.\n\n"
+				+ "PISTAS RECUPERADAS: "
+				+ str(MainCoreClues.count_found()) + "/3"
 			)
 
 			action_button.visible = false
@@ -522,6 +528,7 @@ func recover_records():
 	).timeout
 
 	archive_stage = 1
+	MainCoreClues.save_stage("archives", archive_stage)
 
 	processing = false
 
@@ -554,7 +561,7 @@ func recover_access_fragment():
 	)
 
 	data_label.text = (
-		"Extraindo fragmento de acesso.\n"
+		"Decifrando registo do Núcleo Principal.\n"
 		+ "Verificando assinatura do sistema."
 	)
 
@@ -565,26 +572,12 @@ func recover_access_fragment():
 
 	archive_stage = 2
 	fragment_recovered = true
+	MainCoreClues.save_stage("archives", archive_stage)
 	register_facility_clue()
-
-	if underground_root != null:
-		underground_root.set_meta(
-			"archive_access_fragment",
-			true
-		)
 
 	processing = false
 
-	terminal_visual.color = Color(
-		0.18,
-		0.55,
-		0.44,
-		1.0
-	)
-
-	interaction_label.text = (
-		"[E] REABRIR ARQUIVOS"
-	)
+	apply_completed_visual()
 
 	update_terminal_content()
 
@@ -600,10 +593,9 @@ func register_fragment():
 	):
 		main.add_chat_message(
 			"ANDROID",
-			"Fragmento de autorização recuperado. "
-			+ "Ele está associado ao Núcleo Principal, "
-			+ "mas está incompleto. "
-			+ "Precisamos de outra parte."
+			"Este registo fala da palavra-passe do Núcleo "
+			+ "sem a dizer. Sozinho não chega. "
+			+ "Devemos compará-lo com as outras pistas."
 		)
 
 
@@ -613,8 +605,8 @@ func register_fragment():
 	print("")
 	print("======================================")
 	print("ARCHIVES COMPLETE")
-	print("ACCESS FRAGMENT A: RECOVERED")
-	print("MAIN CORE ACCESS: INCOMPLETE")
+	print("MAIN CORE CLUE (ARCHIVES): RECOVERED")
+	print("CLUES FOUND: ", MainCoreClues.count_found(), "/3")
 	print("======================================")
 
 
@@ -628,18 +620,21 @@ func send_gameplay_context():
 		return
 
 	main.send_gameplay_context_event(
-		"archive_access_fragment_recovered",
-		"archive_access_fragment_recovered",
+		"archives_main_core_clue_recovered",
+		"main_core_clue_recovered",
 		"Atlas e o jogador recuperaram dados nos Arquivos "
 		+ "da instalação subterrânea. "
 		+ "Os registos confirmam a existência de setores "
 		+ "de pesquisa biológica e contenção, "
 		+ "mas muitos arquivos relacionados com experiências "
 		+ "foram eliminados. "
-		+ "Também foi recuperado o Fragmento de Acesso A, "
-		+ "associado ao Núcleo Principal. "
-		+ "O fragmento está incompleto e não permite acesso sozinho. "
-		+ "Uma segunda parte ainda é necessária.",
+		+ "Também foi decifrado um registo que serve de pista "
+		+ "para a palavra-passe do Núcleo Principal: \""
+		+ MainCoreClues.get_clue("archives") + "\" "
+		+ "A palavra-passe é uma única palavra e deduz-se juntando "
+		+ "as pistas do Laboratório, dos Arquivos e do Santuário. "
+		+ "Atlas pode ajudar a interpretar a pista, "
+		+ "mas não sabe a palavra e não a deve afirmar.",
 		true
 	)
 
@@ -676,6 +671,28 @@ func is_player(
 
 func has_access_fragment() -> bool:
 	return fragment_recovered
+
+
+func restore_saved_stage() -> void:
+	archive_stage = MainCoreClues.load_stage("archives")
+	fragment_recovered = archive_stage >= 2
+	if fragment_recovered:
+		apply_completed_visual()
+
+
+func apply_completed_visual() -> void:
+	if terminal_visual != null:
+		terminal_visual.color = Color(
+			0.18,
+			0.55,
+			0.44,
+			1.0
+		)
+
+	if interaction_label != null:
+		interaction_label.text = (
+			"[E] REABRIR ARQUIVOS"
+		)
 
 
 func register_facility_clue() -> void:

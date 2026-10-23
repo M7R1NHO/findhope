@@ -123,6 +123,9 @@ DEFAULT_NARRATIVE_STATE = {
     "humor_allowed": True,
     "casual_interaction_allowed": True,
     "last_significant_event": None,
+    # Respostas seguintes do Atlas em que o momento e grave (sem humor).
+    # Definido pelo jogo, por exemplo ao ver a criatura ou na revelacao do Laboratorio.
+    "grave_turns_remaining": 0,
 
     # Progressao narrativa 0-6
     "narrative_stage": 0,
@@ -134,6 +137,7 @@ DEFAULT_NARRATIVE_STATE = {
 NARRATIVE_STATE = deepcopy(DEFAULT_NARRATIVE_STATE)
 
 MAX_UNRESOLVED_EVENTS = 5
+MAX_GRAVE_TURNS = 10
 
 
 # =========================================================
@@ -164,6 +168,12 @@ def _ensure_narrative_fields():
         stage = 0
 
     NARRATIVE_STATE["narrative_stage"] = max(0, min(6, stage))
+
+    try:
+        grave = int(NARRATIVE_STATE.get("grave_turns_remaining", 0))
+    except (TypeError, ValueError):
+        grave = 0
+    NARRATIVE_STATE["grave_turns_remaining"] = max(0, min(MAX_GRAVE_TURNS, grave))
 
 
 def _clamp(value, minimum=0, maximum=100):
@@ -344,9 +354,10 @@ def _refresh_permissions():
     )
 
     recent_conflict = "recent_conflict" in unresolved
+    grave_moment = NARRATIVE_STATE["grave_turns_remaining"] > 0
 
     NARRATIVE_STATE["humor_allowed"] = (
-        tension < 45 and not serious_unresolved
+        tension < 45 and not serious_unresolved and not grave_moment
     )
 
     NARRATIVE_STATE["casual_interaction_allowed"] = (
@@ -483,6 +494,33 @@ def register_narrative_topic(topic):
         NARRATIVE_STATE["active_topic"] = topic[:200]
 
 
+def set_grave_moment(turns=3):
+    """O jogo marca um momento grave: as proximas respostas nao tem humor."""
+    _ensure_narrative_fields()
+    try:
+        turns = int(turns)
+    except (TypeError, ValueError):
+        turns = 3
+    turns = max(0, min(MAX_GRAVE_TURNS, turns))
+    NARRATIVE_STATE["grave_turns_remaining"] = max(
+        NARRATIVE_STATE["grave_turns_remaining"], turns
+    )
+    _refresh_state()
+
+
+def consume_grave_turn():
+    """Chamado depois de cada resposta do Atlas."""
+    _ensure_narrative_fields()
+    if NARRATIVE_STATE["grave_turns_remaining"] > 0:
+        NARRATIVE_STATE["grave_turns_remaining"] -= 1
+        _refresh_state()
+
+
+def is_grave_moment():
+    _ensure_narrative_fields()
+    return NARRATIVE_STATE["grave_turns_remaining"] > 0
+
+
 def clear_active_event():
     _ensure_narrative_fields()
     NARRATIVE_STATE["active_event"] = None
@@ -508,6 +546,9 @@ def reset_narrative_state():
 def build_narrative_context():
     _ensure_narrative_fields()
     _refresh_story_facts()
+    # As permissoes dependem de campos guardados; recalcular evita usar
+    # um valor antigo depois de um load.
+    _refresh_permissions()
 
     state = NARRATIVE_STATE
     stage = state["narrative_stage"]
@@ -542,6 +583,7 @@ def build_narrative_context():
         f"Ultimo evento significativo: {last_event}",
         f"Topico ativo: {active_topic}",
         f"Eventos por resolver: {unresolved_text}",
+        f"Momento grave: {state['grave_turns_remaining'] > 0}",
         f"Humor permitido: {state['humor_allowed']}",
         f"Interacao casual permitida: {state['casual_interaction_allowed']}",
         "",

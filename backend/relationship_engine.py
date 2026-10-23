@@ -305,6 +305,25 @@ EVENT_EFFECTS = {
         },
     },
 
+    # Comportamentos observados pelo jogo (behavior_state.py), não pelo chat.
+    "followed_guidance": {
+        "atlas_to_player": {
+            "trust": +3,
+            "respect": +2,
+            "affinity": +1,
+            "tension": -2,
+        },
+    },
+
+    "ignored_guidance": {
+        "atlas_to_player": {
+            "trust": -3,
+            "respect": -1,
+            "tension": +4,
+            "irritation": +3,
+        },
+    },
+
     "betrayal": {
         "atlas_to_player": {
             "trust": -15,
@@ -413,7 +432,7 @@ def build_relationship_context(run_id=None):
     atlas = state["atlas_to_player"]
     player = state["player_to_atlas"]
     summary = get_relationship_summary(run_id=run_id)
-    return "\\n".join([
+    return "\n".join([
         (
             "ATLAS → JOGADOR: "
             f"relação={summary['atlas_to_player']['class']} | "

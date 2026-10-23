@@ -294,6 +294,8 @@ func connect_equipment():
 
 	equipment_connected = true
 	SaveManager.set_run_value("story", "sonic_equipment_connected", true)
+	# Autosave #5 da Bíblia: sistema sonoro ligado, FIGHT desbloqueado.
+	SaveManager.autosave_when_safe("sonic_equipment_connected")
 
 	fight_manager.unlock_combat()
 
@@ -373,6 +375,10 @@ func send_gameplay_context():
 		+ "uma distância segura da zona de emissão.",
 		true
 	)
+
+	# Atlas 2.0: o Atlas reage por iniciativa própria.
+	if main.has_method("request_atlas_spontaneous"):
+		main.request_atlas_spontaneous("sonic_equipment_connected")
 
 
 func get_save_id() -> String:

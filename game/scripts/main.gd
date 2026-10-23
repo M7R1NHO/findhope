@@ -27,6 +27,41 @@ const AUTONOMY_STATE_URL := \
 const GAMEPLAY_CONTEXT_EVENT_URL := \
 	"http://127.0.0.1:8000/gameplay/context/event"
 
+const ATLAS_MEMORY_URL := \
+	"http://127.0.0.1:8000/atlas/memory"
+
+# Atlas 2.0: comportamentos observados e falas espontâneas.
+const BEHAVIOR_EVENT_URL := \
+	"http://127.0.0.1:8000/atlas/behavior/event"
+
+const SPONTANEOUS_URL := \
+	"http://127.0.0.1:8000/atlas/spontaneous"
+
+# Contador em run.stats (para Conquistas, Bíblia secção 18) de cada evento.
+const BEHAVIOR_STATS := {
+	"run_escaped": "run_escapes",
+	"fight_won": "fights_won",
+	"hide_success": "hides_success",
+	"hide_failed": "hides_failed",
+	"hack_success": "hacks_success",
+	"hack_failed": "hacks_failed",
+	"overload_used": "overloads_used",
+	"maintenance_used": "maintenance_used",
+}
+
+# Respostas do formulário Project Find Hope que o Atlas deve lembrar.
+const FORM_MEMORY_FIELDS := {
+	"name": ["identity", "name", 0.95, "nome"],
+	"age": ["identity", "age", 0.6, "idade"],
+	"gender": ["identity", "gender", 0.5, "género"],
+	"has_children": ["identity", "has_children", 0.6, "tem filhos"],
+	"volunteer_reason": ["goal", "volunteer_reason", 0.8, "razão para se voluntariar"],
+	"worked_with_android": ["experience", "worked_with_pyssoa_android", 0.6, "já trabalhou com um androide PYSSOA"],
+	"comfortable_with_androids": ["belief", "comfortable_with_androids", 0.7, "sente-se confortável com androides"],
+	"android_emergency_decision": ["belief", "android_may_act_without_authorization", 0.8, "um androide pode agir sem autorização numa emergência"],
+	"protocol_or_life": ["belief", "protocol_or_human_life", 0.8, "numa emergência deve prevalecer"],
+}
+
 
 const NORMAL_PLACEHOLDER := "Escreva uma mensagem..."
 const WAITING_PLACEHOLDER := "Android está a responder..."
@@ -48,6 +83,19 @@ var protocol_request_in_progress: bool = false
 var protocol_door_examined: bool = false
 
 var protocol_api_mode: String = ""
+
+var gameplay_context_api: HTTPRequest = null
+var gameplay_context_queue: Array[Dictionary] = []
+var gameplay_context_in_progress: bool = false
+
+var behavior_api: HTTPRequest = null
+var behavior_queue: Array[Dictionary] = []
+var behavior_in_progress: bool = false
+var behavior_event_counter: int = 0
+
+var spontaneous_api: HTTPRequest = null
+var spontaneous_queue: Array[String] = []
+var spontaneous_in_progress: bool = false
 
 var visible_messages: Array[String] = []
 
@@ -75,6 +123,27 @@ func _ready():
 	protocol_api.request_completed.connect(
 		_on_protocol_api_request_completed
 	)
+
+	gameplay_context_api = HTTPRequest.new()
+	gameplay_context_api.name = "GameplayContextAPI"
+	gameplay_context_api.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(gameplay_context_api)
+	gameplay_context_api.request_completed.connect(
+		_on_gameplay_context_request_completed
+	)
+
+	behavior_api = HTTPRequest.new()
+	behavior_api.name = "BehaviorAPI"
+	behavior_api.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(behavior_api)
+	behavior_api.request_completed.connect(_on_behavior_request_completed)
+
+	spontaneous_api = HTTPRequest.new()
+	spontaneous_api.name = "SpontaneousAPI"
+	spontaneous_api.process_mode = Node.PROCESS_MODE_ALWAYS
+	spontaneous_api.timeout = 20.0
+	add_child(spontaneous_api)
+	spontaneous_api.request_completed.connect(_on_spontaneous_request_completed)
 
 	chat_input.text_submitted.connect(
 		_on_chat_input_submitted
@@ -139,6 +208,10 @@ func _ready():
 			true
 		)
 
+		# O Atlas fica a conhecer o formulário e o desvio de rota antes
+		# do autosave, para que esse estado já vá no snapshot.
+		await register_intro_with_atlas()
+
 		# Guardar imediatamente a conclusão da introdução.
 		var save_success: bool = await SaveManager.autosave(
 			"intro_completed"
@@ -190,8 +263,10 @@ func _resume_surface_recovery_after_load() -> void:
 
 func _input(event):
 	# ATALHO DE TESTE: entrar diretamente no subterraneo.
+	# Só existe em builds de debug (editor); desaparece no jogo exportado.
 	if (
-		event is InputEventKey
+		OS.is_debug_build()
+		and event is InputEventKey
 		and event.pressed
 		and not event.echo
 		and event.keycode == KEY_U
@@ -663,53 +738,61 @@ func atlas_protected_player_by_choice(
 	)
 
 
+# Os eventos de contexto têm um pedido HTTP próprio e uma fila. Antes
+# partilhavam o ProtocolAPI com a verificação da porta e eram descartados
+# sempre que esse pedido estava ocupado.
 func send_gameplay_context_event(
 	event_id: String,
 	event_type: String,
 	description: String,
 	active: bool = true
 ):
-	if protocol_request_in_progress:
-		print(
-			"Gameplay context adiado: "
-			+ "ProtocolAPI ocupado."
-		)
-		return
-
-	protocol_request_in_progress = true
-	protocol_api_mode = "gameplay_context"
-
-	var headers = [
-		"Content-Type: application/json"
-	]
-
-	var run_id = str(
-		SaveManager.active_run_data.get("run_id", "")
-	)
-
-	var body = JSON.stringify({
-		"run_id": run_id,
+	gameplay_context_queue.append({
+		"run_id": str(SaveManager.active_run_data.get("run_id", "")),
 		"event_id": event_id,
 		"event_type": event_type,
 		"description": description,
 		"active": active
 	})
 
-	var error = protocol_api.request(
-		GAMEPLAY_CONTEXT_EVENT_URL,
-		headers,
-		HTTPClient.METHOD_POST,
-		body
-	)
+	_send_next_gameplay_context_event()
 
-	if error != OK:
-		protocol_request_in_progress = false
-		protocol_api_mode = ""
 
-		push_warning(
-			"Não foi possível enviar "
-			+ "o contexto de gameplay."
+func _send_next_gameplay_context_event() -> void:
+	while not gameplay_context_in_progress and not gameplay_context_queue.is_empty():
+		var event: Dictionary = gameplay_context_queue.pop_front()
+
+		var error = gameplay_context_api.request(
+			GAMEPLAY_CONTEXT_EVENT_URL,
+			["Content-Type: application/json"],
+			HTTPClient.METHOD_POST,
+			JSON.stringify(event)
 		)
+
+		if error == OK:
+			gameplay_context_in_progress = true
+		else:
+			push_warning(
+				"Não foi possível enviar o contexto de gameplay: "
+				+ str(event.get("event_id", ""))
+			)
+
+
+func _on_gameplay_context_request_completed(
+	_result,
+	response_code,
+	_headers,
+	_body
+):
+	gameplay_context_in_progress = false
+
+	if response_code != 200:
+		push_warning(
+			"Erro ao atualizar contexto de gameplay. HTTP "
+			+ str(response_code)
+		)
+
+	_send_next_gameplay_context_event()
 
 
 func on_protocol_door_interacted():
@@ -868,14 +951,6 @@ func _on_protocol_api_request_completed(
 
 		return
 
-	if completed_mode == "gameplay_context":
-		print(
-			"GAMEPLAY CONTEXT OK: ",
-			data
-		)
-
-		return
-
 	if completed_mode != "autonomy_check":
 		return
 
@@ -1019,3 +1094,219 @@ func refresh_chat_history():
 	chat_history.scroll_to_line(
 		chat_history.get_line_count()
 	)
+
+
+# =========================================================
+# INTRODUÇÃO -> ATLAS
+# =========================================================
+
+func register_intro_with_atlas() -> void:
+	var run_id := str(SaveManager.active_run_data.get("run_id", ""))
+	var lines: Array[String] = []
+	var backend_reachable := true
+
+	for field in FORM_MEMORY_FIELDS.keys():
+		var value = SaveManager.get_run_value("story", "form_" + str(field), null)
+		if value == null or str(value).strip_edges().is_empty():
+			continue
+
+		var spec: Array = FORM_MEMORY_FIELDS[field]
+		lines.append(str(spec[3]) + ": " + str(value))
+
+		if not backend_reachable:
+			continue
+
+		var code := await _post_json_and_wait(
+			ATLAS_MEMORY_URL + "?run_id=" + run_id.uri_encode(),
+			{
+				"entity": "player",
+				"category": spec[0],
+				"key": spec[1],
+				"value": str(value),
+				"source": "form",
+				"confidence": 1.0,
+				"importance": spec[2],
+			}
+		)
+		# Sem backend, não vale a pena esperar pelos restantes campos.
+		if code == 0:
+			backend_reachable = false
+
+	var description := (
+		"Durante a viagem, a Nave 47 sofreu um desvio de rota que Atlas "
+		+ "não conseguiu explicar nem corrigir, e despenhou-se. "
+		+ "O jogador e Atlas sobreviveram ao impacto."
+	)
+	if not lines.is_empty():
+		description += (
+			" Antes da missão, o jogador preencheu o formulário Project Find Hope "
+			+ "com estas respostas, que Atlas conhece: "
+			+ "; ".join(lines) + "."
+		)
+
+	send_gameplay_context_event(
+		"intro_route_deviation",
+		"story_milestone",
+		description
+	)
+	await wait_gameplay_context_idle()
+
+
+func _post_json_and_wait(url: String, data: Dictionary) -> int:
+	var request := HTTPRequest.new()
+	request.process_mode = Node.PROCESS_MODE_ALWAYS
+	request.timeout = 10.0
+	add_child(request)
+
+	var error := request.request(
+		url,
+		["Content-Type: application/json"],
+		HTTPClient.METHOD_POST,
+		JSON.stringify(data)
+	)
+
+	var code := 0
+	if error == OK:
+		var response: Array = await request.request_completed
+		code = int(response[1])
+
+	request.queue_free()
+	return code
+
+
+func wait_gameplay_context_idle(max_wait_msec: int = 10000) -> void:
+	var started := Time.get_ticks_msec()
+	while gameplay_context_in_progress or not gameplay_context_queue.is_empty():
+		if Time.get_ticks_msec() - started > max_wait_msec:
+			return
+		await get_tree().process_frame
+
+
+# =========================================================
+# ATLAS 2.0 - COMPORTAMENTO OBSERVADO
+# =========================================================
+
+# O jogo regista o que o jogador fez. O contador local (run.stats) vai no
+# save para as Conquistas; o backend recebe o mesmo facto para o Atlas.
+func register_behavior(event: String, room: String = "") -> void:
+	if event != "room_entered":
+		if not BEHAVIOR_STATS.has(event):
+			push_warning("Comportamento desconhecido: " + event)
+			return
+		var stat_key: String = BEHAVIOR_STATS[event]
+		var current := int(SaveManager.get_run_value("stats", stat_key, 0))
+		SaveManager.set_run_value("stats", stat_key, current + 1)
+
+	var run_id := str(SaveManager.active_run_data.get("run_id", ""))
+	if run_id.is_empty():
+		return
+
+	behavior_event_counter += 1
+	behavior_queue.append({
+		"run_id": run_id,
+		"event": event,
+		"room": room,
+		# Identificador único: um pedido repetido não conta duas vezes.
+		"event_id": "%s_%d_%d" % [event, Time.get_ticks_usec(), behavior_event_counter],
+	})
+	_send_next_behavior_event()
+
+
+func _send_next_behavior_event() -> void:
+	while not behavior_in_progress and not behavior_queue.is_empty():
+		var data: Dictionary = behavior_queue.pop_front()
+		var error = behavior_api.request(
+			BEHAVIOR_EVENT_URL,
+			["Content-Type: application/json"],
+			HTTPClient.METHOD_POST,
+			JSON.stringify(data)
+		)
+		if error == OK:
+			behavior_in_progress = true
+		else:
+			push_warning("Não foi possível enviar o comportamento: " + str(data.get("event", "")))
+
+
+func _on_behavior_request_completed(_result, response_code, _headers, body) -> void:
+	behavior_in_progress = false
+
+	if response_code == 200:
+		var data = JSON.parse_string(body.get_string_from_utf8())
+		if data is Dictionary:
+			var trigger = data.get("suggested_trigger")
+			if trigger is String and not trigger.is_empty():
+				request_atlas_spontaneous(trigger)
+	else:
+		push_warning("Erro ao registar comportamento. HTTP " + str(response_code))
+
+	_send_next_behavior_event()
+
+
+# =========================================================
+# ATLAS 2.0 - FALAS ESPONTÂNEAS
+# =========================================================
+
+# Pede ao Atlas que fale sem o jogador escrever. Só existem os gatilhos
+# definidos no backend (SPONTANEOUS_TRIGGERS). Se o backend ou o Groq
+# falharem, o Atlas simplesmente não diz nada.
+func request_atlas_spontaneous(trigger: String) -> void:
+	if trigger.is_empty() or spontaneous_queue.has(trigger):
+		return
+	spontaneous_queue.append(trigger)
+	_send_next_spontaneous()
+
+
+func _send_next_spontaneous() -> void:
+	# Não falar por cima das cinco perguntas iniciais nem de uma resposta
+	# que o jogador está à espera.
+	if spontaneous_in_progress or spontaneous_queue.is_empty():
+		return
+	# Esperar também pelos eventos de contexto, para o Atlas já saber o facto.
+	if (
+		surface_recovery_active or waiting_for_atlas
+		or gameplay_context_in_progress or not gameplay_context_queue.is_empty()
+		or behavior_in_progress
+	):
+		get_tree().create_timer(1.0, true).timeout.connect(_send_next_spontaneous)
+		return
+
+	var trigger: String = spontaneous_queue.pop_front()
+	var body := JSON.stringify({
+		"run_id": str(SaveManager.active_run_data.get("run_id", "")),
+		"trigger": trigger,
+		"current_room": get_current_facility_room_name(),
+	})
+	var error = spontaneous_api.request(
+		SPONTANEOUS_URL,
+		["Content-Type: application/json"],
+		HTTPClient.METHOD_POST,
+		body
+	)
+	if error == OK:
+		spontaneous_in_progress = true
+	else:
+		_send_next_spontaneous()
+
+
+func _on_spontaneous_request_completed(_result, response_code, _headers, body) -> void:
+	spontaneous_in_progress = false
+
+	if response_code == 200:
+		var data = JSON.parse_string(body.get_string_from_utf8())
+		if data is Dictionary and str(data.get("status", "")) == "ok":
+			var text = data.get("response")
+			if text is String and not text.strip_edges().is_empty():
+				add_chat_message("ATLAS", text.strip_edges())
+
+	_send_next_spontaneous()
+
+
+func wait_atlas2_idle(max_wait_msec: int = 10000) -> void:
+	var started := Time.get_ticks_msec()
+	while (
+		behavior_in_progress or not behavior_queue.is_empty()
+		or spontaneous_in_progress or not spontaneous_queue.is_empty()
+	):
+		if Time.get_ticks_msec() - started > max_wait_msec:
+			return
+		await get_tree().process_frame

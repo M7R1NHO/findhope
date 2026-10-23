@@ -305,6 +305,10 @@ func use_station():
 
 	station_used = true
 
+	# Atlas 2.0: contador no save; o backend sugere a fala espontânea.
+	if main != null and main.has_method("register_behavior"):
+		main.register_behavior("maintenance_used")
+
 
 	station_visual.color = Color(
 		0.16,

@@ -237,12 +237,13 @@ func _process(delta):
 func _unhandled_input(event):
 
 	# -----------------------------------------------------
-	# TESTE COM H
+	# TESTE COM H (só em builds de debug; no jogo exportado
+	# o hack só começa pelos terminais)
 	# -----------------------------------------------------
 
 	if not hack_active:
 
-		if event is InputEventKey:
+		if OS.is_debug_build() and event is InputEventKey:
 
 			if (
 				event.pressed
@@ -2596,6 +2597,8 @@ func finish_success():
 		target_node
 	)
 
+	_register_behavior("hack_success")
+
 
 	hack_session_id += 1
 
@@ -2827,6 +2830,9 @@ func set_feedback_error(
 	if feedback_label == null:
 		return
 
+	# Todas as chamadas são tentativas erradas num minigame.
+	_register_behavior("hack_failed")
+
 
 	feedback_label.text = text
 
@@ -3035,3 +3041,10 @@ func destroy_ui():
 	answer_input = null
 
 	confirm_button = null
+
+
+# Atlas 2.0: comportamento observado (contadores no save + contexto do Atlas).
+func _register_behavior(event: String) -> void:
+	var main := get_tree().current_scene
+	if main != null and main.has_method("register_behavior"):
+		main.register_behavior(event)

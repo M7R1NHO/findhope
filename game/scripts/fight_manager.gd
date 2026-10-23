@@ -1341,10 +1341,55 @@ func show_shared_defeat():
 	print("======================================")
 
 
-func restart_game():
-	get_tree().paused = false
+var restart_in_progress := false
 
-	get_tree().reload_current_scene()
+
+func restart_game():
+	# Volta ao último autosave, como CONTINUAR JOGO no menu principal.
+	# reload_current_scene() recriava a cena do .tscn sem passar pelo
+	# SaveManager e deixava o jogador na superfície com a porta selada.
+	if restart_in_progress:
+		return
+
+	restart_in_progress = true
+
+	var tree := get_tree()
+	var scene_path := tree.current_scene.scene_file_path
+	var menu_path := get_main_menu_scene_path()
+
+	if await SaveManager.prepare_current_run_load():
+		if await SaveManager.load_prepared_scene(scene_path):
+			return
+
+	# Sem autosave ou sem backend: abrir o menu com o motivo da falha.
+	if menu_path.is_empty():
+		push_warning("main_menu_scene_path não definido no PauseMenu.")
+		restart_in_progress = false
+		return
+
+	open_main_menu_with_message(tree, menu_path, SaveManager.last_error)
+
+
+func get_main_menu_scene_path() -> String:
+	var pause_menu = get_tree().current_scene.get_node_or_null("PauseMenu")
+
+	if pause_menu == null:
+		return ""
+
+	return str(pause_menu.get("main_menu_scene_path")).strip_edges()
+
+
+# Estática para continuar depois de esta cena ser libertada pela troca de cena.
+static func open_main_menu_with_message(tree: SceneTree, menu_path: String, message: String) -> void:
+	tree.paused = false
+	tree.change_scene_to_file(menu_path)
+
+	await tree.scene_changed
+
+	var menu := tree.current_scene
+
+	if menu != null and menu.has_method("set_status"):
+		menu.set_status(message)
 
 
 func create_fight_ui():

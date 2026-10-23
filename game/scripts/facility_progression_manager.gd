@@ -190,6 +190,14 @@ func unlock_main_core_access() -> void:
 
 	apply_progression_state()
 
+	# Autosave #6 da Bíblia: três pistas concluídas, antes do MainCore.
+	SaveManager.autosave_when_safe("main_core_clues_completed")
+
+	# Atlas 2.0: o Atlas comenta que já pode autenticar a porta.
+	var main := get_tree().current_scene
+	if main != null and main.has_method("request_atlas_spontaneous"):
+		main.request_atlas_spontaneous("clues_complete")
+
 	print("MAIN CORE: AUTENTICAÇÃO FÍSICA AUTORIZADA.")
 
 

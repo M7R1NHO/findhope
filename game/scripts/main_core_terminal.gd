@@ -21,9 +21,11 @@ var action_button: Button = null
 var password_input: LineEdit = null
 var password_feedback: Label = null
 
-const PASSWORD_WORDS: Array[String] = ["ECO", "SOM", "NAVE", "ESPAÇO", "ANDROID", "HUMANO", "VIDA", "MORTE", "ESPERANÇA", "DESTINO"]
-const PASSWORD_SAVE_KEY := "main_core_password_word"
-const PASSWORD_SOLVED_KEY := "main_core_password_solved"
+const MainCoreClues := preload("res://scripts/main_core_clues.gd")
+const UIStyle := preload("res://scripts/ui_style.gd")
+const PASSWORD_WORDS: Array[String] = MainCoreClues.WORDS
+const PASSWORD_SAVE_KEY := MainCoreClues.PASSWORD_KEY
+const PASSWORD_SOLVED_KEY := MainCoreClues.SOLVED_KEY
 const PHASE3_SPAWN_POSITION := Vector2(8540.0, -3803.0)
 
 
@@ -43,6 +45,15 @@ func _ready():
 	create_collision()
 	create_world_visual()
 	create_interaction_label()
+
+	# Depois de carregar um save, o Núcleo já resolvido continua resolvido.
+	if is_password_solved():
+		core_unlocked = true
+		deep_access_discovered = true
+		if terminal_visual != null:
+			terminal_visual.color = Color(0.15, 0.62, 0.52, 1.0)
+		if interaction_label != null:
+			interaction_label.text = "[E] REABRIR NÚCLEO"
 
 	body_entered.connect(
 		on_body_entered
@@ -279,6 +290,7 @@ func create_terminal_ui():
 	terminal_layer.add_child(
 		background
 	)
+	UIStyle.apply(background)
 
 
 	var center = CenterContainer.new()
@@ -296,17 +308,18 @@ func create_terminal_ui():
 
 	container.custom_minimum_size = Vector2(
 		780,
-		570
+		0
 	)
 
 	container.add_theme_constant_override(
 		"separation",
-		20
+		12
 	)
 
 	center.add_child(
 		container
 	)
+	UIStyle.frame(container)
 
 
 	var title = Label.new()
@@ -321,9 +334,10 @@ func create_terminal_ui():
 
 	title.add_theme_font_size_override(
 		"font_size",
-		29
+		26
 	)
 
+	UIStyle.title(title)
 	container.add_child(
 		title
 	)
@@ -356,7 +370,7 @@ func create_terminal_ui():
 
 	data_label.custom_minimum_size = Vector2(
 		720,
-		285
+		200
 	)
 
 	data_label.autowrap_mode = (
@@ -369,7 +383,7 @@ func create_terminal_ui():
 
 	data_label.add_theme_font_size_override(
 		"font_size",
-		19
+		17
 	)
 
 	container.add_child(
@@ -398,7 +412,7 @@ func create_terminal_ui():
 
 	action_button.custom_minimum_size = Vector2(
 		0,
-		62
+		52
 	)
 
 	action_button.add_theme_font_size_override(
@@ -425,7 +439,7 @@ func create_terminal_ui():
 
 	close_button.custom_minimum_size = Vector2(
 		0,
-		55
+		46
 	)
 
 	close_button.add_theme_font_size_override(
@@ -463,7 +477,12 @@ func update_terminal_content():
 		return
 
 	status_label.text = "AUTENTICAÇÃO SEMÂNTICA // NÚCLEO PRINCIPAL"
-	data_label.text = "Interpreta as pistas do Laboratório, dos Arquivos e do Santuário. Introduz a palavra que as liga. A palavra-passe é uma das dez palavras possíveis."
+	data_label.text = (
+		"Introduz a palavra que liga as três pistas. "
+		+ "É uma de dez palavras possíveis.\n\n"
+		+ "PISTAS RECUPERADAS (" + str(MainCoreClues.count_found()) + "/3):\n\n"
+		+ MainCoreClues.describe_found_clues()
+	)
 	action_button.text = "VALIDAR PALAVRA-PASSE"
 	action_button.visible = true
 	action_button.disabled = false
@@ -531,31 +550,11 @@ func normalize_password(value: String) -> String:
 
 
 func load_or_create_password() -> void:
-	var saved := ""
-	var manager := get_node_or_null("/root/SaveManager")
-	if manager != null and manager.has_method("get_run_value"):
-		saved = str(manager.get_run_value("world", PASSWORD_SAVE_KEY, ""))
-	if saved in PASSWORD_WORDS:
-		return
-
-	var chosen := PASSWORD_WORDS[randi_range(0, PASSWORD_WORDS.size() - 1)]
-	if manager != null and manager.has_method("set_run_value"):
-		manager.set_run_value("world", PASSWORD_SAVE_KEY, chosen)
-	elif underground_root != null:
-		underground_root.set_meta(PASSWORD_SAVE_KEY, chosen)
+	MainCoreClues.ensure_password_word()
 
 
 func get_selected_password() -> String:
-	var manager := get_node_or_null("/root/SaveManager")
-	if manager != null and manager.has_method("get_run_value"):
-		var saved := str(manager.get_run_value("world", PASSWORD_SAVE_KEY, ""))
-		if saved in PASSWORD_WORDS:
-			return saved
-	if underground_root != null:
-		var stored := str(underground_root.get_meta(PASSWORD_SAVE_KEY, ""))
-		if stored in PASSWORD_WORDS:
-			return stored
-	return PASSWORD_WORDS[0]
+	return MainCoreClues.get_password_word()
 
 
 func is_password_solved() -> bool:
@@ -618,6 +617,12 @@ func teleport_to_phase3() -> void:
 	print("MAIN CORE PASSWORD: ACCEPTED")
 	print("PHASE 3 TELEPORT: ", PHASE3_SPAWN_POSITION)
 
+	# Autosave à entrada da área seguinte: um Game Over ali já não
+	# devolve o jogador ao subterrâneo.
+	if not bool(SaveManager.get_run_value("story", "phase3_entered", false)):
+		SaveManager.set_run_value("story", "phase3_entered", true)
+		SaveManager.autosave_when_safe("phase3_entered")
+
 
 func register_discovery():
 	if (
@@ -642,8 +647,7 @@ func register_discovery():
 	print("")
 	print("======================================")
 	print("MAIN CORE UNLOCKED")
-	print("ACCESS FRAGMENT A: CONFIRMED")
-	print("ACCESS FRAGMENT B: CONFIRMED")
+	print("PASSWORD: ", get_selected_password())
 	print("DEEP ACCESS: DISCOVERED")
 	print("PHASE 3: UNLOCKED")
 	print("======================================")
@@ -661,11 +665,9 @@ func send_gameplay_context():
 	main.send_gameplay_context_event(
 		"main_core_deep_access_discovered",
 		"deep_access_discovered",
-		"Atlas e o jogador combinaram o Fragmento A "
-		+ "recuperado nos Arquivos com o Fragmento B "
-		+ "recuperado no Santuário. "
-		+ "A autorização do Núcleo Principal foi reconstruída "
-		+ "e aceite pelo sistema. "
+		"Atlas e o jogador juntaram as pistas do Laboratório, "
+		+ "dos Arquivos e do Santuário e descobriram a palavra-passe "
+		+ "do Núcleo Principal, que foi aceite pelo sistema. "
 		+ "O Núcleo revelou a existência de uma rota restrita "
 		+ "que conduz para uma estrutura abaixo da instalação. "
 		+ "Essa estrutura não corresponde completamente "
@@ -675,29 +677,6 @@ func send_gameplay_context():
 		true
 	)
 
-
-func has_archive_fragment() -> bool:
-	if underground_root == null:
-		return false
-
-	return bool(
-		underground_root.get_meta(
-			"archive_access_fragment",
-			false
-		)
-	)
-
-
-func has_sanctuary_fragment() -> bool:
-	if underground_root == null:
-		return false
-
-	return bool(
-		underground_root.get_meta(
-			"sanctuary_access_fragment",
-			false
-		)
-	)
 
 
 func destroy_terminal_ui():

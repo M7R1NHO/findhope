@@ -81,6 +81,9 @@ var underground_root: Node2D = null
 
 var main: Node = null
 
+var fights_won_count: int = 0
+var runs_escaped_count: int = 0
+
 var player: CharacterBody2D = null
 
 var atlas: CharacterBody2D = null
@@ -746,6 +749,12 @@ func _ready():
 	create_all_room_triggers()
 
 	create_all_hide_spots()
+
+
+	# Um save feito depois do HIDEINICIAL volta com os encontros ativos.
+	# Antes, encounters_enabled só era ligado no fim do próprio HIDEINICIAL.
+	if hide_initial_completed:
+		unlock_encounters()
 
 
 	print("")
@@ -1496,6 +1505,7 @@ func on_room_exited(
 
 
 	if hide_initial_active and room_id == "TechnicalRoom":
+		register_behavior("hide_failed")
 		fail_hide_initial("Afastou-se do esconderijo antes de a criatura sair.")
 		return
 
@@ -2314,6 +2324,8 @@ func update_hide_ui():
 
 func complete_hide_event():
 
+	register_behavior("hide_success")
+
 	print("")
 	print(
 		"======================================"
@@ -2374,6 +2386,8 @@ func complete_hide_event():
 func fail_hide_event(
 	reason: String
 ):
+
+	register_behavior("hide_failed")
 
 	print(
 		"HIDE FAILED: ",
@@ -2756,11 +2770,27 @@ func prepare_room_failure_run():
 		return
 
 
+	# Só sortear corredores que a progressão já abriu. Antes podia sair
+	# Laboratory_MainCore ou Sanctuary_MainCore ainda trancados, e a porta
+	# recusava o hack: o RUN acabava sempre em Game Over.
+	var open_routes: Array = []
+
+	for candidate in routes:
+		if is_escape_route_open(candidate):
+			open_routes.append(candidate)
+
+	if open_routes.is_empty():
+		push_warning(
+			"Nenhuma rota de fuga aberta em " + current_room_id + "."
+		)
+		open_routes = routes
+
+
 	var route: Dictionary = (
-		routes[
+		open_routes[
 			rng.randi_range(
 				0,
-				routes.size() - 1
+				open_routes.size() - 1
 			)
 		]
 	)
@@ -2805,6 +2835,19 @@ func prepare_room_failure_run():
 		" -> side ",
 		run_forced_destination_side
 	)
+
+
+func is_escape_route_open(route: Dictionary) -> bool:
+
+	var corridor_id := str(route.get("corridor", ""))
+
+	for side in ["A", "B"]:
+		var door = get_corridor_door(corridor_id, side)
+
+		if door != null and door.has_method("is_progression_locked") and door.is_progression_locked():
+			return false
+
+	return true
 
 
 # =========================================================
@@ -2870,6 +2913,16 @@ func start_fight_encounter():
 func on_fight_won(
 	atlas_hp_remaining: int
 ):
+
+	fights_won_count += 1
+	register_behavior("fight_won")
+	send_encounter_context(
+		"creature_repelled_by_sonic",
+		"creature_repelled",
+		"Atlas afastou a criatura com o equipamento sonoro "
+		+ str(fights_won_count) + " vez(es) nesta sessão. "
+		+ "A criatura recua, mas não foi destruída."
+	)
 
 	if fight_should_teleport:
 
@@ -3821,6 +3874,15 @@ func update_run_timer_label():
 
 func complete_run_escape():
 
+	runs_escaped_count += 1
+	register_behavior("run_escaped")
+	send_encounter_context(
+		"creature_escaped_run",
+		"creature_escape",
+		"Atlas e o jogador fugiram da criatura e fecharam uma porta atrás de si "
+		+ str(runs_escaped_count) + " vez(es) nesta sessão."
+	)
+
 	if not run_closing_active:
 		return
 
@@ -3866,7 +3928,7 @@ func complete_run_escape():
 
 	if hide_initial_waiting_for_run:
 		hide_initial_waiting_for_run = false
-		complete_hide_initial("HIDEINICIAL concluído após fuga RUN.")
+		complete_hide_initial("Conseguimos fugir. A criatura perdeu-nos o rasto, por agora.")
 
 
 	print("")
@@ -4075,6 +4137,13 @@ func show_run_game_over():
 
 func restart_after_game_over():
 
+	# O FightManager trata o regresso ao último autosave para os dois
+	# ecrãs de Game Over (RUN e FIGHT).
+	if fight_manager != null:
+		fight_manager.restart_game()
+		return
+
+
 	get_tree().paused = false
 
 
@@ -4259,6 +4328,14 @@ func try_start_hide_initial() -> void:
 	hide_initial_started = true
 	hide_initial_active = true
 	hide_initial_completed = false
+
+	send_encounter_context(
+		"hide_initial_started",
+		"creature_first_encounter",
+		"Atlas e o jogador viram pela primeira vez uma criatura "
+		+ "desconhecida na instalação subterrânea. Atlas mandou o jogador "
+		+ "esconder-se. Atlas não sabe o que é a criatura nem de onde veio."
+	)
 	hide_initial_waiting_for_run = false
 	hide_initial_atlas_parked = false
 	hide_initial_phase = HideInitialPhase.ALERT
@@ -4332,15 +4409,18 @@ func update_hide_initial(delta: float) -> void:
 					)
 				print("HIDEINICIAL: jogador chegou ao esconderijo.")
 			elif hide_initial_time_remaining <= 0.0:
+				register_behavior("hide_failed")
 				fail_hide_initial("Não chegou ao esconderijo a tempo.")
 				return
 
 		HideInitialPhase.STAY_HIDDEN:
 			if not player_inside_spot(hide_initial_spot):
+				register_behavior("hide_failed")
 				fail_hide_initial("Saiu do esconderijo antes de a ameaça se afastar.")
 				return
 
 			if hide_initial_time_remaining <= 0.0:
+				register_behavior("hide_success")
 				complete_hide_initial("A ameaça afastou-se. Pode continuar.")
 				return
 
@@ -4510,6 +4590,21 @@ func complete_hide_initial(message: String) -> void:
 	reset_room_stalk_timer()
 	unlock_encounters()
 
+	send_encounter_context(
+		"hide_initial_completed",
+		"creature_first_encounter_survived",
+		"Atlas e o jogador sobreviveram ao primeiro encontro com a criatura. "
+		+ "A partir daqui, a criatura pode voltar a aparecer "
+		+ "nos corredores e nas salas da instalação."
+	)
+
+	# Autosave #4 da Bíblia: depois do HIDEINICIAL.
+	SaveManager.autosave_when_safe("hide_initial_completed")
+
+	# Atlas 2.0: o Atlas reage por iniciativa própria ao primeiro encontro.
+	if main != null and main.has_method("request_atlas_spontaneous"):
+		main.request_atlas_spontaneous("hide_initial_completed")
+
 	print("")
 	print("======================================")
 	print("HIDEINICIAL CONCLUÍDO")
@@ -4526,3 +4621,16 @@ func reset_hide_initial_after_failure() -> void:
 	active_hide_spot = null
 	destroy_hide_ui()
 	destroy_hide_initial_creature_visual()
+
+
+# Factos dos encontros para o Atlas. O código decide o que aconteceu;
+# o Atlas só decide como o diz.
+func send_encounter_context(event_id: String, event_type: String, description: String) -> void:
+	if main != null and main.has_method("send_gameplay_context_event"):
+		main.send_gameplay_context_event(event_id, event_type, description, true)
+
+
+# Atlas 2.0: comportamento observado (contadores no save + contexto do Atlas).
+func register_behavior(event: String) -> void:
+	if main != null and main.has_method("register_behavior"):
+		main.register_behavior(event)

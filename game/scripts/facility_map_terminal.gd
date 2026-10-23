@@ -57,6 +57,15 @@ func _ready():
 	create_interaction_label()
 
 
+	# A planta já adquirida continua adquirida depois de carregar um save.
+	if bool(SaveManager.get_run_value("world", "facility_map_acquired", false)):
+		map_acquired = true
+		interaction_label.text = "PLANTA ADQUIRIDA"
+		if terminal_visual != null:
+			terminal_visual.color = Color(0.12, 0.75, 0.55, 1.0)
+		call_deferred("refresh_room_tracker")
+
+
 	body_entered.connect(
 		on_body_entered
 	)
@@ -469,6 +478,7 @@ func complete_scan():
 
 
 	map_acquired = true
+	SaveManager.set_run_value("world", "facility_map_acquired", true)
 
 	scanning = false
 
