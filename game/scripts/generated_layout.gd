@@ -494,62 +494,7 @@ func create_room(
 	)
 
 
-	# -----------------------------------------------------
-	# NOME
-	# -----------------------------------------------------
-
-	var label = Label.new()
-
-
-	label.name = "RoomName"
-
-	label.text = data[
-		"name"
-	]
-
-
-	label.horizontal_alignment = (
-		HORIZONTAL_ALIGNMENT_CENTER
-	)
-
-
-	label.vertical_alignment = (
-		VERTICAL_ALIGNMENT_CENTER
-	)
-
-
-	label.add_theme_font_size_override(
-		"font_size",
-		24
-	)
-
-
-	label.add_theme_color_override(
-		"font_color",
-		label_color
-	)
-
-
-	label.position = Vector2(
-		-data["size"].x / 2.0,
-		-30.0
-	)
-
-
-	label.size = Vector2(
-		data["size"].x,
-		60.0
-	)
-
-
-	room_root.add_child(
-		label
-	)
-
-
-	set_editor_owner(
-		label
-	)
+	# Sem título visível no chão: o nome da sala fica só nos dados.
 
 
 	# -----------------------------------------------------

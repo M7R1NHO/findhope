@@ -1,0 +1,702 @@
+diff --git a/game/scripts/intro_sequence.gd b/game/scripts/intro_sequence.gd
+index 7496e91..386186a 100644
+--- a/game/scripts/intro_sequence.gd
++++ b/game/scripts/intro_sequence.gd
+@@ -43,6 +43,12 @@ var stabilization_status: Label
+ var stabilization_q_hint: Label
+ var minigame_overlay: ColorRect
+ 
++# SKIP CUTSCENE: com o pedido ativo, as esperas, as animações e o texto da
++# cutscene terminam logo, por isso o estado final é o mesmo da cutscene vista
++# até ao fim e o jogo segue para o tutorial de movimento.
++var skip_requested := false
++var skip_button: Button
++
+ 
+ func play() -> void:
+ 	layer = 100
+@@ -53,11 +59,13 @@ func play() -> void:
+ 		player.set_tutorial_locked(true)
+ 
+ 	_create_screen()
++	_create_skip_button()
+ 
+-	await get_tree().create_timer(1.0).timeout
++	await _wait(1.0)
+ 	await _play_scene_one()
+ 	await _play_scene_two()
+ 	await _play_wake_up()
++	_finish_skip()
+ 	await _play_movement_tutorial()
+ 	await _play_panel_tutorial()
+ 	var form = preload(
+@@ -163,7 +171,7 @@ func _fade_screen_content(duration: float) -> void:
+ 		has_content = true
+ 
+ 	if has_content:
+-		await tween.finished
++		await _await_tween(tween)
+ 
+ 
+ func _clear_screen_content() -> void:
+@@ -212,7 +220,7 @@ func _play_scene_one() -> void:
+ 		Color(0.005, 0.008, 0.025),
+ 		2.0
+ 	)
+-	await background_tween.finished
++	await _await_tween(background_tween)
+ 
+ 	for star in stars:
+ 		var star_tween := create_tween()
+@@ -233,9 +241,9 @@ func _play_scene_one() -> void:
+ 		1.0,
+ 		2.0
+ 	)
+-	await title_tween.finished
++	await _await_tween(title_tween)
+ 
+-	await get_tree().create_timer(1.0).timeout
++	await _wait(1.0)
+ 
+ 	var narrative := [
+ 		"ANO 2046. A Terra enfrenta uma crise de recursos.",
+@@ -249,7 +257,7 @@ func _play_scene_one() -> void:
+ 	for line in narrative:
+ 		title_label.text = ""
+ 		await _type_text(dialogue_label, line)
+-		await get_tree().create_timer(TEXT_PAUSE).timeout
++		await _wait(TEXT_PAUSE)
+ 
+ 	await _fade_screen_content(0.5)
+ 	await _clear_screen_content()
+@@ -289,7 +297,7 @@ func _play_scene_two() -> void:
+ 	await get_tree().process_frame
+ 	map_visual.queue_redraw()
+ 
+-	await get_tree().create_timer(2.0).timeout
++	await _wait(2.0)
+ 
+ 	var atlas_lines := [
+ 		"Atlas: A rota registada não corresponde à trajetória atual.",
+@@ -303,7 +311,7 @@ func _play_scene_two() -> void:
+ 
+ 	for line in atlas_lines:
+ 		await _type_text(dialogue_label, line)
+-		await get_tree().create_timer(TEXT_PAUSE).timeout
++		await _wait(TEXT_PAUSE)
+ 
+ 	await _fade_screen_content(0.8)
+ 	await _clear_screen_content()
+@@ -321,7 +329,7 @@ func _play_wake_up() -> void:
+ 	if player != null and player.has_method("set_tutorial_locked"):
+ 		player.set_tutorial_locked(true)
+ 
+-	await get_tree().create_timer(1.5).timeout
++	await _wait(1.5)
+ 
+ 	dialogue_label.text = "Acorde."
+ 	dialogue_label.modulate.a = 0.0
+@@ -333,9 +341,9 @@ func _play_wake_up() -> void:
+ 		1.0,
+ 		1.0
+ 	)
+-	await wake_tween.finished
++	await _await_tween(wake_tween)
+ 
+-	await get_tree().create_timer(1.5).timeout
++	await _wait(1.5)
+ 
+ 	title_label.text = "SISTEMA DE EMERGÊNCIA"
+ 	title_label.modulate.a = 0.0
+@@ -349,9 +357,9 @@ func _play_wake_up() -> void:
+ 		1.0,
+ 		1.0
+ 	)
+-	await emergency_tween.finished
++	await _await_tween(emergency_tween)
+ 
+-	await get_tree().create_timer(2.0).timeout
++	await _wait(2.0)
+ 
+ 	await _fade_screen_content(0.6)
+ 	await _clear_screen_content()
+@@ -596,6 +604,12 @@ func _move_tutorial_player() -> void:
+ 	if Input.is_key_pressed(KEY_D):
+ 		direction.x += 1.0
+ 
++	# O E é lido antes de olhar para o movimento: com o jogador parado ao
++	# lado do painel também tem de funcionar.
++	if tutorial_interaction_enabled and Input.is_key_pressed(KEY_E):
++		if _is_panel_in_range():
++			_activate_tutorial_panel()
++
+ 	if direction == Vector2.ZERO:
+ 		return
+ 
+@@ -618,10 +632,6 @@ func _move_tutorial_player() -> void:
+ 
+ 	_update_tutorial_player_position()
+ 
+-	if tutorial_interaction_enabled and Input.is_key_pressed(KEY_E):
+-		if _is_panel_in_range():
+-			_activate_tutorial_panel()
+-
+ 
+ func _update_tutorial_player_position() -> void:
+ 	if not is_instance_valid(tutorial_player):
+@@ -886,10 +896,85 @@ func _type_text(label: Label, message: String) -> void:
+ 	label.text = ""
+ 
+ 	for i in range(message.length()):
++		if skip_requested:
++			label.text = message
++			return
++
+ 		label.text += message[i]
+ 		await get_tree().create_timer(TYPE_SPEED).timeout
+ 
+ 
++func _create_skip_button() -> void:
++	# Fica fora do screen_root para não ser apagado entre cenas.
++	skip_button = Button.new()
++	skip_button.name = "SkipCutsceneButton"
++	skip_button.text = "SKIP CUTSCENE  ▶▶"
++	skip_button.focus_mode = Control.FOCUS_NONE
++	skip_button.anchor_left = 1.0
++	skip_button.anchor_right = 1.0
++	skip_button.anchor_top = 1.0
++	skip_button.anchor_bottom = 1.0
++	skip_button.offset_left = -230.0
++	skip_button.offset_right = -24.0
++	skip_button.offset_top = -64.0
++	skip_button.offset_bottom = -22.0
++	skip_button.add_theme_font_size_override("font_size", 15)
++	skip_button.add_theme_color_override("font_color", Color(0.65, 0.95, 1.0))
++	skip_button.add_theme_color_override("font_hover_color", Color.WHITE)
++
++	var normal := StyleBoxFlat.new()
++	normal.bg_color = Color(0.025, 0.07, 0.11, 0.85)
++	normal.border_color = Color(0.2, 0.8, 1.0, 0.8)
++	normal.set_border_width_all(2)
++	normal.set_corner_radius_all(8)
++	var hover: StyleBoxFlat = normal.duplicate()
++	hover.bg_color = Color(0.06, 0.2, 0.28, 0.95)
++	hover.border_color = Color(0.5, 0.95, 1.0)
++	skip_button.add_theme_stylebox_override("normal", normal)
++	skip_button.add_theme_stylebox_override("hover", hover)
++	skip_button.add_theme_stylebox_override("pressed", hover)
++	skip_button.add_theme_stylebox_override("disabled", normal)
++	skip_button.pressed.connect(request_skip)
++	add_child(skip_button)
++
++
++func request_skip() -> void:
++	skip_requested = true
++
++	if is_instance_valid(skip_button):
++		skip_button.disabled = true
++
++
++# Chamado quando a cutscene acaba, vista ou saltada: daqui para a frente as
++# esperas voltam ao normal.
++func _finish_skip() -> void:
++	skip_requested = false
++
++	if is_instance_valid(skip_button):
++		skip_button.queue_free()
++
++	skip_button = null
++
++
++func _wait(seconds: float) -> void:
++	if skip_requested:
++		return
++
++	var timer := get_tree().create_timer(seconds)
++
++	while timer.time_left > 0.0 and not skip_requested:
++		await get_tree().process_frame
++
++
++func _await_tween(tween: Tween) -> void:
++	while tween.is_valid() and tween.is_running() and not skip_requested:
++		await get_tree().process_frame
++
++	# Ao saltar, a animação salta para o fim, com os mesmos valores finais.
++	if skip_requested and tween.is_valid() and tween.is_running():
++		tween.custom_step(1000.0)
++
++
+ func _create_stars() -> Array[ColorRect]:
+ 	var stars: Array[ColorRect] = []
+ 	var viewport_size := get_viewport().get_visible_rect().size
+diff --git a/game/scripts/generated_layout.gd b/game/scripts/generated_layout.gd
+index 2264cd2..ab9138a 100644
+--- a/game/scripts/generated_layout.gd
++++ b/game/scripts/generated_layout.gd
+@@ -494,62 +494,7 @@ func create_room(
+ 	)
+ 
+ 
+-	# -----------------------------------------------------
+-	# NOME
+-	# -----------------------------------------------------
+-
+-	var label = Label.new()
+-
+-
+-	label.name = "RoomName"
+-
+-	label.text = data[
+-		"name"
+-	]
+-
+-
+-	label.horizontal_alignment = (
+-		HORIZONTAL_ALIGNMENT_CENTER
+-	)
+-
+-
+-	label.vertical_alignment = (
+-		VERTICAL_ALIGNMENT_CENTER
+-	)
+-
+-
+-	label.add_theme_font_size_override(
+-		"font_size",
+-		24
+-	)
+-
+-
+-	label.add_theme_color_override(
+-		"font_color",
+-		label_color
+-	)
+-
+-
+-	label.position = Vector2(
+-		-data["size"].x / 2.0,
+-		-30.0
+-	)
+-
+-
+-	label.size = Vector2(
+-		data["size"].x,
+-		60.0
+-	)
+-
+-
+-	room_root.add_child(
+-		label
+-	)
+-
+-
+-	set_editor_owner(
+-		label
+-	)
++	# Sem título visível no chão: o nome da sala fica só nos dados.
+ 
+ 
+ 	# -----------------------------------------------------
+diff --git a/game/scripts/phase3_layout.gd b/game/scripts/phase3_layout.gd
+index 6417780..dcb15d6 100644
+--- a/game/scripts/phase3_layout.gd
++++ b/game/scripts/phase3_layout.gd
+@@ -191,16 +191,8 @@ func create_room(room_name: String, center: Vector2, opening_left: bool, opening
+ 	floor.z_index = -2
+ 	room.add_child(floor)
+ 
+-	var label := Label.new()
+-	label.name = "RoomLabel"
+-	label.text = label_text
+-	label.position = Vector2(-room_size.x / 2.0, -room_size.y / 2.0 + 20.0)
+-	label.size = Vector2(room_size.x, 60.0)
+-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+-	label.add_theme_font_size_override("font_size", 28)
+-	label.add_theme_color_override("font_color", Color.WHITE)
+-	room.add_child(label)
++	# Sem título visível no chão; o nome fica guardado na sala.
++	room.set_meta("display_name", label_text)
+ 
+ 	var wall_body := StaticBody2D.new()
+ 	wall_body.name = "WallCollision"
+diff --git a/game/scripts/world_style.gd b/game/scripts/world_style.gd
+index 45e2cf1..b52ef60 100644
+--- a/game/scripts/world_style.gd
++++ b/game/scripts/world_style.gd
+@@ -54,8 +54,6 @@ func style_node(node: Node) -> void:
+ 		style_polygon(node)
+ 	elif node is Line2D:
+ 		style_line(node)
+-	elif node is Label and node.name == "RoomName":
+-		style_room_label(node)
+ 
+ 
+ func should_skip(node: CanvasItem) -> bool:
+@@ -155,14 +153,6 @@ func style_line(line: Line2D) -> void:
+ 	line.add_child(outline)
+ 
+ 
+-func style_room_label(label: Label) -> void:
+-	label.set_meta("world_style", true)
+-	label.add_theme_color_override("font_color", Color(0.92, 0.9, 0.82))
+-	label.add_theme_color_override("font_outline_color", OUTLINE)
+-	label.add_theme_constant_override("outline_size", 8)
+-	label.modulate.a = 0.75
+-
+-
+ func add_outline(poly: Polygon2D, width: float) -> void:
+ 	var outline := Line2D.new()
+ 	outline.name = "Outline"
+diff --git a/game/scenes/main.tscn b/game/scenes/main.tscn
+index 3cc9bbd..056b384 100644
+--- a/game/scenes/main.tscn
++++ b/game/scenes/main.tscn
+@@ -820,18 +820,6 @@ z_index = -7
+ color = Color(0.18, 0.22, 0.25, 1)
+ polygon = PackedVector2Array(-350, -200, 350, -200, 350, 200, -350, 200)
+ 
+-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Entrance" unique_id=1112194450]
+-offset_left = -350.0
+-offset_top = -30.0
+-offset_right = 350.0
+-offset_bottom = 30.0
+-theme_override_colors/font_color = Color(1, 1, 1, 1)
+-theme_override_font_sizes/font_size = 24
+-text = "ENTRADA"
+-horizontal_alignment = 1
+-vertical_alignment = 1
+-metadata/_edit_use_anchors_ = true
+-
+ [node name="Hall" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=980830815]
+ position = Vector2(0, -900)
+ 
+@@ -845,18 +833,6 @@ z_index = -7
+ color = Color(0.22, 0.27, 0.31, 1)
+ polygon = PackedVector2Array(-500, -300, 500, -300, 500, 300, -500, 300)
+ 
+-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Hall" unique_id=1871360395]
+-offset_left = -500.0
+-offset_top = -30.0
+-offset_right = 500.0
+-offset_bottom = 30.0
+-theme_override_colors/font_color = Color(1, 1, 1, 1)
+-theme_override_font_sizes/font_size = 24
+-text = "HALL DE ENTRADA"
+-horizontal_alignment = 1
+-vertical_alignment = 1
+-metadata/_edit_use_anchors_ = true
+-
+ [node name="Storage" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=485240610]
+ position = Vector2(-1100, -1650)
+ 
+@@ -870,18 +846,6 @@ z_index = -7
+ color = Color(0.18, 0.22, 0.25, 1)
+ polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
+ 
+-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Storage" unique_id=1129669123]
+-offset_left = -350.0
+-offset_top = -30.0
+-offset_right = 350.0
+-offset_bottom = 30.0
+-theme_override_colors/font_color = Color(1, 1, 1, 1)
+-theme_override_font_sizes/font_size = 24
+-text = "ARMAZÉM / PEÇAS"
+-horizontal_alignment = 1
+-vertical_alignment = 1
+-metadata/_edit_use_anchors_ = true
+-
+ [node name="TechnicalRoom" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1178901522]
+ position = Vector2(1100, -1650)
+ 
+@@ -895,18 +859,6 @@ z_index = -7
+ color = Color(0.22, 0.27, 0.31, 1)
+ polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
+ 
+-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/TechnicalRoom" unique_id=1956020453]
+-offset_left = -400.0
+-offset_top = -30.0
+-offset_right = 400.0
+-offset_bottom = 30.0
+-theme_override_colors/font_color = Color(1, 1, 1, 1)
+-theme_override_font_sizes/font_size = 24
+-text = "SALA TÉCNICA / ENERGIA"
+-horizontal_alignment = 1
+-vertical_alignment = 1
+-metadata/_edit_use_anchors_ = true
+-
+ [node name="SupportRoom" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=204620601]
+ position = Vector2(-2200, -1650)
+ 
+@@ -920,18 +872,6 @@ z_index = -7
+ color = Color(0.18, 0.22, 0.25, 1)
+ polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
+ 
+-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/SupportRoom" unique_id=826562567]
+-offset_left = -350.0
+-offset_top = -30.0
+-offset_right = 350.0
+-offset_bottom = 30.0
+-theme_override_colors/font_color = Color(1, 1, 1, 1)
+-theme_override_font_sizes/font_size = 24
+-text = "SALA DE SUPORTE"
+-horizontal_alignment = 1
+-vertical_alignment = 1
+-metadata/_edit_use_anchors_ = true
+-
+ [node name="Security" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=586158869]
+ position = Vector2(2200, -1650)
+ 
+@@ -945,18 +885,6 @@ z_index = -7
+ color = Color(0.18, 0.22, 0.25, 1)
+ polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
+ 
+-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Security" unique_id=1982701391]
+-offset_left = -350.0
+-offset_top = -30.0
+-offset_right = 350.0
+-offset_bottom = 30.0
+-theme_override_colors/font_color = Color(1, 1, 1, 1)
+-theme_override_font_sizes/font_size = 24
+-text = "SEGURANÇA / CONTENÇÃO"
+-horizontal_alignment = 1
+-vertical_alignment = 1
+-metadata/_edit_use_anchors_ = true
+-
+ [node name="Archives" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=816182896]
+ position = Vector2(-1100, -2700)
+ 
+@@ -970,18 +898,6 @@ z_index = -7
+ color = Color(0.22, 0.27, 0.31, 1)
+ polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
+ 
+-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Archives" unique_id=634376396]
+-offset_left = -400.0
+-offset_top = -30.0
+-offset_right = 400.0
+-offset_bottom = 30.0
+-theme_override_colors/font_color = Color(1, 1, 1, 1)
+-theme_override_font_sizes/font_size = 24
+-text = "ARQUIVOS / REGISTOS"
+-horizontal_alignment = 1
+-vertical_alignment = 1
+-metadata/_edit_use_anchors_ = true
+-
+ [node name="Laboratory" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=727011191]
+ position = Vector2(1100, -2700)
+ 
+@@ -995,18 +911,6 @@ z_index = -7
+ color = Color(0.22, 0.27, 0.31, 1)
+ polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
+ 
+-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Laboratory" unique_id=1250321027]
+-offset_left = -400.0
+-offset_top = -30.0
+-offset_right = 400.0
+-offset_bottom = 30.0
+-theme_override_colors/font_color = Color(1, 1, 1, 1)
+-theme_override_font_sizes/font_size = 24
+-text = "LABORATÓRIO / ANÁLISE"
+-horizontal_alignment = 1
+-vertical_alignment = 1
+-metadata/_edit_use_anchors_ = true
+-
+ [node name="Maintenance" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=2050801817]
+ position = Vector2(-2200, -2700)
+ 
+@@ -1020,18 +924,6 @@ z_index = -7
+ color = Color(0.18, 0.22, 0.25, 1)
+ polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
+ 
+-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Maintenance" unique_id=2146710604]
+-offset_left = -350.0
+-offset_top = -30.0
+-offset_right = 350.0
+-offset_bottom = 30.0
+-theme_override_colors/font_color = Color(1, 1, 1, 1)
+-theme_override_font_sizes/font_size = 24
+-text = "OFICINA / MANUTENÇÃO"
+-horizontal_alignment = 1
+-vertical_alignment = 1
+-metadata/_edit_use_anchors_ = true
+-
+ [node name="Sanctuary" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=291775203]
+ position = Vector2(-2200, -3800)
+ 
+@@ -1045,18 +937,6 @@ z_index = -7
+ color = Color(0.22, 0.27, 0.31, 1)
+ polygon = PackedVector2Array(-550, -325, 550, -325, 550, 325, -550, 325)
+ 
+-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Sanctuary" unique_id=2047618888]
+-offset_left = -550.0
+-offset_top = -30.0
+-offset_right = 550.0
+-offset_bottom = 30.0
+-theme_override_colors/font_color = Color(1, 1, 1, 1)
+-theme_override_font_sizes/font_size = 24
+-text = "SANTUÁRIO / ESCULTURAS"
+-horizontal_alignment = 1
+-vertical_alignment = 1
+-metadata/_edit_use_anchors_ = true
+-
+ [node name="MainCore" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=533092038]
+ position = Vector2(2200, -3800)
+ 
+@@ -1070,18 +950,6 @@ z_index = -7
+ color = Color(0.22, 0.27, 0.31, 1)
+ polygon = PackedVector2Array(-550, -325, 550, -325, 550, 325, -550, 325)
+ 
+-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/MainCore" unique_id=1991719042]
+-offset_left = -550.0
+-offset_top = -30.0
+-offset_right = 550.0
+-offset_bottom = 30.0
+-theme_override_colors/font_color = Color(1, 1, 1, 1)
+-theme_override_font_sizes/font_size = 24
+-text = "NÚCLEO PRINCIPAL"
+-horizontal_alignment = 1
+-vertical_alignment = 1
+-metadata/_edit_use_anchors_ = true
+-
+ [node name="Corridor_Entrance_Hall" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1256491647]
+ 
+ [node name="Segment_0" type="Polygon2D" parent="UndergroundRoot/GeneratedLayout/Corridor_Entrance_Hall" unique_id=151485189]
+diff --git a/game/zz_tests/s1_tests.gd b/game/zz_tests/s1_tests.gd
+new file mode 100644
+index 0000000..b48e6b1
+--- /dev/null
++++ b/game/zz_tests/s1_tests.gd
+@@ -0,0 +1,111 @@
++extends Node
++# Etapa 1: bug do [E] no tutorial, SKIP CUTSCENE e títulos das salas.
++# Precisa do backend de teste: GROQ_API_KEY=dummy python -m zz_phase3.fake_server
++const MAIN := "res://scenes/main.tscn"
++var results: Array = []
++var SM
++
++func check(id: String, desc: String, cond: bool, info: String = "") -> void:
++	results.append(cond)
++	print(("PASS " if cond else "FAIL ") + id + " " + desc + ("  [" + info + "]" if info != "" else ""))
++
++func frames(n: int) -> void:
++	for i in n: await get_tree().process_frame
++
++func key(code: Key, pressed: bool) -> void:
++	var ev := InputEventKey.new()
++	ev.keycode = code
++	ev.physical_keycode = code
++	ev.pressed = pressed
++	Input.parse_input_event(ev)
++	Input.flush_buffered_events()
++
++func find_intro(node: Node) -> Node:
++	for child in node.get_children():
++		if child.get_script() != null and child.get_script().resource_path.ends_with("intro_sequence.gd"):
++			return child
++	return null
++
++func labels_named(node: Node, names: Array, out: Array) -> void:
++	if node is Label and names.has(String(node.name)):
++		out.append(node.get_path())
++	for child in node.get_children():
++		labels_named(child, names, out)
++
++func _ready() -> void:
++	SM = get_node("/root/SaveManager")
++	await frames(3)
++	await SM.start_new_run()
++	get_tree().change_scene_to_file(MAIN)
++	await frames(3)
++	while get_tree().current_scene == null or not get_tree().current_scene.is_node_ready():
++		await get_tree().process_frame
++	var main := get_tree().current_scene
++	var intro: Node = null
++	for i in 60:
++		intro = find_intro(main)
++		if intro != null: break
++		await frames(1)
++	check("S1.0", "nova partida abre a cutscene inicial", intro != null)
++	if intro == null:
++		finish()
++		return
++
++	# --- SKIP CUTSCENE ---
++	await get_tree().create_timer(2.5).timeout
++	var button: Button = intro.get_node_or_null("SkipCutsceneButton")
++	check("S1.1", "o botão SKIP CUTSCENE está visível durante a cutscene", button != null and button.is_visible_in_tree() and button.text.contains("SKIP CUTSCENE"))
++	var started := Time.get_ticks_msec()
++	button.pressed.emit()
++	button.pressed.emit()
++	while not is_instance_valid(intro.tutorial_player) and Time.get_ticks_msec() - started < 8000:
++		await frames(1)
++	var took := (Time.get_ticks_msec() - started) / 1000.0
++	check("S1.2", "ao carregar, salta logo para o tutorial de movimento (em vez de ~45 s)",
++		is_instance_valid(intro.tutorial_player) and took < 3.0, "%.2f s" % took)
++	await frames(2)
++	check("S1.3", "o tutorial começa como depois da cutscene completa (título, texto, jogador bloqueado)",
++		is_instance_valid(intro.title_label) and intro.title_label.text == "RECUPERAÇÃO DE CONSCIÊNCIA"
++		and intro.dialogue_label.text.contains("WASD") and intro.player.tutorial_locked == true,
++		"%s" % (intro.title_label.text if is_instance_valid(intro.title_label) else "?"))
++	check("S1.4", "depois do salto, o botão desaparece e as esperas voltam ao normal (clicar duas vezes não salta o tutorial)",
++		intro.get_node_or_null("SkipCutsceneButton") == null and intro.skip_requested == false)
++	check("S1.5", "o bloqueio de save da cutscene continua ativo depois do salto (até ao fim da intro)", SM.manual_save_blocks.has("cutscene"))
++
++	# --- Bug do [E] ---
++	key(KEY_D, true)
++	await get_tree().create_timer(0.3).timeout
++	key(KEY_D, false)
++	for i in 30:
++		if intro.dialogue_label.text.contains("painel"): break
++		await frames(1)
++	# leva o quadrado para junto do painel sem carregar em teclas de movimento
++	intro.tutorial_player_position = intro.tutorial_panel_position + Vector2(-60, 0)
++	for i in 30:
++		if intro.tutorial_interaction_enabled: break
++		await frames(1)
++	check("S1.6", "parado junto do painel, o tutorial pede o E", intro.tutorial_interaction_enabled)
++	intro.tutorial_player_position = intro.tutorial_panel_position + Vector2(-250, 0)
++	key(KEY_E, true)
++	await frames(5)
++	key(KEY_E, false)
++	check("S1.7", "longe do painel, o E não ativa nada", not intro.tutorial_panel_activated)
++	intro.tutorial_player_position = intro.tutorial_panel_position + Vector2(-60, 0)
++	await frames(2)
++	key(KEY_E, true)
++	await frames(5)
++	key(KEY_E, false)
++	check("S1.8", "parado junto do painel (sem WASD), o E ativa o painel", intro.tutorial_panel_activated)
++
++	# --- Títulos das salas ---
++	var found := []
++	labels_named(main, ["RoomName", "RoomLabel"], found)
++	check("S1.9", "nenhum título de sala no chão (RoomName / RoomLabel)", found.is_empty(), str(found))
++	var tracker: Node = main.get_facility_room_tracker() if main.has_method("get_facility_room_tracker") else null
++	check("S1.10", "o rastreio de salas usado pelo Atlas continua a ter os nomes", tracker != null and tracker.rooms.size() >= 10, str(tracker.rooms.size() if tracker else -1))
++	finish()
++
++func finish() -> void:
++	var passed := results.count(true)
++	print("RESULTADO S1: ", passed, " / ", results.size(), " PASS")
++	get_tree().quit(0 if passed == results.size() else 1)
+diff --git a/game/zz_tests/s1_runner.gd b/game/zz_tests/s1_runner.gd
+new file mode 100644
+index 0000000..95fb162
+--- /dev/null
++++ b/game/zz_tests/s1_runner.gd
+@@ -0,0 +1,5 @@
++extends Node
++func _ready():
++	var t = load("res://zz_tests/s1_tests.gd").new()
++	t.name = "S1Tests"
++	get_tree().root.add_child.call_deferred(t)
+diff --git a/game/zz_tests/s1_runner.tscn b/game/zz_tests/s1_runner.tscn
+new file mode 100644
+index 0000000..39925a1
+--- /dev/null
++++ b/game/zz_tests/s1_runner.tscn
+@@ -0,0 +1,4 @@
++[gd_scene format=3]
++[ext_resource type="Script" path="res://zz_tests/s1_runner.gd" id="1"]
++[node name="R" type="Node"]
++script = ExtResource("1")

@@ -1,5 +1,12 @@
 extends Area2D
 
+const SonicDeviceArt := preload("res://scripts/sonic_device_art.gd")
+
+# Animação de ligar o equipamento ao Atlas.
+const EQUIP_WALK_TIMEOUT := 2.0
+const EQUIP_ENERGY_TIME := 1.0
+const EQUIP_FLY_TIME := 0.7
+const EQUIP_STAND_OFFSET := Vector2(0.0, 80.0)
 
 var player_nearby: bool = false
 
@@ -12,6 +19,8 @@ var fight_manager: Node = null
 var equipment_visual: Polygon2D = null
 var energy_visual: Polygon2D = null
 var interaction_label: Label = null
+
+var equip_animation_active: bool = false
 
 
 func _ready():
@@ -317,6 +326,8 @@ func connect_equipment():
 		"SISTEMA SONORO OPERACIONAL"
 	)
 
+	await play_equip_animation()
+
 	if (
 		main != null
 		and main.has_method(
@@ -371,8 +382,10 @@ func send_gameplay_context():
 		+ "que podem afastar a criatura. "
 		+ "Atlas não utiliza uma arma de projéteis: "
 		+ "o seu método de combate atual depende de emissão sonora. "
-		+ "Durante a descarga, o jogador também precisa manter "
-		+ "uma distância segura da zona de emissão.",
+		+ "O dispositivo ficou preso ao ombro do Atlas. "
+		+ "Na luta, a criatura persegue o jogador, que tem de fugir, "
+		+ "enquanto o Atlas aponta e dispara ondas sonoras contra ela; "
+		+ "o dispositivo precisa de 2 segundos para recarregar.",
 		true
 	)
 
@@ -396,8 +409,127 @@ func load_save_data(data: Dictionary):
 		equipment_visual.color = Color(0.15, 0.82, 0.68, 1.0)
 		energy_visual.color = Color(0.30, 1.0, 0.82, 1.0)
 		interaction_label.text = "SISTEMA SONORO OPERACIONAL"
+		call_deferred("mount_device_on_atlas")
 	elif tools_collected:
 		equipment_visual.color = Color(0.35, 0.43, 0.46, 1.0)
 		interaction_label.text = "[E] CONECTAR ATLAS À ENERGIA"
 	else:
 		interaction_label.text = "[E] RECOLHER FERRAMENTAS"
+
+
+func get_atlas() -> Node2D:
+	if main == null or not is_instance_valid(main):
+		main = get_tree().current_scene
+
+	if main == null:
+		return null
+
+	return main.get_node_or_null("Atlas")
+
+
+func mount_device_on_atlas() -> Node2D:
+	return SonicDeviceArt.mount_on(get_atlas())
+
+
+# O Atlas vai até à bancada, a energia passa para ele e o dispositivo sónico
+# sai da bancada e prende-se ao ombro dele. O Player fica parado e não se
+# pode gravar à mão enquanto dura (cerca de 3 s).
+func play_equip_animation() -> void:
+	var atlas := get_atlas()
+
+	if atlas == null:
+		return
+
+	equip_animation_active = true
+	SaveManager.set_manual_save_block("sonic_equip", true)
+
+	var player: Node = main.get_node_or_null("Player")
+
+	if player != null and player.has_method("set_tutorial_locked"):
+		player.set_tutorial_locked(true)
+
+	# 1. O Atlas aproxima-se da bancada.
+	var stand := global_position + EQUIP_STAND_OFFSET
+
+	if atlas.has_method("start_scripted_move_to"):
+		atlas.start_scripted_move_to(stand)
+
+		var waited := 0.0
+
+		while waited < EQUIP_WALK_TIMEOUT and atlas.global_position.distance_to(stand) > 6.0:
+			await get_tree().physics_frame
+			waited += get_physics_process_delta_time()
+
+		atlas.stop_scripted_move_to()
+
+	# 2. Descarga de energia da fonte para o Atlas.
+	var energy := Line2D.new()
+	energy.name = "EquipEnergy"
+	energy.width = 3.0
+	energy.default_color = Color(0.45, 1.0, 0.95, 0.9)
+	energy.z_as_relative = false
+	energy.z_index = 20
+	add_child(energy)
+
+	var elapsed := 0.0
+
+	while elapsed < EQUIP_ENERGY_TIME:
+		var from := energy_visual.position
+		var to := to_local(atlas.global_position + Vector2(0.0, -26.0))
+		energy.points = lightning_points(from, to)
+		energy.modulate.a = 0.55 + 0.45 * randf()
+		equipment_visual.modulate = Color(1.0, 1.0, 1.0).lerp(Color(1.6, 2.0, 2.0), 0.5 + 0.5 * sin(elapsed * 30.0))
+		await get_tree().process_frame
+		elapsed += get_process_delta_time()
+
+	energy.queue_free()
+	equipment_visual.modulate = Color.WHITE
+
+	# 3. O dispositivo sai da bancada e vai para o ombro do Atlas.
+	var mounted := SonicDeviceArt.mount_on(atlas)
+	mounted.modulate.a = 0.0
+	mounted.follow_view()
+
+	var flying := SonicDeviceArt.make(1.8)
+	flying.z_as_relative = false
+	flying.z_index = 20
+	main.add_child(flying)
+	flying.global_position = equipment_visual.global_position
+
+	var tween := flying.create_tween().set_parallel(true)
+	tween.tween_property(flying, "global_position", mounted.global_position, EQUIP_FLY_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(flying, "scale", Vector2.ONE, EQUIP_FLY_TIME)
+	await tween.finished
+
+	flying.queue_free()
+	mounted.modulate.a = 1.0
+	mounted.pulse()
+
+	# 4. O Atlas pisca com a energia do dispositivo.
+	var flash := atlas.create_tween()
+
+	for i in 2:
+		flash.tween_property(atlas, "modulate", Color(0.6, 1.6, 1.6), 0.12)
+		flash.tween_property(atlas, "modulate", Color.WHITE, 0.12)
+
+	await flash.finished
+	await get_tree().create_timer(0.4).timeout
+
+	if player != null and is_instance_valid(player) and player.has_method("set_tutorial_locked"):
+		player.set_tutorial_locked(false)
+
+	SaveManager.set_manual_save_block("sonic_equip", false)
+	equip_animation_active = false
+
+
+# Raio em ziguezague entre dois pontos.
+func lightning_points(from: Vector2, to: Vector2) -> PackedVector2Array:
+	var points := PackedVector2Array([from])
+	var normal := (to - from).orthogonal().normalized()
+
+	for i in range(1, 8):
+		var t := i / 8.0
+		points.append(from.lerp(to, t) + normal * randf_range(-10.0, 10.0))
+
+	points.append(to)
+	return points

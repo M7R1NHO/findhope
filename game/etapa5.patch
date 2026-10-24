@@ -1,0 +1,1223 @@
+diff --git a/game/scripts/control_room_art.gd b/game/scripts/control_room_art.gd
+new file mode 100644
+index 0000000..a4dddce
+--- /dev/null
++++ b/game/scripts/control_room_art.gd
+@@ -0,0 +1,195 @@
++extends Node2D
++
++# A Sala de Controlo no mundo (Phase 3, sala 2), desenhada a partir da planta
++# do confronto (phase3_boss_view.gd), para a sala onde se anda ser a mesma
++# que aparece no minijogo:
++#
++#   - a consola com os três ecrãs, ao centro, encostada à parede de cima;
++#   - um termómetro junto a cada porta, com a marca dos 28 °C;
++#   - a luz por cima de cada porta (verde aberta, ciano fechada);
++#   - o anel do Hangar no chão, que fica cheio depois do confronto;
++#   - o brilho vermelho no corredor do lado que aquece.
++#
++# Só desenha. A colisão da consola é posta pelo phase3_layout.gd, e quem
++# muda "awake", "heat" e "hangar_progress" é a animação da sala
++# (phase3_layout.play_control_room_intro) e o fim do confronto.
++
++const BossView := preload("res://scripts/phase3_boss_view.gd")
++const UIStyle := preload("res://scripts/ui_style.gd")
++
++const DESK_COLOR := Color(0.2, 0.24, 0.29)
++const SCREEN_OFF := Color(0.12, 0.14, 0.16)
++const OUTLINE := Color(0.07, 0.07, 0.09)
++
++var layout: Node2D = null
++var room_size: Vector2 = Vector2(1000.0, 453.0)
++var corridor_size: Vector2 = Vector2(220.0, 180.0)
++var clock: float = 0.0
++# 0 ecrãs apagados, 1 ligados.
++var awake: float = 0.0
++# 0 a 1, como no confronto (12 °C a 39 °C).
++var heat: Dictionary = {"left": 0.0, "right": 0.0}
++var hangar_progress: float = 0.0
++# Enquanto houver Atlas aqui, desenha o feixe de dados até à consola.
++var beam_from: Node2D = null
++
++
++func _ready() -> void:
++	name = "ControlRoomArt"
++	z_index = 2
++
++
++func _process(delta: float) -> void:
++	clock += delta
++	queue_redraw()
++
++
++# Ponto da planta do confronto -> posição local nesta sala.
++func p(view_point: Vector2) -> Vector2:
++	return BossView.to_room(view_point, room_size)
++
++
++func scale_factor() -> float:
++	return room_size.x / BossView.ROOM.size.x
++
++
++func rect(view_rect: Rect2) -> Rect2:
++	return Rect2(p(view_rect.position), view_rect.size * scale_factor())
++
++
++# Posições (locais à sala) onde o Player e o Atlas ficam na consola. São os
++# pés dos sprites; o corpo fica 16 px acima (CharacterSprite.attach).
++func player_spot() -> Vector2:
++	return p(BossView.PLAYER_FEET) - Vector2(0.0, 16.0)
++
++
++func atlas_spot() -> Vector2:
++	return p(BossView.ATLAS_FEET) - Vector2(0.0, 16.0)
++
++
++func console_rect() -> Rect2:
++	return rect(BossView.CONSOLE)
++
++
++func temperature(side: String) -> float:
++	return 12.0 + 27.0 * float(heat[side])
++
++
++func door_closed(side: String) -> bool:
++	if layout == null or not is_instance_valid(layout):
++		return false
++	if side == "right":
++		return not layout.hangar_door.is_empty() and layout.hangar_door["visual"].visible
++	for door in layout.phase3_exit_doors:
++		if String(door["body"].name) == "Porta_Entrada_Criatura":
++			return door["visual"].visible
++	return false
++
++
++func _draw() -> void:
++	draw_corridor_heat()
++	draw_hangar_ring()
++	draw_console()
++	for side in ["left", "right"]:
++		draw_thermometer(side)
++		draw_door_light(side)
++	draw_beam()
++
++
++func draw_corridor_heat() -> void:
++	for side in ["left", "right"]:
++		var amount: float = heat[side]
++		if amount <= 0.05:
++			continue
++		var pulse := 0.85 + 0.15 * sin(clock * 6.0)
++		var edge := room_size.x / 2.0
++		var x := -edge - corridor_size.x if side == "left" else edge
++		draw_rect(Rect2(x, -corridor_size.y / 2.0, corridor_size.x, corridor_size.y), Color(BossView.HEAT, amount * 0.35 * pulse))
++		var door := Vector2(-edge - 50.0 if side == "left" else edge + 50.0, 0.0)
++		for ring in 6:
++			draw_circle(door, 30.0 + ring * 26.0, Color(BossView.HEAT, amount * 0.09 * pulse))
++
++
++func draw_hangar_ring() -> void:
++	var center := p(BossView.RING_CENTER)
++	var radius := BossView.RING_RADIUS * scale_factor()
++	var width := 8.0 * scale_factor()
++	draw_circle(center, radius + width, Color(0.08, 0.09, 0.11, 0.8))
++	draw_arc(center, radius, 0.0, TAU, 64, Color(0.18, 0.22, 0.26), width)
++	if hangar_progress > 0.0:
++		draw_arc(center, radius, -PI / 2.0, -PI / 2.0 + TAU * clamp(hangar_progress, 0.0, 1.0), 64, UIStyle.ACCENT, width)
++	draw_arc(center, radius + width / 2.0 + 2.0, 0.0, TAU, 64, OUTLINE, 3.0)
++
++
++func draw_console() -> void:
++	var desk := console_rect()
++	var k := scale_factor()
++	draw_rect(desk, DESK_COLOR)
++	draw_rect(desk, OUTLINE, false, 4.0)
++	for i in 3:
++		var screen := Rect2(desk.position + Vector2((10.0 + i * 50.0) * k, 7.0 * k), Vector2(40.0, 24.0) * k)
++		var glow := 0.6 + 0.4 * sin(clock * 3.0 + i)
++		var lit := Color(0.15, 0.55, 0.55).lerp(UIStyle.ACCENT, glow)
++		# Ao ligar, os ecrãs piscam antes de ficarem acesos.
++		var on: float = awake
++		if awake > 0.0 and awake < 1.0 and fmod(clock * 13.0 + i * 1.7, 1.0) < 0.35:
++			on = 0.0
++		draw_rect(screen, SCREEN_OFF.lerp(lit, on))
++		draw_rect(screen, OUTLINE, false, 2.0)
++
++
++func draw_thermometer(side: String) -> void:
++	var amount: float = heat[side]
++	var tube := rect(BossView.thermo_rect(side))
++	var k := scale_factor()
++	draw_rect(tube, Color(0.05, 0.06, 0.08))
++	var fill_height: float = tube.size.y * max(0.08, amount)
++	var fill_color := Color(0.25, 0.55, 0.9).lerp(BossView.HEAT, amount)
++	draw_rect(Rect2(tube.position.x, tube.end.y - fill_height, tube.size.x, fill_height), fill_color)
++	draw_rect(tube, OUTLINE, false, 3.0)
++	draw_circle(Vector2(tube.get_center().x, tube.end.y + 8.0 * k), 10.0 * k, fill_color)
++	var mark_y := tube.end.y - tube.size.y * ((28.0 - 12.0) / 27.0)
++	draw_line(Vector2(tube.position.x - 6.0, mark_y), Vector2(tube.end.x + 6.0, mark_y), UIStyle.DANGER, 3.0)
++	var text := str(snapped(temperature(side), 0.1)) + "°"
++	draw_string(ThemeDB.fallback_font, Vector2(tube.position.x - 18.0, tube.end.y + 52.0), text,
++		HORIZONTAL_ALIGNMENT_LEFT, -1, 20, UIStyle.DANGER if temperature(side) >= 28.0 else UIStyle.TEXT)
++
++
++func draw_door_light(side: String) -> void:
++	var view := BossView.ROOM
++	var x := view.position.x if side == "left" else view.end.x
++	var light := p(Vector2(x, view.get_center().y - BossView.DOOR_HEIGHT / 2.0 - 14.0))
++	var color := UIStyle.ACCENT if door_closed(side) else Color(0.3, 0.8, 0.35)
++	draw_circle(light, 9.0, OUTLINE)
++	draw_circle(light, 7.0, color)
++
++
++func draw_beam() -> void:
++	if beam_from == null or not is_instance_valid(beam_from):
++		return
++	var start := to_local(beam_from.global_position) + Vector2(0.0, -40.0)
++	var desk := console_rect()
++	var finish := Vector2(desk.get_center().x + 30.0, desk.end.y)
++	var segments := 8
++	for i in segments:
++		if (i + int(clock * 8.0)) % 2 == 0:
++			draw_line(start.lerp(finish, float(i) / segments), start.lerp(finish, float(i + 1) / segments), Color(UIStyle.ACCENT, 0.7), 3.0)
++
++
++# Riscas amarelas nas portas da sala, como no confronto.
++class DoorStripes extends Node2D:
++	var size: Vector2 = Vector2(32.0, 240.0)
++
++	func _draw() -> void:
++		var y := -size.y / 2.0 + 8.0
++		while y < size.y / 2.0 - 10.0:
++			draw_rect(Rect2(-size.x / 2.0, y, size.x, 8.0), BossView.HAZARD)
++			y += 24.0
++
++
++static func make_door_stripes(door_size: Vector2) -> Node2D:
++	var stripes := DoorStripes.new()
++	stripes.name = "HazardStripes"
++	stripes.size = door_size
++	stripes.set_meta("world_style", true)
++	return stripes
+diff --git a/game/scripts/phase3_boss_view.gd b/game/scripts/phase3_boss_view.gd
+index 488204d..dfb54dd 100644
+--- a/game/scripts/phase3_boss_view.gd
++++ b/game/scripts/phase3_boss_view.gd
+@@ -20,7 +20,20 @@ const CharacterFrames := preload("res://scripts/character_frames.gd")
+ const VIEW_SIZE := Vector2(1000.0, 300.0)
+ const ROOM := Rect2(200.0, 14.0, 600.0, 272.0)
+ const WALL := 12.0
+-const DOOR_HEIGHT := 92.0
++# Mesma proporção que as aberturas da Sala de Controlo no mundo (228 em 453).
++const DOOR_HEIGHT := 136.0
++
++# Planta da sala, em coordenadas desta vista. A Sala de Controlo do mundo
++# (phase3_layout.gd + control_room_art.gd) é construída a partir destes
++# números com to_room(), para a sala onde se anda ser a mesma do confronto.
++const CONSOLE := Rect2(420.0, 26.0, 160.0, 40.0)
++const PLAYER_FEET := Vector2(470.0, 122.0)
++const ATLAS_FEET := Vector2(532.0, 122.0)
++const RING_CENTER := Vector2(500.0, 205.0)
++const RING_RADIUS := 46.0
++const THERMO_SIZE := Vector2(12.0, 150.0)
++const THERMO_TOP := 40.0
++const THERMO_INSET := {"left": 34.0, "right": 46.0}
+ const DOOR_SPEED := 6.0            # fração da porta por segundo (~0,17 s)
+ const INTRUDER_TIME := 1.4         # quanto tempo a criatura fica à vista ao entrar
+ const INTRUDER_WALK := 0.5         # dos quais a passar a porta
+@@ -96,6 +109,21 @@ func heat_of(side: String) -> float:
+ 	return clamp((float(boss.sensor_readings[side]) - 12.0) / 27.0, 0.0, 1.0)
+ 
+ 
++# Tamanho da sala no mundo com a mesma proporção desta planta.
++static func room_size_for(width: float) -> Vector2:
++	return Vector2(width, width * ROOM.size.y / ROOM.size.x)
++
++
++# Ponto da planta -> posição local na sala do mundo (centro da sala = 0, 0).
++static func to_room(view_point: Vector2, room_size: Vector2) -> Vector2:
++	return (view_point - ROOM.get_center()) * (room_size.x / ROOM.size.x)
++
++
++static func thermo_rect(side: String) -> Rect2:
++	var x: float = ROOM.position.x + THERMO_INSET["left"] if side == "left" else ROOM.end.x - THERMO_INSET["right"]
++	return Rect2(Vector2(x, ROOM.position.y + THERMO_TOP), THERMO_SIZE)
++
++
+ func door_rect(side: String) -> Rect2:
+ 	var y := ROOM.get_center().y - DOOR_HEIGHT / 2.0
+ 	var x := ROOM.position.x - WALL / 2.0 if side == "left" else ROOM.end.x - WALL / 2.0
+@@ -118,8 +146,8 @@ func _draw() -> void:
+ 		draw_thermometer(side)
+ 	draw_hangar_ring()
+ 	draw_console()
+-	draw_player(Vector2(470.0, 96.0))
+-	draw_atlas(Vector2(532.0, 96.0))
++	draw_player(PLAYER_FEET - Vector2(0.0, 26.0))
++	draw_atlas(ATLAS_FEET - Vector2(0.0, 26.0))
+ 	if intruder_time > 0.0:
+ 		draw_intruder(intruder_side)
+ 	if boss.power_out:
+@@ -199,8 +227,7 @@ func draw_door(side: String) -> void:
+ 
+ func draw_thermometer(side: String) -> void:
+ 	var heat := heat_of(side)
+-	var x := ROOM.position.x + 34.0 if side == "left" else ROOM.end.x - 46.0
+-	var tube := Rect2(x, ROOM.position.y + 40.0, 12.0, 150.0)
++	var tube := thermo_rect(side)
+ 	draw_rect(tube, Color(0.05, 0.06, 0.08))
+ 	var fill_height: float = tube.size.y * max(0.08, heat)
+ 	var cold := Color(0.25, 0.55, 0.9)
+@@ -218,10 +245,10 @@ func draw_thermometer(side: String) -> void:
+ 
+ 
+ func draw_hangar_ring() -> void:
+-	var center := Vector2(500.0, 205.0)
++	var center := RING_CENTER
+ 	var progress: float = 1.0 - float(boss.time_left) / float(boss.DURATION)
+-	draw_arc(center, 46.0, 0.0, TAU, 48, Color(0.18, 0.22, 0.26), 8.0)
+-	draw_arc(center, 46.0, -PI / 2.0, -PI / 2.0 + TAU * progress, 48, UIStyle.ACCENT, 8.0)
++	draw_arc(center, RING_RADIUS, 0.0, TAU, 48, Color(0.18, 0.22, 0.26), 8.0)
++	draw_arc(center, RING_RADIUS, -PI / 2.0, -PI / 2.0 + TAU * progress, 48, UIStyle.ACCENT, 8.0)
+ 	var font := get_theme_default_font()
+ 	var seconds := str(int(ceil(float(boss.time_left)))) + " s"
+ 	draw_string(font, center + Vector2(-46.0, 6.0), seconds, HORIZONTAL_ALIGNMENT_CENTER, 92.0, 20, UIStyle.TEXT)
+@@ -229,7 +256,7 @@ func draw_hangar_ring() -> void:
+ 
+ 
+ func draw_console() -> void:
+-	var desk := Rect2(420.0, 26.0, 160.0, 40.0)
++	var desk := CONSOLE
+ 	draw_rect(desk, Color(0.2, 0.24, 0.29))
+ 	for i in 3:
+ 		var screen := Rect2(desk.position.x + 10.0 + i * 50.0, desk.position.y + 7.0, 40.0, 24.0)
+diff --git a/game/scripts/phase3_layout.gd b/game/scripts/phase3_layout.gd
+index dcb15d6..399d0db 100644
+--- a/game/scripts/phase3_layout.gd
++++ b/game/scripts/phase3_layout.gd
+@@ -23,6 +23,9 @@ var exit_doors_open: bool = false
+ 
+ # Confronto da Sala de Controlo (P3.3).
+ const Phase3Boss := preload("res://scripts/phase3_boss.gd")
++const BossView := preload("res://scripts/phase3_boss_view.gd")
++const ControlRoomArt := preload("res://scripts/control_room_art.gd")
++const UIStyle := preload("res://scripts/ui_style.gd")
+ const CharacterFrames := preload("res://scripts/character_frames.gd")
+ var boss_done: bool = false
+ var boss_active: bool = false
+@@ -30,6 +33,29 @@ var atlas_damaged: bool = false
+ var boss_ui: CanvasLayer = null
+ var hangar_door: Dictionary = {}
+ 
++# Sala de Controlo igual à do confronto e a animação de chegada (Etapa 5).
++const CONTROL_ROOM_SEEN_KEY := "phase3_control_room_seen"
++const CONTROL_ROOM_WALK_TIMEOUT := 4.0
++const CONTROL_ROOM_HEAT_TIME := 2.5
++# Durante as falas a câmara afasta-se para mostrar a sala toda por cima da
++# caixa de texto (centro um pouco abaixo do centro da sala).
++const CONTROL_ROOM_CAMERA_ZOOM := 1.1
++const CONTROL_ROOM_CAMERA_SHIFT := Vector2(0.0, 90.0)
++const CONTROL_ROOM_LINES := [
++	"ATLAS: Esta é a Sala de Controlo. A porta do Hangar está trancada e só abre a partir desta consola.",
++	"ATLAS: Consigo abri-la, mas preciso de 60 segundos ligado ao sistema. Enquanto isso, não consigo fazer mais nada.",
++	"SENSOR TÉRMICO: temperatura a subir junto à porta esquerda.",
++	"ATLAS: Não há câmaras nesta sala, só estes sensores. A criatura é quente... e está a aproximar-se.",
++	"ATLAS: Tu ficas na consola a vigiar o calor das duas portas. Quando um lado aquecer, fecha essa porta.",
++	"ATLAS: Cada porta fechada gasta a energia da sala. Fecha só quando for preciso. Vou começar.",
++]
++var control_room_art: Node2D = null
++var control_room_intro_active: bool = false
++var control_room_layer: CanvasLayer = null
++var control_room_label: Label = null
++var control_room_button: Button = null
++signal control_room_line_advanced
++
+ # Hangar e escolha final (P3.4).
+ const Phase3Hangar := preload("res://scripts/phase3_hangar.gd")
+ const EndingScreen := preload("res://scripts/ending_screen.gd")
+@@ -42,13 +68,9 @@ var ending_screen: CanvasLayer = null
+ @export var corridor_width: float = 180.0
+ @export var corridor_length: float = 220.0
+ @export var wall_width: float = 24.0
+-@export var structure_size: Vector2 = Vector2(150.0, 200.0)
+-@export var structure_offset_x: float = 250.0
+-@export var structure_offset_y: float = 150.0
+ @export var room_color: Color = Color(0.12, 0.15, 0.18, 1.0)
+ @export var corridor_color: Color = Color(0.08, 0.10, 0.12, 1.0)
+ @export var wall_color: Color = Color(0.65, 0.72, 0.75, 1.0)
+-@export var structure_color: Color = Color(0.35, 0.40, 0.44, 1.0)
+ 
+ @export var gerar_layout_agora: bool = false:
+ 	set(value):
+@@ -137,17 +159,12 @@ func rebuild_layout() -> void:
+ 	var room_3_x: float = step_x * 2.0
+ 
+ 	create_room("Sala_1_Android", Vector2(room_1_x, 0.0), true, true, "ALA DE COMUNICAÇÕES")
+-	create_room("Sala_2_Criatura", Vector2(room_2_x, 0.0), true, true, "SALA DE CONTROLO")
++	create_room("Sala_2_Criatura", Vector2(room_2_x, 0.0), true, true, "SALA DE CONTROLO", control_room_size())
+ 	create_room("Sala_3_Nave", Vector2(room_3_x, 0.0), true, false, "HANGAR")
+ 
+ 	create_corridor("Corredor_Android_Criatura", Vector2(room_1_x + room_size.x / 2.0 + corridor_length / 2.0, 0.0))
+ 	create_corridor("Corredor_Criatura_Nave", Vector2(room_2_x + room_size.x / 2.0 + corridor_length / 2.0, 0.0))
+ 
+-	create_structure("Estrutura_Superior_Esquerda", Vector2(room_2_x - structure_offset_x, -structure_offset_y))
+-	create_structure("Estrutura_Superior_Direita", Vector2(room_2_x + structure_offset_x, -structure_offset_y))
+-	create_structure("Estrutura_Inferior_Esquerda", Vector2(room_2_x - structure_offset_x, structure_offset_y))
+-	create_structure("Estrutura_Inferior_Direita", Vector2(room_2_x + structure_offset_x, structure_offset_y))
+-
+ 	# Criar os objetos narrativos interativos da Sala 1.
+ 	create_phase3_story_objects()
+ 	phase3_exit_doors.clear()
+@@ -156,6 +173,7 @@ func rebuild_layout() -> void:
+ 	create_phase3_exit_door("Porta_Entrada_Criatura", Vector2(step_x - room_size.x / 2.0, 0.0))
+ 	create_boss_trigger(Vector2(room_2_x, 0.0))
+ 	create_hangar_door(Vector2(room_2_x + room_size.x / 2.0, 0.0))
++	create_control_room(Vector2(room_2_x, 0.0))
+ 	create_explorer_ship(Vector2(room_3_x + 250.0, 0.0))
+ 	create_hangar_trigger(Vector2(room_3_x - 150.0, 0.0))
+ 
+@@ -176,7 +194,9 @@ func rebuild_layout() -> void:
+ 	print("PHASE 3: salas, corredores, estruturas e limites invisiveis criados.")
+ 
+ 
+-func create_room(room_name: String, center: Vector2, opening_left: bool, opening_right: bool, label_text: String) -> void:
++func create_room(room_name: String, center: Vector2, opening_left: bool, opening_right: bool, label_text: String, size: Vector2 = Vector2.ZERO) -> void:
++	if size == Vector2.ZERO:
++		size = room_size
+ 	var room := Node2D.new()
+ 	room.name = room_name
+ 	room.position = center
+@@ -186,7 +206,7 @@ func create_room(room_name: String, center: Vector2, opening_left: bool, opening
+ 	@warning_ignore("shadowed_global_identifier")
+ 	var floor := Polygon2D.new()
+ 	floor.name = "Floor"
+-	floor.polygon = rectangle(room_size)
++	floor.polygon = rectangle(size)
+ 	floor.color = room_color
+ 	floor.z_index = -2
+ 	room.add_child(floor)
+@@ -198,26 +218,26 @@ func create_room(room_name: String, center: Vector2, opening_left: bool, opening
+ 	wall_body.name = "WallCollision"
+ 	room.add_child(wall_body)
+ 
+-	var half_x: float = room_size.x / 2.0
+-	var half_y: float = room_size.y / 2.0
++	var half_x: float = size.x / 2.0
++	var half_y: float = size.y / 2.0
+ 	# A abertura fica ligeiramente maior que o corredor para evitar colisao nas bordas.
+ 	var opening_half: float = (corridor_width + wall_width * 2.0) / 2.0
+ 	var side_length: float = half_y - opening_half
+ 
+-	create_wall(wall_body, Vector2(0.0, -half_y), Vector2(room_size.x, wall_width))
+-	create_wall(wall_body, Vector2(0.0, half_y), Vector2(room_size.x, wall_width))
++	create_wall(wall_body, Vector2(0.0, -half_y), Vector2(size.x, wall_width))
++	create_wall(wall_body, Vector2(0.0, half_y), Vector2(size.x, wall_width))
+ 
+ 	if opening_left:
+ 		create_wall(wall_body, Vector2(-half_x, -(opening_half + side_length / 2.0)), Vector2(wall_width, side_length))
+ 		create_wall(wall_body, Vector2(-half_x, opening_half + side_length / 2.0), Vector2(wall_width, side_length))
+ 	else:
+-		create_wall(wall_body, Vector2(-half_x, 0.0), Vector2(wall_width, room_size.y))
++		create_wall(wall_body, Vector2(-half_x, 0.0), Vector2(wall_width, size.y))
+ 
+ 	if opening_right:
+ 		create_wall(wall_body, Vector2(half_x, -(opening_half + side_length / 2.0)), Vector2(wall_width, side_length))
+ 		create_wall(wall_body, Vector2(half_x, opening_half + side_length / 2.0), Vector2(wall_width, side_length))
+ 	else:
+-		create_wall(wall_body, Vector2(half_x, 0.0), Vector2(wall_width, room_size.y))
++		create_wall(wall_body, Vector2(half_x, 0.0), Vector2(wall_width, size.y))
+ 
+ 
+ func create_corridor(corridor_name: String, center: Vector2) -> void:
+@@ -244,28 +264,6 @@ func create_corridor(corridor_name: String, center: Vector2) -> void:
+ 		var wall_center := Vector2(0.0, side * (corridor_width / 2.0 + wall_width / 2.0))
+ 		create_wall(walls, wall_center, wall_size)
+ 
+-func create_structure(structure_name: String, center: Vector2) -> void:
+-	var structure := StaticBody2D.new()
+-	structure.name = structure_name
+-	structure.position = center
+-	structure.add_to_group("phase3_generated")
+-	add_child(structure)
+-
+-	var visual := Polygon2D.new()
+-	visual.name = "Visual"
+-	visual.polygon = rectangle(structure_size)
+-	visual.color = structure_color
+-	visual.z_index = 1
+-	structure.add_child(visual)
+-
+-	var collision := CollisionShape2D.new()
+-	collision.name = "Collision"
+-	var shape := RectangleShape2D.new()
+-	shape.size = structure_size
+-	collision.shape = shape
+-	structure.add_child(collision)
+-
+-
+ func create_wall(parent: Node2D, center: Vector2, size: Vector2) -> void:
+ 	var collision := CollisionShape2D.new()
+ 	collision.name = "Collision"
+@@ -669,7 +667,228 @@ func set_hangar_door_open(open: bool) -> void:
+ func _on_boss_trigger_entered(body: Node2D) -> void:
+ 	if body.name != "Player":
+ 		return
+-	start_boss()
++	enter_control_room()
++
++
++# =========================================================
++# SALA DE CONTROLO: IGUAL À DO CONFRONTO + ANIMAÇÃO DE CHEGADA
++# =========================================================
++
++# A sala tem a proporção da planta do confronto (600 x 272): mesma largura
++# das outras salas, menos alta.
++func control_room_size() -> Vector2:
++	return BossView.room_size_for(room_size.x)
++
++
++func create_control_room(center: Vector2) -> void:
++	var art := ControlRoomArt.new()
++	art.layout = self
++	art.room_size = control_room_size()
++	art.corridor_size = Vector2(corridor_length, corridor_width)
++	art.position = center
++	art.add_to_group("phase3_generated")
++	add_child(art)
++	control_room_art = art
++	if boss_done:
++		art.awake = 1.0
++		art.hangar_progress = 1.0
++
++	# A consola é sólida, como os terminais.
++	var desk: Rect2 = art.console_rect()
++	var console := Node2D.new()
++	console.name = "Consola_Controlo"
++	console.position = center + desk.get_center()
++	console.add_to_group("phase3_generated")
++	add_child(console)
++	add_solid_shape(console, Vector2.ZERO, desk.size)
++
++	# As portas da sala ganham as riscas das portas do confronto.
++	var door_visuals: Array = []
++	for door in phase3_exit_doors:
++		if String(door["body"].name) == "Porta_Entrada_Criatura":
++			door_visuals.append(door["visual"])
++	if not hangar_door.is_empty():
++		door_visuals.append(hangar_door["visual"])
++	for visual in door_visuals:
++		var bounds := Rect2(visual.polygon[0], visual.polygon[2] - visual.polygon[0])
++		visual.add_child(ControlRoomArt.make_door_stripes(bounds.size))
++
++
++# Na primeira vez, o Player e o Atlas vão até à consola e percebem o que
++# têm de fazer; só depois aparecem as instruções do confronto. Depois de
++# vista (fica na run), entrar outra vez vai direto ao confronto.
++func enter_control_room() -> void:
++	if boss_done or boss_active or control_room_intro_active or twist_stage < 3:
++		return
++	if bool(SaveManager.get_run_value("story", CONTROL_ROOM_SEEN_KEY, false)) or control_room_art == null:
++		start_boss()
++		return
++	await play_control_room_intro()
++	if is_inside_tree():
++		start_boss()
++
++
++func play_control_room_intro() -> void:
++	control_room_intro_active = true
++	SaveManager.set_manual_save_block("cutscene", true)
++	var main := get_tree().current_scene
++	var player: Node2D = main.find_child("Player", true, false)
++	var atlas: Node2D = main.find_child("Atlas", true, false)
++	var art: Node2D = control_room_art
++
++	# 1. Vão até aos lugares que têm no confronto, à frente da consola.
++	await walk_to_console(player, atlas)
++	face(player, "back")
++	face(atlas, "back")
++
++	# 2. A câmara mostra a sala toda e a consola liga-se.
++	var camera: Camera2D = player.get_node_or_null("Camera2D") if player != null else null
++	var camera_zoom := camera.zoom if camera != null else Vector2.ONE
++	if camera != null:
++		var frame := create_tween().set_parallel()
++		frame.tween_property(camera, "offset", art.global_position + CONTROL_ROOM_CAMERA_SHIFT - player.global_position, 0.8)
++		frame.tween_property(camera, "zoom", Vector2.ONE * CONTROL_ROOM_CAMERA_ZOOM, 0.8)
++	var wake := create_tween()
++	wake.tween_property(art, "awake", 1.0, 0.8)
++	create_control_room_dialogue()
++	await show_control_room_line(0)
++	await show_control_room_line(1)
++
++	# 3. O sensor da porta por onde entraram começa a aquecer.
++	var warm := create_tween()
++	warm.tween_method(func(value: float): art.heat["left"] = value, 0.0, 0.62, CONTROL_ROOM_HEAT_TIME)
++	face(player, "side", true)
++	await show_control_room_line(2)
++	face(atlas, "side", true)
++	await show_control_room_line(3)
++
++	# 4. O Atlas liga-se à consola; o Player fica a vigiar.
++	face(player, "back")
++	face(atlas, "back")
++	art.beam_from = atlas
++	await show_control_room_line(4)
++	await show_control_room_line(5)
++
++	destroy_control_room_dialogue()
++	if camera != null and is_instance_valid(camera):
++		camera.offset = Vector2.ZERO
++		camera.zoom = camera_zoom
++	SaveManager.set_run_value("story", CONTROL_ROOM_SEEN_KEY, true)
++	SaveManager.set_manual_save_block("cutscene", false)
++	if player != null and player.has_method("set_tutorial_locked"):
++		player.set_tutorial_locked(false)
++	control_room_intro_active = false
++
++
++func walk_to_console(player: Node2D, atlas: Node2D) -> void:
++	var art: Node2D = control_room_art
++	var player_target: Vector2 = art.to_global(art.player_spot())
++	var atlas_target: Vector2 = art.to_global(art.atlas_spot())
++	if player != null and player.has_method("start_scripted_move_to"):
++		player.start_scripted_move_to(player_target)
++	if atlas != null and atlas.has_method("start_scripted_move_to"):
++		atlas.start_scripted_move_to(atlas_target)
++	var waited := 0.0
++	while waited < CONTROL_ROOM_WALK_TIMEOUT:
++		var player_there: bool = player == null or player.global_position.distance_to(player_target) <= 6.0
++		var atlas_there: bool = atlas == null or atlas.global_position.distance_to(atlas_target) <= 6.0
++		if player_there and atlas_there:
++			break
++		await get_tree().physics_frame
++		if not get_tree().paused:
++			waited += get_physics_process_delta_time()
++	if atlas != null and atlas.has_method("stop_scripted_move_to"):
++		atlas.stop_scripted_move_to()
++	if player != null:
++		if player.has_method("stop_scripted_move_to"):
++			player.stop_scripted_move_to()
++		if player.has_method("set_tutorial_locked"):
++			player.set_tutorial_locked(true)
++
++
++# Vira o sprite parado de uma personagem (frente, costas ou lado).
++func face(body: Node2D, facing: String, left: bool = false) -> void:
++	if body == null:
++		return
++	var sprite := body.get_node_or_null("CharacterSprite")
++	if sprite == null or not "facing" in sprite:
++		return
++	sprite.facing = facing
++	sprite.facing_left = left
++	sprite.facing_time = 0.0
++
++
++func show_control_room_line(index: int) -> void:
++	if control_room_label == null:
++		return
++	control_room_label.text = CONTROL_ROOM_LINES[index]
++	control_room_button.text = "CONTINUAR  [E]" if index < CONTROL_ROOM_LINES.size() - 1 else "COMEÇAR  [E]"
++	await control_room_line_advanced
++
++
++# Também usado pelos testes.
++func advance_control_room_line() -> void:
++	if control_room_intro_active and control_room_layer != null:
++		control_room_line_advanced.emit()
++
++
++func _unhandled_input(event: InputEvent) -> void:
++	if Engine.is_editor_hint() or control_room_layer == null:
++		return
++	if event is InputEventKey and event.pressed and not event.echo:
++		if event.keycode in [KEY_E, KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]:
++			get_viewport().set_input_as_handled()
++			advance_control_room_line()
++
++
++# Caixa de falas em baixo: a sala continua à vista.
++func create_control_room_dialogue() -> void:
++	if is_instance_valid(interaction_prompt_label):
++		interaction_prompt_label.visible = false
++	control_room_layer = CanvasLayer.new()
++	control_room_layer.name = "ControlRoomDialogue"
++	control_room_layer.layer = 1000
++	get_tree().current_scene.add_child(control_room_layer)
++
++	var panel := PanelContainer.new()
++	panel.name = "DialoguePanel"
++	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
++	panel.offset_left = -470.0
++	panel.offset_right = 470.0
++	panel.offset_top = -190.0
++	panel.offset_bottom = -24.0
++	panel.add_theme_stylebox_override("panel", UIStyle._box(Color(UIStyle.PANEL_BG, 1.0), UIStyle.ACCENT, 2, 6, 24.0, 16.0))
++	UIStyle.apply(panel)
++	control_room_layer.add_child(panel)
++
++	var box := VBoxContainer.new()
++	box.add_theme_constant_override("separation", 12)
++	panel.add_child(box)
++
++	control_room_label = Label.new()
++	control_room_label.name = "DialogueText"
++	control_room_label.custom_minimum_size = Vector2(880.0, 80.0)
++	control_room_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
++	control_room_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
++	control_room_label.add_theme_font_size_override("font_size", 22)
++	control_room_label.add_theme_color_override("font_color", Color.WHITE)
++	box.add_child(control_room_label)
++
++	control_room_button = Button.new()
++	control_room_button.name = "ContinueButton"
++	control_room_button.custom_minimum_size = Vector2(240.0, 42.0)
++	control_room_button.size_flags_horizontal = Control.SIZE_SHRINK_END
++	control_room_button.focus_mode = Control.FOCUS_NONE
++	control_room_button.pressed.connect(advance_control_room_line)
++	box.add_child(control_room_button)
++
++
++func destroy_control_room_dialogue() -> void:
++	if control_room_layer != null and is_instance_valid(control_room_layer):
++		control_room_layer.queue_free()
++	control_room_layer = null
++	control_room_label = null
++	control_room_button = null
+ 
+ 
+ func start_boss(seed: int = 0) -> void:
+@@ -710,6 +929,11 @@ func _on_boss_finished(damaged: bool, stats: Dictionary) -> void:
+ 	get_tree().paused = false
+ 	set_hangar_door_open(true)
+ 	apply_atlas_damage_visual()
++	if control_room_art != null and is_instance_valid(control_room_art):
++		control_room_art.awake = 1.0
++		control_room_art.hangar_progress = 1.0
++		control_room_art.heat = {"left": 0.0, "right": 0.0}
++		control_room_art.beam_from = null
+ 
+ 	var main := get_tree().current_scene
+ 	if main != null and main.has_method("send_gameplay_context_event"):
+diff --git a/game/scripts/room_decor.gd b/game/scripts/room_decor.gd
+index 46e74a6..fd90fc4 100644
+--- a/game/scripts/room_decor.gd
++++ b/game/scripts/room_decor.gd
+@@ -154,7 +154,9 @@ const UNDERGROUND := {
+ 	],
+ }
+ 
+-# Phase 3: as três salas (1000 x 600), pela ordem em que aparecem.
++# Phase 3: as três salas (1000 x 600), pela ordem em que aparecem. A Sala de
++# Controlo (a segunda) não leva decoração daqui: é desenhada igual à planta do
++# confronto por control_room_art.gd.
+ const PHASE3 := [
+ 	[
+ 		["radio", Vector2(-360, -300), Vector2(130, 76), true, 0],
+@@ -165,12 +167,7 @@ const PHASE3 := [
+ 		["cables", Vector2(0, -150), Vector2(400, 60), false, 0],
+ 		["stain", Vector2(300, 180), Vector2(90, 50), false, 0],
+ 	],
+-	[
+-		["pipes", Vector2(0, 300), Vector2(220, 30), false, 0],
+-		["stripes", Vector2(-430, 0), Vector2(18, 180), false, 0],
+-		["stripes", Vector2(430, 0), Vector2(18, 180), false, 0],
+-		["vent", Vector2(0, 150), Vector2(90, 46), false, 0],
+-	],
++	[],
+ 	[
+ 		["landing", Vector2(250, 0), Vector2(480, 480), false, 0, true],
+ 		["fuel", Vector2(-350, -300), Vector2(200, 72), true, 0],
+@@ -243,13 +240,8 @@ func decorate_phase3(endgame: Node2D) -> void:
+ 	var step: float = endgame.room_size.x + endgame.corridor_length
+ 	for i in PHASE3.size():
+ 		var center: Vector2 = endgame.to_global(Vector2(step * i, 0.0))
+-		place_room(container, "Phase3_%d" % (i + 1), center, endgame.room_size, PHASE3[i], occupied)
+-	# Estruturas da Sala de Controlo passam a consolas com luzes.
+-	for structure in endgame.get_children():
+-		if String(structure.name).begins_with("Estrutura_") and structure is Node2D:
+-			var console := Props.make("server", endgame.structure_size, false, structure.get_index())
+-			console.z_index = 2
+-			structure.add_child(console)
++		var size: Vector2 = endgame.control_room_size() if i == 1 and endgame.has_method("control_room_size") else endgame.room_size
++		place_room(container, "Phase3_%d" % (i + 1), center, size, PHASE3[i], occupied)
+ 	dress_explorer_ship(endgame)
+ 
+ 
+diff --git a/game/scripts/player.gd b/game/scripts/player.gd
+index 596700f..7c27260 100644
+--- a/game/scripts/player.gd
++++ b/game/scripts/player.gd
+@@ -3,6 +3,8 @@ extends CharacterBody2D
+ 
+ const CharacterSprite := preload("res://scripts/character_sprite.gd")
+ 
++signal scripted_move_finished
++
+ @export var speed: float = 200.0
+ @export var min_x: float = -3400.0
+ @export var max_x: float = 1940.0
+@@ -13,6 +15,11 @@ const CharacterSprite := preload("res://scripts/character_sprite.gd")
+ var atlas: CharacterBody2D
+ var tutorial_locked: bool = false
+ var tutorial_target: Node2D = null
++# Caminhada por script (entrada na Phase 3, Sala de Controlo): anda sozinho
++# até ao ponto, sem teclado.
++var scripted_move_active: bool = false
++var scripted_move_target: Vector2 = Vector2.ZERO
++var scripted_last_position: Vector2 = Vector2.ZERO
+ 
+ 
+ func _ready():
+@@ -22,6 +29,10 @@ func _ready():
+ 
+ 
+ func _physics_process(_delta):
++	if scripted_move_active:
++		update_scripted_move(_delta)
++		return
++
+ 	if tutorial_locked or is_typing_in_chat():
+ 		velocity = Vector2.ZERO
+ 		move_and_slide()
+@@ -61,7 +72,7 @@ func _physics_process(_delta):
+ 
+ 
+ func _unhandled_input(event):
+-	if tutorial_locked or is_typing_in_chat():
++	if tutorial_locked or scripted_move_active or is_typing_in_chat():
+ 		return
+ 
+ 	if not event is InputEventKey:
+@@ -154,6 +165,35 @@ func set_movement_bounds(
+ 	max_y = new_max_y
+ 
+ 
++func start_scripted_move_to(target: Vector2) -> void:
++	scripted_move_target = target
++	scripted_move_active = true
++	scripted_last_position = global_position
++
++
++func stop_scripted_move_to() -> void:
++	if not scripted_move_active:
++		return
++	scripted_move_active = false
++	velocity = Vector2.ZERO
++	scripted_move_finished.emit()
++
++
++func update_scripted_move(delta: float) -> void:
++	# Se alguém pôs o Player noutro sítio (um load, um teste), a caminhada acaba.
++	if global_position.distance_to(scripted_last_position) > speed * delta * 2.0 + 40.0:
++		stop_scripted_move_to()
++		return
++	var to_target := scripted_move_target - global_position
++	if to_target.length() <= 3.0:
++		stop_scripted_move_to()
++		move_and_slide()
++		return
++	velocity = to_target.normalized() * minf(speed, to_target.length() / maxf(delta, 0.001))
++	move_and_slide()
++	scripted_last_position = global_position
++
++
+ func teleport_to(target_position: Vector2):
+ 	velocity = Vector2.ZERO
+ 	global_position = target_position
+diff --git a/game/scripts/main_core_terminal.gd b/game/scripts/main_core_terminal.gd
+index b92857b..54aaba6 100644
+--- a/game/scripts/main_core_terminal.gd
++++ b/game/scripts/main_core_terminal.gd
+@@ -27,6 +27,13 @@ const PASSWORD_WORDS: Array[String] = MainCoreClues.WORDS
+ const PASSWORD_SAVE_KEY := MainCoreClues.PASSWORD_KEY
+ const PASSWORD_SOLVED_KEY := MainCoreClues.SOLVED_KEY
+ const PHASE3_SPAWN_POSITION := Vector2(8540.0, -3803.0)
++# Entrada na Phase 3: o Player e o Atlas aparecem na abertura esquerda da
++# Ala de Comunicações e entram a andar enquanto o ecrã clareia.
++const PHASE3_ENTRY_OFFSET := Vector2(-440.0, 0.0)
++const PHASE3_ATLAS_ENTRY_OFFSET := Vector2(-478.0, -34.0)
++const PHASE3_FADE_HOLD := 0.35
++const PHASE3_FADE_TIME := 0.9
++const PHASE3_WALK_TIMEOUT := 4.0
+ 
+ 
+ func _ready():
+@@ -589,7 +596,8 @@ func teleport_to_phase3() -> void:
+ 		show_password_feedback("Palavra-passe aceite, mas o jogador não foi encontrado.")
+ 		return
+ 
+-	player_node.global_position = PHASE3_SPAWN_POSITION
++	var entry_position := PHASE3_SPAWN_POSITION + PHASE3_ENTRY_OFFSET
++	player_node.global_position = entry_position
+ 	if player_node is CharacterBody2D:
+ 		player_node.set_movement_bounds(
+ 			9000.0,
+@@ -599,12 +607,12 @@ func teleport_to_phase3() -> void:
+ 		)
+ 		player_node.velocity = Vector2.ZERO
+ 
+-	player_node.global_position = PHASE3_SPAWN_POSITION
++	player_node.global_position = entry_position
+ 
+ 	if main != null:
+ 		var atlas_node := main.get_node_or_null("Atlas")
+ 		if atlas_node is Node2D:
+-			atlas_node.global_position = PHASE3_SPAWN_POSITION + Vector2(80.0, 0.0)
++			atlas_node.global_position = PHASE3_SPAWN_POSITION + PHASE3_ATLAS_ENTRY_OFFSET
+ 		if atlas_node is CharacterBody2D:
+ 			atlas_node.velocity = Vector2.ZERO
+ 	if underground_root != null:
+@@ -623,6 +631,39 @@ func teleport_to_phase3() -> void:
+ 		SaveManager.set_run_value("story", "phase3_entered", true)
+ 		SaveManager.autosave_when_safe("phase3_entered")
+ 
++	play_phase3_entry(player_node)
++
++
++# O ecrã começa preto e clareia enquanto o Player entra a andar até ao
++# centro da sala; o Atlas segue-o como sempre. Não bloqueia o save: é curta
++# e o Player já está na Phase 3.
++func play_phase3_entry(player_node: Node) -> void:
++	var fade := CanvasLayer.new()
++	fade.name = "Phase3EntryFade"
++	fade.layer = 1100
++	var black := ColorRect.new()
++	black.color = Color.BLACK
++	black.mouse_filter = Control.MOUSE_FILTER_IGNORE
++	black.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
++	fade.add_child(black)
++	get_tree().current_scene.add_child(fade)
++
++	if player_node.has_method("start_scripted_move_to"):
++		player_node.start_scripted_move_to(PHASE3_SPAWN_POSITION)
++
++	await get_tree().create_timer(PHASE3_FADE_HOLD, false).timeout
++	var tween := fade.create_tween()
++	tween.tween_property(black, "color:a", 0.0, PHASE3_FADE_TIME)
++	await tween.finished
++	fade.queue_free()
++
++	var waited := PHASE3_FADE_HOLD + PHASE3_FADE_TIME
++	while is_instance_valid(player_node) and player_node.get("scripted_move_active") and waited < PHASE3_WALK_TIMEOUT:
++		await get_tree().physics_frame
++		waited += get_physics_process_delta_time()
++	if is_instance_valid(player_node) and player_node.has_method("stop_scripted_move_to"):
++		player_node.stop_scripted_move_to()
++
+ 
+ func register_discovery():
+ 	if (
+diff --git a/game/zz_tests/p33_tests.gd b/game/zz_tests/p33_tests.gd
+index affa1c3..3d81d12 100644
+--- a/game/zz_tests/p33_tests.gd
++++ b/game/zz_tests/p33_tests.gd
+@@ -22,6 +22,16 @@ func physics(n: int) -> void:
+ func wait_sec(s: float) -> void:
+ 	await get_tree().create_timer(s, true, false, true).timeout
+ 
++# Etapa 5: na primeira entrada na Sala de Controlo há uma animação com falas
++# antes do confronto; o teste carrega em CONTINUAR até o confronto abrir.
++func pass_control_room(layout: Node, max_frames: int = 900) -> void:
++	for i in max_frames:
++		if layout.boss_ui != null:
++			return
++		if layout.control_room_layer != null:
++			layout.advance_control_room_line()
++		await get_tree().process_frame
++
+ func scene() -> Node: return get_tree().current_scene
+ 
+ func open_main() -> void:
+@@ -163,9 +173,7 @@ func integration() -> void:
+ 	var atlas: Node2D = scene().get_node("Atlas")
+ 	player.global_position = SPAWN + Vector2(1220.0, 0.0)
+ 	atlas.global_position = SPAWN + Vector2(1150.0, 0.0)
+-	for i in 300:
+-		if layout.boss_ui != null: break
+-		await get_tree().process_frame
++	await pass_control_room(layout)
+ 	var boss = layout.boss_ui
+ 	# G1: o confronto abre com as instruções; o teste carrega em COMEÇAR.
+ 	if boss != null and boss.briefing_open: boss.close_briefing()
+@@ -209,9 +217,7 @@ func integration() -> void:
+ 	atlas = scene().get_node("Atlas")
+ 	player.global_position = SPAWN + Vector2(1220.0, 0.0)
+ 	atlas.global_position = SPAWN + Vector2(1150.0, 0.0)
+-	for i in 300:
+-		if layout.boss_ui != null: break
+-		await get_tree().process_frame
++	await pass_control_room(layout)
+ 	boss = layout.boss_ui
+ 	# G1: o confronto abre com as instruções; o teste carrega em COMEÇAR.
+ 	if boss != null and boss.briefing_open: boss.close_briefing()
+diff --git a/game/zz_tests/p38_tests.gd b/game/zz_tests/p38_tests.gd
+index 85e3d73..6d8c7ac 100644
+--- a/game/zz_tests/p38_tests.gd
++++ b/game/zz_tests/p38_tests.gd
+@@ -48,6 +48,16 @@ func finish_dialogue(layout: Node) -> void:
+ 		layout._on_twist_dialogue_button_pressed()
+ 		await frames(2)
+ 
++# Etapa 5: na primeira entrada na Sala de Controlo há uma animação com falas
++# antes do confronto; o teste carrega em CONTINUAR até o confronto abrir.
++func pass_control_room(layout: Node, max_frames: int = 900) -> void:
++	for i in max_frames:
++		if layout.boss_ui != null:
++			return
++		if layout.control_room_layer != null:
++			layout.advance_control_room_line()
++		await get_tree().process_frame
++
+ func wait_until(cond: Callable, max_frames: int = 900) -> bool:
+ 	for i in max_frames:
+ 		if cond.call():
+@@ -113,7 +123,7 @@ func run() -> void:
+ 	# --- Sala 2: confronto; o jogador não fecha portas → Atlas danificado ---
+ 	player.global_position = SPAWN + ROOM2
+ 	atlas.global_position = SPAWN + ROOM2 + Vector2(-70.0, 0.0)
+-	await wait_until(func(): return layout.boss_ui != null, 300)
++	await pass_control_room(layout)
+ 	var boss = layout.boss_ui
+ 	# G1: o confronto abre com as instruções; o teste carrega em COMEÇAR.
+ 	if boss != null and boss.briefing_open: boss.close_briefing()
+diff --git a/game/zz_tests/g5_tests.gd b/game/zz_tests/g5_tests.gd
+index 7d760b5..8e4e9d6 100644
+--- a/game/zz_tests/g5_tests.gd
++++ b/game/zz_tests/g5_tests.gd
+@@ -116,10 +116,11 @@ func _ready() -> void:
+ 		if per_room.get(room_id, 0) < 4:
+ 			rooms_ok = false
+ 		info += "%s=%d " % [room_id, per_room.get(room_id, 0)]
+-	for i in 3:
++	# A Sala de Controlo (Phase3_2) é desenhada pela ControlRoomArt (G5.13).
++	for i in [0, 2]:
+ 		if per_room.get("Phase3_%d" % (i + 1), 0) < 4: rooms_ok = false
+ 		info += "Phase3_%d=%d " % [i + 1, per_room.get("Phase3_%d" % (i + 1), 0)]
+-	check("G5.9", "as 11 salas da instalação e as 3 da Phase 3 têm decoração", rooms_ok, info)
++	check("G5.9", "as 11 salas da instalação e as salas 1 e 3 da Phase 3 têm decoração", rooms_ok, info)
+ 	var room_skips := []
+ 	for s in decor.skipped:
+ 		if s["room"] != "Surface": room_skips.append("%s/%s<-%s" % [s["room"], s["kind"], s["because"]])
+@@ -165,11 +166,11 @@ func _ready() -> void:
+ 							blocked_paths.append("%s %s" % [room_id, corridor.name])
+ 	check("G5.12", "decoração não bloqueia o caminho entre as entradas e o centro de cada sala", blocked_paths.is_empty(), str(blocked_paths))
+ 
+-	# Sala de Controlo: estruturas viram consolas; Hangar: nave do viajante.
+-	var consoles := 0
+-	for child in endgame.get_children():
+-		if String(child.name).begins_with("Estrutura_") and child.get_node_or_null("Decor_server") != null: consoles += 1
+-	check("G5.13", "as 4 estruturas da Sala de Controlo passam a consolas", consoles == 4, str(consoles))
++	# Sala de Controlo: desde a Etapa 5 é igual à planta do confronto (consola
++	# sólida, sem as 4 estruturas); Hangar: nave do viajante.
++	var structures := endgame.get_children().filter(func(c): return String(c.name).begins_with("Estrutura_"))
++	var console_ok: bool = endgame.get_node_or_null("ControlRoomArt") != null and endgame.get_node_or_null("Consola_Controlo/Solid") != null
++	check("G5.13", "a Sala de Controlo tem a consola do confronto e já não tem as 4 estruturas", console_ok and structures.is_empty(), str(structures.size()))
+ 	var explorer: Node2D = endgame.get_node("Nave_Explorador")
+ 	check("G5.14", "nave do viajante desenhada e sólida (placeholder escondido)",
+ 		explorer.get_node_or_null("ShipArt") != null and explorer.get_node_or_null("Solid") != null and not explorer.get_node("PlaceholderVisual").visible
+diff --git a/game/zz_tests/s5_tests.gd b/game/zz_tests/s5_tests.gd
+new file mode 100644
+index 0000000..58ac0d5
+--- /dev/null
++++ b/game/zz_tests/s5_tests.gd
+@@ -0,0 +1,177 @@
++extends Node
++# Etapa 5: entrada na Phase 3 a andar e Sala de Controlo igual à planta do
++# confronto, com a animação de chegada antes das instruções.
++# Precisa do backend de teste: GROQ_API_KEY=dummy python -m zz_phase3.fake_server
++const MAIN := "res://scenes/main.tscn"
++const SPAWN := Vector2(8540.0, -3803.0)
++const BossView := preload("res://scripts/phase3_boss_view.gd")
++var results: Array = []
++var SM
++
++func check(id: String, desc: String, cond: bool, info: String = "") -> void:
++	results.append(cond)
++	print(("PASS " if cond else "FAIL ") + id + " " + desc + ("  [" + info + "]" if info != "" else ""))
++
++func frames(n: int) -> void:
++	for i in n: await get_tree().process_frame
++
++func wait_until(cond: Callable, seconds: float) -> bool:
++	var t0 := Time.get_ticks_msec()
++	while not cond.call() and Time.get_ticks_msec() - t0 < seconds * 1000.0:
++		await get_tree().process_frame
++	return cond.call()
++
++func scene() -> Node: return get_tree().current_scene
++
++func near(a: Vector2, b: Vector2, tolerance: float = 2.0) -> bool:
++	return a.distance_to(b) <= tolerance
++
++func press(keycode: int) -> void:
++	var event := InputEventKey.new()
++	event.keycode = keycode
++	event.pressed = true
++	get_viewport().push_input(event)
++	var up := InputEventKey.new()
++	up.keycode = keycode
++	up.pressed = false
++	get_viewport().push_input(up)
++
++func _ready() -> void:
++	SM = get_node("/root/SaveManager")
++	await frames(3)
++	await SM.start_new_run()
++	for key in ["intro_completed", "surface_recovery_complete", "protocol_door_opened",
++			"facility_security_unlocked", "hide_initial_complete", "main_core_access_unlocked"]:
++		SM.set_run_value("story", key, true)
++	for id in ["controls", "encounter", "run", "hide", "hack", "fight"]:
++		SM.set_run_value("custom", "tutorial_" + id, true)
++	SM.set_run_value("world", "main_core_password_solved", true)
++	SM.set_run_value("world", "phase3_twist_stage", 3)
++	get_tree().change_scene_to_file(MAIN)
++	await frames(3)
++	while scene() == null or not scene().is_node_ready():
++		await get_tree().process_frame
++	await frames(15)
++	var player: CharacterBody2D = scene().get_node("Player")
++	var atlas: CharacterBody2D = scene().get_node("Atlas")
++	var layout: Node2D = scene().get_node("Endgame")
++	var core: Node = scene().get_node("UndergroundRoot/MainCoreTerminal")
++
++	# --- Entrada na Phase 3 ---
++	core.teleport_to_phase3()
++	var fade: CanvasLayer = scene().get_node_or_null("Phase3EntryFade")
++	var black: ColorRect = fade.get_child(0) if fade != null else null
++	check("S5.1", "entrada: ecrã preto e o Player na abertura esquerda da sala 1, a andar sozinho",
++		black != null and black.color.a > 0.99 and near(player.global_position, SPAWN + Vector2(-440.0, 0.0)) and player.scripted_move_active,
++		str(player.global_position - SPAWN))
++	await get_tree().create_timer(0.6).timeout
++	check("S5.2", "entrada: durante a caminhada pode-se gravar e o jogo não está pausado", SM.can_manual_save() and not get_tree().paused, SM.get_manual_save_block_reason())
++	var cleared: bool = await wait_until(func(): return scene().get_node_or_null("Phase3EntryFade") == null, 3.0)
++	check("S5.3", "entrada: o ecrã clareia e o preto sai", cleared)
++	var arrived: bool = await wait_until(func(): return not player.scripted_move_active, 4.0)
++	check("S5.4", "entrada: o Player chega ao centro da sala e volta a ser controlado",
++		arrived and near(player.global_position, SPAWN, 6.0), str(player.global_position - SPAWN))
++	check("S5.5", "entrada: o Atlas entrou atrás do Player", atlas.global_position.x > SPAWN.x - 300.0 and atlas.global_position.x < player.global_position.x,
++		str(atlas.global_position - SPAWN))
++	var saved: bool = await wait_until(func(): return SM.active_run_data.get("last_checkpoint", "") == "phase3_entered", 5.0)
++	check("S5.6", "entrada: autosave phase3_entered como antes", saved)
++	# Um load ou um teste que mude o Player de sítio acaba a caminhada.
++	player.start_scripted_move_to(SPAWN + Vector2(200.0, 0.0))
++	await get_tree().physics_frame
++	player.global_position = SPAWN + Vector2(0.0, 120.0)
++	await get_tree().physics_frame
++	await get_tree().physics_frame
++	check("S5.7", "caminhada por script acaba se o Player for posto noutro sítio", not player.scripted_move_active)
++
++	# --- Sala de Controlo igual à planta do confronto ---
++	var room: Node2D = layout.get_node("Sala_2_Criatura")
++	var room_size: Vector2 = layout.control_room_size()
++	var view_ratio := BossView.ROOM.size.y / BossView.ROOM.size.x
++	check("S5.8", "Sala de Controlo com a proporção da planta (600 x 272)",
++		absf(room_size.y / room_size.x - view_ratio) < 0.001 and room_size.x == layout.room_size.x, str(room_size))
++	var opening: float = layout.corridor_width + layout.wall_width * 2.0
++	check("S5.9", "as portas têm a mesma proporção na sala e no confronto",
++		absf(opening / room_size.y - BossView.DOOR_HEIGHT / BossView.ROOM.size.y) < 0.01,
++		"%.3f vs %.3f" % [opening / room_size.y, BossView.DOOR_HEIGHT / BossView.ROOM.size.y])
++	var structures := layout.get_children().filter(func(c): return String(c.name).begins_with("Estrutura_"))
++	var art: Node2D = layout.get_node("ControlRoomArt")
++	var console: Node2D = layout.get_node("Consola_Controlo")
++	var expected_console := room.position + BossView.to_room(BossView.CONSOLE.get_center(), room_size)
++	var shape: RectangleShape2D = console.get_node("Solid").get_child(0).shape
++	check("S5.10", "sem as 4 estruturas; consola sólida no mesmo sítio e tamanho da planta",
++		structures.is_empty() and near(console.position, expected_console) and shape.size.is_equal_approx(BossView.CONSOLE.size * room_size.x / BossView.ROOM.size.x),
++		str(console.position - room.position) + " " + str(shape.size))
++	var thermo_left: Rect2 = art.rect(BossView.thermo_rect("left"))
++	var thermo_right: Rect2 = art.rect(BossView.thermo_rect("right"))
++	check("S5.11", "um termómetro junto a cada porta, dentro da sala",
++		thermo_left.position.x < -room_size.x / 2.0 + 80.0 and thermo_left.position.x > -room_size.x / 2.0
++		and thermo_right.end.x > room_size.x / 2.0 - 80.0 and thermo_right.end.x < room_size.x / 2.0,
++		str(thermo_left) + " " + str(thermo_right))
++	var doors_striped := 0
++	for door in layout.phase3_exit_doors:
++		if door["visual"].get_node_or_null("HazardStripes") != null: doors_striped += 1
++	if layout.hangar_door["visual"].get_node_or_null("HazardStripes") != null: doors_striped += 1
++	check("S5.12", "as duas portas da sala têm as riscas das portas do confronto", doors_striped == 2, str(doors_striped))
++
++	# --- Chegada à Sala de Controlo ---
++	player.global_position = SPAWN + room.position + Vector2(-200.0, 0.0)
++	atlas.global_position = SPAWN + room.position + Vector2(-300.0, 0.0)
++	var started: bool = await wait_until(func(): return layout.control_room_intro_active, 3.0)
++	check("S5.13", "ao entrar começa a animação, antes das instruções; sem save manual e sem pausa",
++		started and layout.boss_ui == null and not SM.can_manual_save() and not get_tree().paused, SM.get_manual_save_block_reason())
++	var at_console: bool = await wait_until(func(): return layout.control_room_layer != null, 5.0)
++	var player_spot: Vector2 = art.to_global(art.player_spot())
++	var atlas_spot: Vector2 = art.to_global(art.atlas_spot())
++	check("S5.14", "o Player e o Atlas vão para os lugares que têm no confronto, à frente da consola",
++		at_console and near(player.global_position, player_spot, 8.0) and near(atlas.global_position, atlas_spot, 8.0)
++		and near(BossView.to_room(BossView.PLAYER_FEET, room_size), art.player_spot() + Vector2(0.0, 16.0)),
++		str(player.global_position - player_spot) + " " + str(atlas.global_position - atlas_spot))
++	await get_tree().create_timer(0.9).timeout
++	check("S5.15", "a consola liga-se e aparece a primeira fala", art.awake >= 1.0 and layout.control_room_label.text == layout.CONTROL_ROOM_LINES[0])
++	press(KEY_E)
++	await frames(3)
++	check("S5.16", "[E] passa à fala seguinte", layout.control_room_label.text == layout.CONTROL_ROOM_LINES[1])
++	layout.advance_control_room_line()
++	await frames(3)
++	await get_tree().create_timer(2.7).timeout
++	check("S5.17", "na fala do sensor, a porta da esquerda aquece (termómetro e corredor)",
++		layout.control_room_label.text == layout.CONTROL_ROOM_LINES[2] and art.heat["left"] > 0.5 and art.temperature("left") >= 28.0,
++		"%.1f °C" % art.temperature("left"))
++	var lines_seen := 3
++	while layout.control_room_layer != null and lines_seen < 10:
++		layout.advance_control_room_line()
++		lines_seen += 1
++		await frames(3)
++	await wait_until(func(): return layout.boss_ui != null, 3.0)
++	var boss = layout.boss_ui
++	check("S5.18", "depois da última fala abrem as instruções do confronto (G1)",
++		boss != null and boss.briefing_open and layout.control_room_layer == null and lines_seen == layout.CONTROL_ROOM_LINES.size() + 1)
++	check("S5.19", "a animação fica marcada como vista na run e só o bloqueio do confronto fica ativo",
++		bool(SM.get_run_value("story", "phase3_control_room_seen", false)) and SM.get_manual_save_block_reason() != "" and not SM.manual_save_blocks.has("cutscene"),
++		str(SM.manual_save_blocks.keys()))
++
++	# Fim do confronto: o anel do Hangar fica cheio.
++	boss.close_briefing()
++	boss.set_process(false)
++	var t := 0.0
++	while boss.running and t < 61.0:
++		boss.step(0.1)
++		t += 0.1
++	await wait_until(func(): return bool(layout.boss_done), 5.0)
++	check("S5.20", "depois do confronto o anel do Hangar fica cheio e o calor desaparece",
++		art.hangar_progress >= 1.0 and art.heat["left"] == 0.0 and not get_tree().paused)
++
++	# Já vista: entrar outra vez vai direto ao confronto.
++	layout.boss_done = false
++	layout.enter_control_room()
++	await wait_until(func(): return layout.boss_ui != null, 3.0)
++	check("S5.21", "já vista: entrar outra vez vai direto às instruções, sem falas",
++		layout.boss_ui != null and layout.control_room_layer == null and not layout.control_room_intro_active)
++	if layout.boss_ui != null:
++		layout.boss_ui.queue_free()
++		layout.boss_ui = null
++	get_tree().paused = false
++
++	var passed := results.filter(func(r): return r).size()
++	print("RESULTADO S5: %d / %d PASS" % [passed, results.size()])
++	get_tree().quit()
+diff --git a/game/zz_tests/s5_runner.gd b/game/zz_tests/s5_runner.gd
+new file mode 100644
+index 0000000..51ca5dd
+--- /dev/null
++++ b/game/zz_tests/s5_runner.gd
+@@ -0,0 +1,5 @@
++extends Node
++func _ready():
++	var t = load("res://zz_tests/s5_tests.gd").new()
++	t.name = "S5Tests"
++	get_tree().root.add_child.call_deferred(t)
+diff --git a/game/zz_tests/s5_runner.tscn b/game/zz_tests/s5_runner.tscn
+new file mode 100644
+index 0000000..664e51b
+--- /dev/null
++++ b/game/zz_tests/s5_runner.tscn
+@@ -0,0 +1,4 @@
++[gd_scene format=3]
++[ext_resource type="Script" path="res://zz_tests/s5_runner.gd" id="1"]
++[node name="R" type="Node"]
++script = ExtResource("1")

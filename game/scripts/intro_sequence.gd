@@ -3,6 +3,10 @@ extends CanvasLayer
 
 const TYPE_SPEED := 0.035
 const TEXT_PAUSE := 1.8
+const ShipArt := preload("res://scripts/ship_art.gd")
+const SHIP_LINE := 2
+const SHIP_SIZE := Vector2(260.0, 100.0)
+const SHIP_SPEED := 75.0
 const PLAYER_SIZE := Vector2(28, 28)
 const PANEL_SIZE := Vector2(48, 58)
 const TUTORIAL_SPEED := 240.0
@@ -43,6 +47,12 @@ var stabilization_status: Label
 var stabilization_q_hint: Label
 var minigame_overlay: ColorRect
 
+# SKIP CUTSCENE: com o pedido ativo, as esperas, as animações e o texto da
+# cutscene terminam logo, por isso o estado final é o mesmo da cutscene vista
+# até ao fim e o jogo segue para o tutorial de movimento.
+var skip_requested := false
+var skip_button: Button
+
 
 func play() -> void:
 	layer = 100
@@ -53,11 +63,13 @@ func play() -> void:
 		player.set_tutorial_locked(true)
 
 	_create_screen()
+	_create_skip_button()
 
-	await get_tree().create_timer(1.0).timeout
+	await _wait(1.0)
 	await _play_scene_one()
 	await _play_scene_two()
 	await _play_wake_up()
+	_finish_skip()
 	await _play_movement_tutorial()
 	await _play_panel_tutorial()
 	var form = preload(
@@ -163,7 +175,7 @@ func _fade_screen_content(duration: float) -> void:
 		has_content = true
 
 	if has_content:
-		await tween.finished
+		await _await_tween(tween)
 
 
 func _clear_screen_content() -> void:
@@ -212,7 +224,7 @@ func _play_scene_one() -> void:
 		Color(0.005, 0.008, 0.025),
 		2.0
 	)
-	await background_tween.finished
+	await _await_tween(background_tween)
 
 	for star in stars:
 		var star_tween := create_tween()
@@ -233,9 +245,9 @@ func _play_scene_one() -> void:
 		1.0,
 		2.0
 	)
-	await title_tween.finished
+	await _await_tween(title_tween)
 
-	await get_tree().create_timer(1.0).timeout
+	await _wait(1.0)
 
 	var narrative := [
 		"ANO 2046. A Terra enfrenta uma crise de recursos.",
@@ -246,10 +258,21 @@ func _play_scene_one() -> void:
 		"Mas algo começa a interferir na navegação."
 	]
 
-	for line in narrative:
+	var ship: Node2D = null
+
+	for index in narrative.size():
+		var line: String = narrative[index]
 		title_label.text = ""
+
+		# A Nave 47 entra quando a missão começa e atravessa as estrelas; na
+		# última frase, a interferência faz os motores falhar.
+		if index == SHIP_LINE:
+			ship = _create_flying_ship()
+		elif index == narrative.size() - 1 and is_instance_valid(ship):
+			ship.interference = 1.0
+
 		await _type_text(dialogue_label, line)
-		await get_tree().create_timer(TEXT_PAUSE).timeout
+		await _wait(TEXT_PAUSE)
 
 	await _fade_screen_content(0.5)
 	await _clear_screen_content()
@@ -289,7 +312,7 @@ func _play_scene_two() -> void:
 	await get_tree().process_frame
 	map_visual.queue_redraw()
 
-	await get_tree().create_timer(2.0).timeout
+	await _wait(2.0)
 
 	var atlas_lines := [
 		"Atlas: A rota registada não corresponde à trajetória atual.",
@@ -303,7 +326,7 @@ func _play_scene_two() -> void:
 
 	for line in atlas_lines:
 		await _type_text(dialogue_label, line)
-		await get_tree().create_timer(TEXT_PAUSE).timeout
+		await _wait(TEXT_PAUSE)
 
 	await _fade_screen_content(0.8)
 	await _clear_screen_content()
@@ -321,7 +344,7 @@ func _play_wake_up() -> void:
 	if player != null and player.has_method("set_tutorial_locked"):
 		player.set_tutorial_locked(true)
 
-	await get_tree().create_timer(1.5).timeout
+	await _wait(1.5)
 
 	dialogue_label.text = "Acorde."
 	dialogue_label.modulate.a = 0.0
@@ -333,9 +356,9 @@ func _play_wake_up() -> void:
 		1.0,
 		1.0
 	)
-	await wake_tween.finished
+	await _await_tween(wake_tween)
 
-	await get_tree().create_timer(1.5).timeout
+	await _wait(1.5)
 
 	title_label.text = "SISTEMA DE EMERGÊNCIA"
 	title_label.modulate.a = 0.0
@@ -349,9 +372,9 @@ func _play_wake_up() -> void:
 		1.0,
 		1.0
 	)
-	await emergency_tween.finished
+	await _await_tween(emergency_tween)
 
-	await get_tree().create_timer(2.0).timeout
+	await _wait(2.0)
 
 	await _fade_screen_content(0.6)
 	await _clear_screen_content()
@@ -596,6 +619,12 @@ func _move_tutorial_player() -> void:
 	if Input.is_key_pressed(KEY_D):
 		direction.x += 1.0
 
+	# O E é lido antes de olhar para o movimento: com o jogador parado ao
+	# lado do painel também tem de funcionar.
+	if tutorial_interaction_enabled and Input.is_key_pressed(KEY_E):
+		if _is_panel_in_range():
+			_activate_tutorial_panel()
+
 	if direction == Vector2.ZERO:
 		return
 
@@ -617,10 +646,6 @@ func _move_tutorial_player() -> void:
 	)
 
 	_update_tutorial_player_position()
-
-	if tutorial_interaction_enabled and Input.is_key_pressed(KEY_E):
-		if _is_panel_in_range():
-			_activate_tutorial_panel()
 
 
 func _update_tutorial_player_position() -> void:
@@ -886,8 +911,93 @@ func _type_text(label: Label, message: String) -> void:
 	label.text = ""
 
 	for i in range(message.length()):
+		if skip_requested:
+			label.text = message
+			return
+
 		label.text += message[i]
 		await get_tree().create_timer(TYPE_SPEED).timeout
+
+
+func _create_skip_button() -> void:
+	# Fica fora do screen_root para não ser apagado entre cenas.
+	skip_button = Button.new()
+	skip_button.name = "SkipCutsceneButton"
+	skip_button.text = "SKIP CUTSCENE  ▶▶"
+	skip_button.focus_mode = Control.FOCUS_NONE
+	skip_button.anchor_left = 1.0
+	skip_button.anchor_right = 1.0
+	skip_button.anchor_top = 1.0
+	skip_button.anchor_bottom = 1.0
+	skip_button.offset_left = -230.0
+	skip_button.offset_right = -24.0
+	skip_button.offset_top = -64.0
+	skip_button.offset_bottom = -22.0
+	skip_button.add_theme_font_size_override("font_size", 15)
+	skip_button.add_theme_color_override("font_color", Color(0.65, 0.95, 1.0))
+	skip_button.add_theme_color_override("font_hover_color", Color.WHITE)
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.025, 0.07, 0.11, 0.85)
+	normal.border_color = Color(0.2, 0.8, 1.0, 0.8)
+	normal.set_border_width_all(2)
+	normal.set_corner_radius_all(8)
+	var hover: StyleBoxFlat = normal.duplicate()
+	hover.bg_color = Color(0.06, 0.2, 0.28, 0.95)
+	hover.border_color = Color(0.5, 0.95, 1.0)
+	skip_button.add_theme_stylebox_override("normal", normal)
+	skip_button.add_theme_stylebox_override("hover", hover)
+	skip_button.add_theme_stylebox_override("pressed", hover)
+	skip_button.add_theme_stylebox_override("disabled", normal)
+	skip_button.pressed.connect(request_skip)
+	add_child(skip_button)
+
+
+func request_skip() -> void:
+	skip_requested = true
+
+	if is_instance_valid(skip_button):
+		skip_button.disabled = true
+
+
+# Chamado quando a cutscene acaba, vista ou saltada: daqui para a frente as
+# esperas voltam ao normal.
+func _finish_skip() -> void:
+	skip_requested = false
+
+	if is_instance_valid(skip_button):
+		skip_button.queue_free()
+
+	skip_button = null
+
+
+func _wait(seconds: float) -> void:
+	if skip_requested:
+		return
+
+	var timer := get_tree().create_timer(seconds)
+
+	while timer.time_left > 0.0 and not skip_requested and is_inside_tree():
+		await get_tree().process_frame
+
+
+func _await_tween(tween: Tween) -> void:
+	while tween.is_valid() and tween.is_running() and not skip_requested and is_inside_tree():
+		await get_tree().process_frame
+
+	# Ao saltar, a animação salta para o fim, com os mesmos valores finais.
+	if skip_requested and tween.is_valid() and tween.is_running():
+		tween.custom_step(1000.0)
+
+
+func _create_flying_ship() -> Node2D:
+	var viewport_size := get_viewport().get_visible_rect().size
+	var ship := ShipArt.make("nave47_voo", SHIP_SIZE)
+	ship.name = "FlyingShip"
+	ship.position = Vector2(-SHIP_SIZE.x, viewport_size.y * 0.4)
+	ship.drift = Vector2(SHIP_SPEED, -4.0)
+	screen_root.add_child(ship)
+	return ship
 
 
 func _create_stars() -> Array[ColorRect]:

@@ -820,18 +820,6 @@ z_index = -7
 color = Color(0.18, 0.22, 0.25, 1)
 polygon = PackedVector2Array(-350, -200, 350, -200, 350, 200, -350, 200)
 
-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Entrance" unique_id=1112194450]
-offset_left = -350.0
-offset_top = -30.0
-offset_right = 350.0
-offset_bottom = 30.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-text = "ENTRADA"
-horizontal_alignment = 1
-vertical_alignment = 1
-metadata/_edit_use_anchors_ = true
-
 [node name="Hall" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=980830815]
 position = Vector2(0, -900)
 
@@ -844,18 +832,6 @@ polygon = PackedVector2Array(-516, -316, 516, -316, 516, 316, -516, 316)
 z_index = -7
 color = Color(0.22, 0.27, 0.31, 1)
 polygon = PackedVector2Array(-500, -300, 500, -300, 500, 300, -500, 300)
-
-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Hall" unique_id=1871360395]
-offset_left = -500.0
-offset_top = -30.0
-offset_right = 500.0
-offset_bottom = 30.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-text = "HALL DE ENTRADA"
-horizontal_alignment = 1
-vertical_alignment = 1
-metadata/_edit_use_anchors_ = true
 
 [node name="Storage" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=485240610]
 position = Vector2(-1100, -1650)
@@ -870,18 +846,6 @@ z_index = -7
 color = Color(0.18, 0.22, 0.25, 1)
 polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
 
-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Storage" unique_id=1129669123]
-offset_left = -350.0
-offset_top = -30.0
-offset_right = 350.0
-offset_bottom = 30.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-text = "ARMAZÉM / PEÇAS"
-horizontal_alignment = 1
-vertical_alignment = 1
-metadata/_edit_use_anchors_ = true
-
 [node name="TechnicalRoom" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1178901522]
 position = Vector2(1100, -1650)
 
@@ -894,18 +858,6 @@ polygon = PackedVector2Array(-416, -291, 416, -291, 416, 291, -416, 291)
 z_index = -7
 color = Color(0.22, 0.27, 0.31, 1)
 polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
-
-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/TechnicalRoom" unique_id=1956020453]
-offset_left = -400.0
-offset_top = -30.0
-offset_right = 400.0
-offset_bottom = 30.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-text = "SALA TÉCNICA / ENERGIA"
-horizontal_alignment = 1
-vertical_alignment = 1
-metadata/_edit_use_anchors_ = true
 
 [node name="SupportRoom" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=204620601]
 position = Vector2(-2200, -1650)
@@ -920,18 +872,6 @@ z_index = -7
 color = Color(0.18, 0.22, 0.25, 1)
 polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
 
-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/SupportRoom" unique_id=826562567]
-offset_left = -350.0
-offset_top = -30.0
-offset_right = 350.0
-offset_bottom = 30.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-text = "SALA DE SUPORTE"
-horizontal_alignment = 1
-vertical_alignment = 1
-metadata/_edit_use_anchors_ = true
-
 [node name="Security" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=586158869]
 position = Vector2(2200, -1650)
 
@@ -944,18 +884,6 @@ polygon = PackedVector2Array(-366, -266, 366, -266, 366, 266, -366, 266)
 z_index = -7
 color = Color(0.18, 0.22, 0.25, 1)
 polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
-
-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Security" unique_id=1982701391]
-offset_left = -350.0
-offset_top = -30.0
-offset_right = 350.0
-offset_bottom = 30.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-text = "SEGURANÇA / CONTENÇÃO"
-horizontal_alignment = 1
-vertical_alignment = 1
-metadata/_edit_use_anchors_ = true
 
 [node name="Archives" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=816182896]
 position = Vector2(-1100, -2700)
@@ -970,18 +898,6 @@ z_index = -7
 color = Color(0.22, 0.27, 0.31, 1)
 polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
 
-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Archives" unique_id=634376396]
-offset_left = -400.0
-offset_top = -30.0
-offset_right = 400.0
-offset_bottom = 30.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-text = "ARQUIVOS / REGISTOS"
-horizontal_alignment = 1
-vertical_alignment = 1
-metadata/_edit_use_anchors_ = true
-
 [node name="Laboratory" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=727011191]
 position = Vector2(1100, -2700)
 
@@ -994,18 +910,6 @@ polygon = PackedVector2Array(-416, -291, 416, -291, 416, 291, -416, 291)
 z_index = -7
 color = Color(0.22, 0.27, 0.31, 1)
 polygon = PackedVector2Array(-400, -275, 400, -275, 400, 275, -400, 275)
-
-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Laboratory" unique_id=1250321027]
-offset_left = -400.0
-offset_top = -30.0
-offset_right = 400.0
-offset_bottom = 30.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-text = "LABORATÓRIO / ANÁLISE"
-horizontal_alignment = 1
-vertical_alignment = 1
-metadata/_edit_use_anchors_ = true
 
 [node name="Maintenance" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=2050801817]
 position = Vector2(-2200, -2700)
@@ -1020,18 +924,6 @@ z_index = -7
 color = Color(0.18, 0.22, 0.25, 1)
 polygon = PackedVector2Array(-350, -250, 350, -250, 350, 250, -350, 250)
 
-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Maintenance" unique_id=2146710604]
-offset_left = -350.0
-offset_top = -30.0
-offset_right = 350.0
-offset_bottom = 30.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-text = "OFICINA / MANUTENÇÃO"
-horizontal_alignment = 1
-vertical_alignment = 1
-metadata/_edit_use_anchors_ = true
-
 [node name="Sanctuary" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=291775203]
 position = Vector2(-2200, -3800)
 
@@ -1045,18 +937,6 @@ z_index = -7
 color = Color(0.22, 0.27, 0.31, 1)
 polygon = PackedVector2Array(-550, -325, 550, -325, 550, 325, -550, 325)
 
-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/Sanctuary" unique_id=2047618888]
-offset_left = -550.0
-offset_top = -30.0
-offset_right = 550.0
-offset_bottom = 30.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-text = "SANTUÁRIO / ESCULTURAS"
-horizontal_alignment = 1
-vertical_alignment = 1
-metadata/_edit_use_anchors_ = true
-
 [node name="MainCore" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=533092038]
 position = Vector2(2200, -3800)
 
@@ -1069,18 +949,6 @@ polygon = PackedVector2Array(-566, -341, 566, -341, 566, 341, -566, 341)
 z_index = -7
 color = Color(0.22, 0.27, 0.31, 1)
 polygon = PackedVector2Array(-550, -325, 550, -325, 550, 325, -550, 325)
-
-[node name="RoomName" type="Label" parent="UndergroundRoot/GeneratedLayout/MainCore" unique_id=1991719042]
-offset_left = -550.0
-offset_top = -30.0
-offset_right = 550.0
-offset_bottom = 30.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-text = "NÚCLEO PRINCIPAL"
-horizontal_alignment = 1
-vertical_alignment = 1
-metadata/_edit_use_anchors_ = true
 
 [node name="Corridor_Entrance_Hall" type="Node2D" parent="UndergroundRoot/GeneratedLayout" unique_id=1256491647]
 
@@ -2468,5 +2336,9 @@ script = ExtResource("26_2wyq8")
 [node name="Endgame" type="Node2D" parent="." unique_id=1794400448]
 position = Vector2(8540, -3803)
 script = ExtResource("30_fv21b")
+structure_size = Vector2(150, 200)
+structure_offset_x = 250.0
+structure_offset_y = 150.0
+structure_color = Color(0.35, 0.4, 0.44, 1)
 
 [node name="Phase3Spawn" type="Marker2D" parent="Endgame" unique_id=1465528010]

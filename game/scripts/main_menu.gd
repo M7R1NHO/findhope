@@ -1,6 +1,7 @@
 extends Control
 
 const UIStyle := preload("res://scripts/ui_style.gd")
+const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
 
 
 @export_file("*.tscn") var game_scene_path: String
@@ -36,6 +37,8 @@ func create_menu():
 	)
 	add_child(background)
 	UIStyle.apply(background)
+	# Estrelas, planeta e a Nave 47 por trás dos botões.
+	background.add_child(MenuBackdrop.new())
 
 	var center = CenterContainer.new()
 	center.set_anchors_and_offsets_preset(
@@ -50,9 +53,12 @@ func create_menu():
 	)
 	root_container.add_theme_constant_override(
 		"separation",
-		16
+		8
 	)
 	center.add_child(root_container)
+	# Caixa semitransparente para os botões se lerem por cima das estrelas.
+	var frame := UIStyle.frame(root_container)
+	frame.add_theme_stylebox_override("panel", UIStyle._box(Color(UIStyle.PANEL_BG, 0.82), UIStyle.PANEL_BORDER, 1, 8, 30.0, 20.0))
 
 	var title = Label.new()
 	title.text = "FIND HOPE"
@@ -61,9 +67,12 @@ func create_menu():
 	)
 	title.add_theme_font_size_override(
 		"font_size",
-		44
+		52
 	)
 	UIStyle.title(title)
+	title.add_theme_color_override("font_shadow_color", Color(UIStyle.ACCENT, 0.35))
+	title.add_theme_constant_override("shadow_offset_x", 0)
+	title.add_theme_constant_override("shadow_offset_y", 3)
 	root_container.add_child(title)
 
 	var subtitle = Label.new()
@@ -81,7 +90,7 @@ func create_menu():
 	var spacer = Control.new()
 	spacer.custom_minimum_size = Vector2(
 		0,
-		25
+		10
 	)
 	root_container.add_child(spacer)
 
@@ -193,7 +202,7 @@ func create_menu_button(
 	button.text = text_value
 	button.custom_minimum_size = Vector2(
 		0,
-		58
+		44
 	)
 	button.add_theme_font_size_override(
 		"font_size",

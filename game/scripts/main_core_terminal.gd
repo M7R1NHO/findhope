@@ -27,6 +27,13 @@ const PASSWORD_WORDS: Array[String] = MainCoreClues.WORDS
 const PASSWORD_SAVE_KEY := MainCoreClues.PASSWORD_KEY
 const PASSWORD_SOLVED_KEY := MainCoreClues.SOLVED_KEY
 const PHASE3_SPAWN_POSITION := Vector2(8540.0, -3803.0)
+# Entrada na Phase 3: o Player e o Atlas aparecem na abertura esquerda da
+# Ala de Comunicações e entram a andar enquanto o ecrã clareia.
+const PHASE3_ENTRY_OFFSET := Vector2(-440.0, 0.0)
+const PHASE3_ATLAS_ENTRY_OFFSET := Vector2(-478.0, -34.0)
+const PHASE3_FADE_HOLD := 0.35
+const PHASE3_FADE_TIME := 0.9
+const PHASE3_WALK_TIMEOUT := 4.0
 
 
 func _ready():
@@ -589,7 +596,8 @@ func teleport_to_phase3() -> void:
 		show_password_feedback("Palavra-passe aceite, mas o jogador não foi encontrado.")
 		return
 
-	player_node.global_position = PHASE3_SPAWN_POSITION
+	var entry_position := PHASE3_SPAWN_POSITION + PHASE3_ENTRY_OFFSET
+	player_node.global_position = entry_position
 	if player_node is CharacterBody2D:
 		player_node.set_movement_bounds(
 			9000.0,
@@ -599,12 +607,12 @@ func teleport_to_phase3() -> void:
 		)
 		player_node.velocity = Vector2.ZERO
 
-	player_node.global_position = PHASE3_SPAWN_POSITION
+	player_node.global_position = entry_position
 
 	if main != null:
 		var atlas_node := main.get_node_or_null("Atlas")
 		if atlas_node is Node2D:
-			atlas_node.global_position = PHASE3_SPAWN_POSITION + Vector2(80.0, 0.0)
+			atlas_node.global_position = PHASE3_SPAWN_POSITION + PHASE3_ATLAS_ENTRY_OFFSET
 		if atlas_node is CharacterBody2D:
 			atlas_node.velocity = Vector2.ZERO
 	if underground_root != null:
@@ -622,6 +630,39 @@ func teleport_to_phase3() -> void:
 	if not bool(SaveManager.get_run_value("story", "phase3_entered", false)):
 		SaveManager.set_run_value("story", "phase3_entered", true)
 		SaveManager.autosave_when_safe("phase3_entered")
+
+	play_phase3_entry(player_node)
+
+
+# O ecrã começa preto e clareia enquanto o Player entra a andar até ao
+# centro da sala; o Atlas segue-o como sempre. Não bloqueia o save: é curta
+# e o Player já está na Phase 3.
+func play_phase3_entry(player_node: Node) -> void:
+	var fade := CanvasLayer.new()
+	fade.name = "Phase3EntryFade"
+	fade.layer = 1100
+	var black := ColorRect.new()
+	black.color = Color.BLACK
+	black.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	black.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fade.add_child(black)
+	get_tree().current_scene.add_child(fade)
+
+	if player_node.has_method("start_scripted_move_to"):
+		player_node.start_scripted_move_to(PHASE3_SPAWN_POSITION)
+
+	await get_tree().create_timer(PHASE3_FADE_HOLD, false).timeout
+	var tween := fade.create_tween()
+	tween.tween_property(black, "color:a", 0.0, PHASE3_FADE_TIME)
+	await tween.finished
+	fade.queue_free()
+
+	var waited := PHASE3_FADE_HOLD + PHASE3_FADE_TIME
+	while is_instance_valid(player_node) and player_node.get("scripted_move_active") and waited < PHASE3_WALK_TIMEOUT:
+		await get_tree().physics_frame
+		waited += get_physics_process_delta_time()
+	if is_instance_valid(player_node) and player_node.has_method("stop_scripted_move_to"):
+		player_node.stop_scripted_move_to()
 
 
 func register_discovery():

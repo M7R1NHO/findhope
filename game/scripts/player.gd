@@ -3,6 +3,8 @@ extends CharacterBody2D
 
 const CharacterSprite := preload("res://scripts/character_sprite.gd")
 
+signal scripted_move_finished
+
 @export var speed: float = 200.0
 @export var min_x: float = -3400.0
 @export var max_x: float = 1940.0
@@ -13,6 +15,11 @@ const CharacterSprite := preload("res://scripts/character_sprite.gd")
 var atlas: CharacterBody2D
 var tutorial_locked: bool = false
 var tutorial_target: Node2D = null
+# Caminhada por script (entrada na Phase 3, Sala de Controlo): anda sozinho
+# até ao ponto, sem teclado.
+var scripted_move_active: bool = false
+var scripted_move_target: Vector2 = Vector2.ZERO
+var scripted_last_position: Vector2 = Vector2.ZERO
 
 
 func _ready():
@@ -22,6 +29,10 @@ func _ready():
 
 
 func _physics_process(_delta):
+	if scripted_move_active:
+		update_scripted_move(_delta)
+		return
+
 	if tutorial_locked or is_typing_in_chat():
 		velocity = Vector2.ZERO
 		move_and_slide()
@@ -61,7 +72,7 @@ func _physics_process(_delta):
 
 
 func _unhandled_input(event):
-	if tutorial_locked or is_typing_in_chat():
+	if tutorial_locked or scripted_move_active or is_typing_in_chat():
 		return
 
 	if not event is InputEventKey:
@@ -152,6 +163,35 @@ func set_movement_bounds(
 	max_x = new_max_x
 	min_y = new_min_y
 	max_y = new_max_y
+
+
+func start_scripted_move_to(target: Vector2) -> void:
+	scripted_move_target = target
+	scripted_move_active = true
+	scripted_last_position = global_position
+
+
+func stop_scripted_move_to() -> void:
+	if not scripted_move_active:
+		return
+	scripted_move_active = false
+	velocity = Vector2.ZERO
+	scripted_move_finished.emit()
+
+
+func update_scripted_move(delta: float) -> void:
+	# Se alguém pôs o Player noutro sítio (um load, um teste), a caminhada acaba.
+	if global_position.distance_to(scripted_last_position) > speed * delta * 2.0 + 40.0:
+		stop_scripted_move_to()
+		return
+	var to_target := scripted_move_target - global_position
+	if to_target.length() <= 3.0:
+		stop_scripted_move_to()
+		move_and_slide()
+		return
+	velocity = to_target.normalized() * minf(speed, to_target.length() / maxf(delta, 0.001))
+	move_and_slide()
+	scripted_last_position = global_position
 
 
 func teleport_to(target_position: Vector2):

@@ -1,5 +1,7 @@
 extends Node
 
+const HackFrameArt := preload("res://scripts/hack_frame_art.gd")
+
 const TutorialCard := preload("res://scripts/tutorial_card.gd")
 
 
@@ -377,7 +379,7 @@ func create_base_ui():
 		0.01,
 		0.02,
 		0.03,
-		0.95
+		0.88
 	)
 
 	overlay.mouse_filter = (
@@ -386,6 +388,11 @@ func create_base_ui():
 
 	ui_layer.add_child(
 		overlay
+	)
+
+	# Linhas de varrimento e cantos escuros (a sala vê-se ao fundo).
+	overlay.add_child(
+		HackFrameArt.make("backdrop")
 	)
 
 
@@ -417,6 +424,16 @@ func create_base_ui():
 
 	center.add_child(
 		main_panel
+	)
+
+	# Moldura de terminal, igual em todos os minijogos.
+	main_panel.add_theme_stylebox_override(
+		"panel",
+		HackFrameArt.panel_box()
+	)
+
+	main_panel.add_child(
+		HackFrameArt.make("panel")
 	)
 
 

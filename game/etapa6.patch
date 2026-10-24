@@ -1,0 +1,634 @@
+diff --git a/game/scripts/ship_art.gd b/game/scripts/ship_art.gd
+index 41b27ec..e11744f 100644
+--- a/game/scripts/ship_art.gd
++++ b/game/scripts/ship_art.gd
+@@ -5,6 +5,10 @@ extends Node2D
+ #                 rachado, motores apagados a deitar fumo, faíscas).
+ #   "explorador": a nave do viajante no Hangar (inteira, branca e ciano,
+ #                 motores a brilhar, luzes de presença a piscar).
++#   "nave47_voo": a Nave 47 inteira, a voar (intro e menu principal): os
++#                 mesmos cinzentos, faixa amarela e cockpit, motores acesos.
++#                 Com "drift" anda sozinha; "interference" (0 a 1) faz os
++#                 motores falhar e a nave tremer.
+ # "size" é a caixa onde a nave cabe, centrada na origem. Só desenha: a
+ # colisão é da cena (Nave 47) ou de quem cria o nó (explorador).
+ 
+@@ -17,6 +21,8 @@ const LINE := 4.0
+ var style: String = "nave47"
+ var size: Vector2 = Vector2(660.0, 260.0)
+ var clock: float = 0.0
++var drift: Vector2 = Vector2.ZERO
++var interference: float = 0.0
+ 
+ 
+ static func make(ship_style: String, ship_size: Vector2) -> Node2D:
+@@ -29,12 +35,15 @@ static func make(ship_style: String, ship_size: Vector2) -> Node2D:
+ 
+ func _process(delta: float) -> void:
+ 	clock += delta
++	position += drift * delta
+ 	queue_redraw()
+ 
+ 
+ func _draw() -> void:
+ 	if style == "explorador":
+ 		draw_explorer()
++	elif style == "nave47_voo":
++		draw_nave47_flying()
+ 	else:
+ 		draw_nave47()
+ 
+@@ -177,3 +186,63 @@ func draw_explorer() -> void:
+ 	for i in 5:
+ 		var on := int(clock * 6.0) % 5 == i
+ 		draw_circle(at(-0.62 + i * 0.12, 0.0), 3.0, CYAN if on else CYAN.darkened(0.6))
++
++
++# ---------------------------------------------------------------------------
++# Nave 47 a voar (intro, menu)
++# ---------------------------------------------------------------------------
++
++func draw_nave47_flying() -> void:
++	var hull := Color(0.58, 0.61, 0.65)
++	var hull_dark := Color(0.4, 0.43, 0.48)
++	# Com interferência, a nave treme e os motores falham.
++	var shake := Vector2.ZERO
++	var engines := 1.0
++	if interference > 0.0:
++		shake = Vector2(sin(clock * 37.0), cos(clock * 29.0)) * 3.0 * interference
++		if fmod(clock * 5.3, 1.0) < 0.35 * interference:
++			engines = 0.25
++	draw_set_transform(shake, sin(clock * 1.3) * 0.02 + shake.y * 0.004, Vector2.ONE)
++
++	# Rasto dos motores
++	var pulse := (0.8 + 0.2 * sin(clock * 9.0)) * engines
++	for y in [-0.32, 0.32]:
++		var nozzle := at(-1.0, y)
++		for i in 16:
++			var t := float(i) / 16.0
++			draw_circle(nozzle + Vector2(-t * size.x * 0.5, 0.0), size.y * (0.12 - t * 0.08) * pulse, Color(ACCENT.lerp(Color(1.0, 0.4, 0.15), t), 0.28 * (1.0 - t) * pulse))
++		draw_circle(nozzle + Vector2(-6.0, 0.0), size.y * 0.1 * pulse, Color(1.0, 0.95, 0.75, 0.9 * pulse))
++
++	# Asas
++	shape(fit([Vector2(-0.45, -0.62), Vector2(0.12, -0.62), Vector2(-0.12, -1.0), Vector2(-0.55, -1.0)]), hull_dark)
++	shape(fit([Vector2(-0.45, 0.62), Vector2(0.12, 0.62), Vector2(-0.12, 1.0), Vector2(-0.55, 1.0)]), hull_dark)
++	draw_line(at(-0.5, -0.9), at(-0.1, -0.9), ACCENT, 5.0)
++	draw_line(at(-0.5, 0.9), at(-0.1, 0.9), ACCENT, 5.0)
++	draw_circle(at(-0.52, -0.97), 4.0, RED if fmod(clock, 1.2) < 0.4 else RED.darkened(0.6))
++	draw_circle(at(-0.52, 0.97), 4.0, Color(0.3, 0.9, 0.4) if fmod(clock + 0.6, 1.2) < 0.4 else Color(0.15, 0.4, 0.2))
++
++	# Motores
++	for y in [-0.32, 0.32]:
++		var box := Rect2(at(-1.0, y - 0.2), Vector2(size.x * 0.1, size.y * 0.2))
++		draw_rect(box, Color(0.18, 0.19, 0.22))
++		draw_rect(box, OUTLINE, false, LINE)
++
++	# Casco, placas, faixa e número
++	var body := fit([Vector2(-0.9, -0.55), Vector2(0.45, -0.68), Vector2(0.82, -0.42), Vector2(1.0, 0.0), Vector2(0.82, 0.42), Vector2(0.45, 0.68), Vector2(-0.9, 0.55)])
++	shape(body, hull)
++	for x in [-0.6, -0.3, 0.0, 0.3]:
++		draw_line(at(x, -0.6), at(x, 0.6), hull_dark, 2.0)
++	draw_line(at(-0.9, 0.0), at(0.55, 0.0), hull_dark, 2.0)
++	draw_rect(Rect2(at(-0.55, -0.6), Vector2(size.x * 0.08, size.y * 0.6)), ACCENT)
++	draw_rect(Rect2(at(-0.55, -0.6), Vector2(size.x * 0.08, size.y * 0.6)), OUTLINE, false, 2.0)
++	draw_string(ThemeDB.fallback_font, at(-0.3, 0.42), "47", HORIZONTAL_ALIGNMENT_LEFT, -1, int(size.y * 0.32), Color(0.2, 0.22, 0.26))
++	draw_string(ThemeDB.fallback_font, at(-0.3, -0.18), "RIGHTSIDE", HORIZONTAL_ALIGNMENT_LEFT, -1, int(size.y * 0.1), Color(0.3, 0.32, 0.36))
++
++	# Cockpit inteiro, com reflexo
++	var glass := fit([Vector2(0.5, -0.38), Vector2(0.78, -0.25), Vector2(0.9, 0.0), Vector2(0.78, 0.25), Vector2(0.5, 0.38), Vector2(0.44, 0.0)])
++	shape(glass, Color(0.1, 0.3, 0.36))
++	draw_line(at(0.52, -0.25), at(0.7, -0.18), Color(1, 1, 1, 0.5), 3.0)
++	# Com interferência, uma luz de aviso pisca no cockpit.
++	if interference > 0.0 and fmod(clock, 0.6) < 0.3:
++		draw_circle(at(0.62, 0.1), size.y * 0.05, RED)
++	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+diff --git a/game/scripts/intro_sequence.gd b/game/scripts/intro_sequence.gd
+index 386186a..d733505 100644
+--- a/game/scripts/intro_sequence.gd
++++ b/game/scripts/intro_sequence.gd
+@@ -3,6 +3,10 @@ extends CanvasLayer
+ 
+ const TYPE_SPEED := 0.035
+ const TEXT_PAUSE := 1.8
++const ShipArt := preload("res://scripts/ship_art.gd")
++const SHIP_LINE := 2
++const SHIP_SIZE := Vector2(260.0, 100.0)
++const SHIP_SPEED := 75.0
+ const PLAYER_SIZE := Vector2(28, 28)
+ const PANEL_SIZE := Vector2(48, 58)
+ const TUTORIAL_SPEED := 240.0
+@@ -254,8 +258,19 @@ func _play_scene_one() -> void:
+ 		"Mas algo começa a interferir na navegação."
+ 	]
+ 
+-	for line in narrative:
++	var ship: Node2D = null
++
++	for index in narrative.size():
++		var line: String = narrative[index]
+ 		title_label.text = ""
++
++		# A Nave 47 entra quando a missão começa e atravessa as estrelas; na
++		# última frase, a interferência faz os motores falhar.
++		if index == SHIP_LINE:
++			ship = _create_flying_ship()
++		elif index == narrative.size() - 1 and is_instance_valid(ship):
++			ship.interference = 1.0
++
+ 		await _type_text(dialogue_label, line)
+ 		await _wait(TEXT_PAUSE)
+ 
+@@ -962,12 +977,12 @@ func _wait(seconds: float) -> void:
+ 
+ 	var timer := get_tree().create_timer(seconds)
+ 
+-	while timer.time_left > 0.0 and not skip_requested:
++	while timer.time_left > 0.0 and not skip_requested and is_inside_tree():
+ 		await get_tree().process_frame
+ 
+ 
+ func _await_tween(tween: Tween) -> void:
+-	while tween.is_valid() and tween.is_running() and not skip_requested:
++	while tween.is_valid() and tween.is_running() and not skip_requested and is_inside_tree():
+ 		await get_tree().process_frame
+ 
+ 	# Ao saltar, a animação salta para o fim, com os mesmos valores finais.
+@@ -975,6 +990,16 @@ func _await_tween(tween: Tween) -> void:
+ 		tween.custom_step(1000.0)
+ 
+ 
++func _create_flying_ship() -> Node2D:
++	var viewport_size := get_viewport().get_visible_rect().size
++	var ship := ShipArt.make("nave47_voo", SHIP_SIZE)
++	ship.name = "FlyingShip"
++	ship.position = Vector2(-SHIP_SIZE.x, viewport_size.y * 0.4)
++	ship.drift = Vector2(SHIP_SPEED, -4.0)
++	screen_root.add_child(ship)
++	return ship
++
++
+ func _create_stars() -> Array[ColorRect]:
+ 	var stars: Array[ColorRect] = []
+ 	var viewport_size := get_viewport().get_visible_rect().size
+diff --git a/game/scripts/main_menu.gd b/game/scripts/main_menu.gd
+index 0e708c1..1969213 100644
+--- a/game/scripts/main_menu.gd
++++ b/game/scripts/main_menu.gd
+@@ -1,6 +1,7 @@
+ extends Control
+ 
+ const UIStyle := preload("res://scripts/ui_style.gd")
++const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
+ 
+ 
+ @export_file("*.tscn") var game_scene_path: String
+@@ -36,6 +37,8 @@ func create_menu():
+ 	)
+ 	add_child(background)
+ 	UIStyle.apply(background)
++	# Estrelas, planeta e a Nave 47 por trás dos botões.
++	background.add_child(MenuBackdrop.new())
+ 
+ 	var center = CenterContainer.new()
+ 	center.set_anchors_and_offsets_preset(
+@@ -50,9 +53,12 @@ func create_menu():
+ 	)
+ 	root_container.add_theme_constant_override(
+ 		"separation",
+-		16
++		8
+ 	)
+ 	center.add_child(root_container)
++	# Caixa semitransparente para os botões se lerem por cima das estrelas.
++	var frame := UIStyle.frame(root_container)
++	frame.add_theme_stylebox_override("panel", UIStyle._box(Color(UIStyle.PANEL_BG, 0.82), UIStyle.PANEL_BORDER, 1, 8, 30.0, 20.0))
+ 
+ 	var title = Label.new()
+ 	title.text = "FIND HOPE"
+@@ -61,9 +67,12 @@ func create_menu():
+ 	)
+ 	title.add_theme_font_size_override(
+ 		"font_size",
+-		44
++		52
+ 	)
+ 	UIStyle.title(title)
++	title.add_theme_color_override("font_shadow_color", Color(UIStyle.ACCENT, 0.35))
++	title.add_theme_constant_override("shadow_offset_x", 0)
++	title.add_theme_constant_override("shadow_offset_y", 3)
+ 	root_container.add_child(title)
+ 
+ 	var subtitle = Label.new()
+@@ -81,7 +90,7 @@ func create_menu():
+ 	var spacer = Control.new()
+ 	spacer.custom_minimum_size = Vector2(
+ 		0,
+-		25
++		10
+ 	)
+ 	root_container.add_child(spacer)
+ 
+@@ -193,7 +202,7 @@ func create_menu_button(
+ 	button.text = text_value
+ 	button.custom_minimum_size = Vector2(
+ 		0,
+-		58
++		44
+ 	)
+ 	button.add_theme_font_size_override(
+ 		"font_size",
+diff --git a/game/scripts/menu_backdrop.gd b/game/scripts/menu_backdrop.gd
+new file mode 100644
+index 0000000..3fd8e7c
+--- /dev/null
++++ b/game/scripts/menu_backdrop.gd
+@@ -0,0 +1,68 @@
++extends Control
++
++# Fundo do menu principal: espaço com estrelas em três camadas que andam
++# devagar, o horizonte de um planeta em baixo e a Nave 47 a voar à direita
++# (ShipArt "nave47_voo", a mesma da intro). Só desenha; não recebe o rato.
++
++const ShipArt := preload("res://scripts/ship_art.gd")
++const UIStyle := preload("res://scripts/ui_style.gd")
++
++const STAR_COUNT := 150
++const SKY_TOP := Color(0.02, 0.035, 0.08)
++const SKY_BOTTOM := Color(0.006, 0.008, 0.02)
++const STAR_COLOR := Color(0.65, 0.82, 1.0)
++const PLANET := Color(0.035, 0.045, 0.06)
++const SHIP_SIZE := Vector2(300.0, 115.0)
++# Onde fica a nave, em fração do ecrã (fora da coluna de botões).
++const SHIP_ANCHOR := Vector2(0.86, 0.3)
++
++var stars: Array = []   # [posição 0..1, camada 0..2, fase]
++var clock: float = 0.0
++var ship: Node2D = null
++var rng := RandomNumberGenerator.new()
++
++
++func _ready() -> void:
++	name = "MenuBackdrop"
++	mouse_filter = Control.MOUSE_FILTER_IGNORE
++	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
++	rng.seed = 47
++	for i in STAR_COUNT:
++		stars.append([Vector2(rng.randf(), rng.randf()), rng.randi_range(0, 2), rng.randf() * TAU])
++	ship = ShipArt.make("nave47_voo", SHIP_SIZE)
++	ship.name = "MenuShip"
++	add_child(ship)
++
++
++func _process(delta: float) -> void:
++	clock += delta
++	if ship != null:
++		# A nave flutua um pouco no sítio.
++		ship.position = size * SHIP_ANCHOR + Vector2(sin(clock * 0.5) * 10.0, sin(clock * 0.9) * 6.0)
++	queue_redraw()
++
++
++func _draw() -> void:
++	# Céu em degradê, de cima para baixo.
++	var bands := 24
++	for i in bands:
++		var t := float(i) / bands
++		draw_rect(Rect2(0.0, size.y * t, size.x, size.y / bands + 1.0), SKY_TOP.lerp(SKY_BOTTOM, t))
++
++	# Estrelas: as mais próximas andam mais depressa e brilham mais.
++	for star in stars:
++		var layer: int = star[1]
++		var speed := 4.0 + layer * 7.0
++		var x := fposmod(star[0].x * size.x - clock * speed, size.x)
++		var y: float = star[0].y * size.y
++		var twinkle := 0.55 + 0.45 * sin(clock * (1.0 + layer) + star[2])
++		var radius := 0.8 + layer * 0.6
++		draw_circle(Vector2(x, y), radius, Color(STAR_COLOR, (0.35 + layer * 0.2) * twinkle))
++
++	# Horizonte de um planeta, com a atmosfera em ciano.
++	var center := Vector2(size.x * 0.5, size.y * 2.05)
++	var radius := size.y * 1.35
++	for i in 4:
++		draw_circle(center, radius + 26.0 - i * 6.0, Color(UIStyle.ACCENT, 0.04 + i * 0.03))
++	draw_circle(center, radius, PLANET)
++	draw_arc(center, radius, PI * 1.15, PI * 1.85, 96, Color(UIStyle.ACCENT, 0.5), 2.0)
+diff --git a/game/scripts/hack_manager.gd b/game/scripts/hack_manager.gd
+index 27e74ab..d5e0b24 100644
+--- a/game/scripts/hack_manager.gd
++++ b/game/scripts/hack_manager.gd
+@@ -1,5 +1,7 @@
+ extends Node
+ 
++const HackFrameArt := preload("res://scripts/hack_frame_art.gd")
++
+ const TutorialCard := preload("res://scripts/tutorial_card.gd")
+ 
+ 
+@@ -377,7 +379,7 @@ func create_base_ui():
+ 		0.01,
+ 		0.02,
+ 		0.03,
+-		0.95
++		0.88
+ 	)
+ 
+ 	overlay.mouse_filter = (
+@@ -388,6 +390,11 @@ func create_base_ui():
+ 		overlay
+ 	)
+ 
++	# Linhas de varrimento e cantos escuros (a sala vê-se ao fundo).
++	overlay.add_child(
++		HackFrameArt.make("backdrop")
++	)
++
+ 
+ 	# -----------------------------------------------------
+ 	# CENTRO
+@@ -419,6 +426,16 @@ func create_base_ui():
+ 		main_panel
+ 	)
+ 
++	# Moldura de terminal, igual em todos os minijogos.
++	main_panel.add_theme_stylebox_override(
++		"panel",
++		HackFrameArt.panel_box()
++	)
++
++	main_panel.add_child(
++		HackFrameArt.make("panel")
++	)
++
+ 
+ 	# -----------------------------------------------------
+ 	# MARGENS
+diff --git a/game/scripts/hack_frame_art.gd b/game/scripts/hack_frame_art.gd
+new file mode 100644
+index 0000000..cc62358
+--- /dev/null
++++ b/game/scripts/hack_frame_art.gd
+@@ -0,0 +1,103 @@
++extends Control
++
++# Moldura comum dos minijogos (hack_manager.create_base_ui), para parecerem
++# o ecrã de um terminal da instalação e não uma janela solta:
++#   "backdrop": por trás do painel, linhas de varrimento e cantos escuros,
++#               com a sala ainda a ver-se ao fundo;
++#   "panel":    dentro do painel, por trás do conteúdo: cantos em L, rebites,
++#               luzes de estado e um brilho que desce devagar, como nos
++#               ecrãs dos terminais do mundo (world_style.gd).
++# Só desenha; não recebe o rato.
++
++const UIStyle := preload("res://scripts/ui_style.gd")
++
++const OUTLINE := Color(0.07, 0.07, 0.09)
++const METAL := Color(0.28, 0.3, 0.34)
++const RIVET := Color(0.4, 0.43, 0.48)
++const AMBER := Color(0.88, 0.64, 0.17)
++
++var mode: String = "panel"
++var clock: float = 0.0
++
++
++static func make(art_mode: String) -> Control:
++	var art = load("res://scripts/hack_frame_art.gd").new()
++	art.name = "HackFrame_" + art_mode
++	art.mode = art_mode
++	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
++	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
++	return art
++
++
++# Caixa do painel: fundo de ecrã escuro e moldura de metal com contorno.
++static func panel_box() -> StyleBoxFlat:
++	var box := StyleBoxFlat.new()
++	box.bg_color = Color(0.025, 0.05, 0.06, 0.97)
++	box.border_color = METAL
++	box.set_border_width_all(6)
++	box.set_corner_radius_all(6)
++	box.shadow_color = Color(0.0, 0.0, 0.0, 0.6)
++	box.shadow_size = 14
++	return box
++
++
++func _process(delta: float) -> void:
++	clock += delta
++	queue_redraw()
++
++
++func _draw() -> void:
++	if mode == "backdrop":
++		draw_backdrop()
++	else:
++		draw_panel()
++
++
++func draw_backdrop() -> void:
++	var y := 0.0
++	while y < size.y:
++		draw_line(Vector2(0.0, y), Vector2(size.x, y), Color(0.0, 0.0, 0.0, 0.18), 1.0)
++		y += 3.0
++	# Cantos mais escuros.
++	var steps := 10
++	for i in steps:
++		var inset := float(i) * 14.0
++		draw_rect(Rect2(Vector2(inset, inset), size - Vector2(inset, inset) * 2.0), Color(0.0, 0.0, 0.0, 0.04), false, 14.0)
++
++
++func draw_panel() -> void:
++	var rect := Rect2(Vector2.ZERO, size)
++	# Contorno preto grosso por fora da moldura, como nos sprites.
++	draw_rect(rect.grow(2.0), OUTLINE, false, 4.0)
++
++	# Brilho que desce devagar pelo ecrã e linhas de varrimento leves.
++	var sweep := fmod(clock * 60.0, size.y + 120.0) - 60.0
++	draw_rect(Rect2(6.0, sweep, size.x - 12.0, 60.0), Color(UIStyle.ACCENT, 0.035))
++	var y := 8.0
++	while y < size.y - 8.0:
++		draw_line(Vector2(8.0, y), Vector2(size.x - 8.0, y), Color(1.0, 1.0, 1.0, 0.018), 1.0)
++		y += 4.0
++
++	# Cantos em L, em ciano.
++	var arm := 26.0
++	var inset := 14.0
++	for corner in [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]:
++		var p := Vector2(inset + corner.x * (size.x - inset * 2.0), inset + corner.y * (size.y - inset * 2.0))
++		var dx := -arm if corner.x == 1 else arm
++		var dy := -arm if corner.y == 1 else arm
++		draw_line(p, p + Vector2(dx, 0.0), Color(UIStyle.ACCENT, 0.7), 3.0)
++		draw_line(p, p + Vector2(0.0, dy), Color(UIStyle.ACCENT, 0.7), 3.0)
++
++	# Rebites na moldura.
++	for corner in [Vector2(3, 3), Vector2(size.x - 3, 3), Vector2(3, size.y - 3), Vector2(size.x - 3, size.y - 3)]:
++		draw_circle(corner, 3.0, RIVET)
++		draw_arc(corner, 3.0, 0.0, TAU, 12, OUTLINE, 1.5)
++
++	# Luzes de estado em cima, à direita.
++	var colors := [Color(0.3, 0.8, 0.35), AMBER, UIStyle.ACCENT]
++	for i in 3:
++		var on := fmod(clock * (0.7 + i * 0.4) + i * 0.33, 1.0) < 0.6
++		var color: Color = colors[i] if on else colors[i].darkened(0.6)
++		var led := Vector2(size.x - 60.0 + i * 16.0, 3.0)
++		draw_circle(led, 4.0, OUTLINE)
++		draw_circle(led, 3.0, color)
+diff --git a/game/zz_tests/s2_tests.gd b/game/zz_tests/s2_tests.gd
+index 928f5a2..83e436f 100644
+--- a/game/zz_tests/s2_tests.gd
++++ b/game/zz_tests/s2_tests.gd
+@@ -86,7 +86,10 @@ func _ready() -> void:
+ 		fm.fight_layer.find_child("MonsterSprite", true, false) != null and fm.creature_position.distance_to(fm.player_position) > 250.0,
+ 		"%.0f px" % fm.creature_position.distance_to(fm.player_position))
+ 	var d0: float = fm.creature_position.distance_to(fm.player_position)
+-	await get_tree().create_timer(2.2).timeout
++	# Espera pela aproximação (com folga para frames lentos), em vez de um tempo fixo.
++	var chase_start := Time.get_ticks_msec()
++	while fm.creature_position.distance_to(fm.player_position) >= d0 - 60.0 and Time.get_ticks_msec() - chase_start < 5000:
++		await get_tree().process_frame
+ 	var d1: float = fm.creature_position.distance_to(fm.player_position)
+ 	check("S2.4", "a criatura persegue o Player (a distância diminui)", d1 < d0 - 60.0, "%.0f -> %.0f px" % [d0, d1])
+ 
+diff --git a/game/zz_tests/s6_tests.gd b/game/zz_tests/s6_tests.gd
+new file mode 100644
+index 0000000..f860f64
+--- /dev/null
++++ b/game/zz_tests/s6_tests.gd
+@@ -0,0 +1,119 @@
++extends Node
++# Etapa 6: Nave 47 a voar na intro, novo menu principal e moldura comum dos
++# minijogos.
++# Precisa do backend de teste: GROQ_API_KEY=dummy python -m zz_phase3.fake_server
++const MAIN := "res://scenes/main.tscn"
++const MENU := "res://scenes/main_menu.tscn"
++var results: Array = []
++var SM
++
++func check(id: String, desc: String, cond: bool, info: String = "") -> void:
++	results.append(cond)
++	print(("PASS " if cond else "FAIL ") + id + " " + desc + ("  [" + info + "]" if info != "" else ""))
++
++func frames(n: int) -> void:
++	for i in n: await get_tree().process_frame
++
++func wait_until(cond: Callable, seconds: float) -> bool:
++	var t0 := Time.get_ticks_msec()
++	while not cond.call() and Time.get_ticks_msec() - t0 < seconds * 1000.0:
++		await get_tree().process_frame
++	return cond.call()
++
++func scene() -> Node: return get_tree().current_scene
++
++func open(path: String) -> void:
++	get_tree().change_scene_to_file(path)
++	await frames(3)
++	while scene() == null or not scene().is_node_ready():
++		await get_tree().process_frame
++	await frames(5)
++
++func find_intro(node: Node) -> Node:
++	for child in node.get_children():
++		if child.get_script() != null and child.get_script().resource_path.ends_with("intro_sequence.gd"):
++			return child
++	return null
++
++func find_by_class(node: Node, type_name: String, out: Array) -> void:
++	if node.is_class(type_name):
++		out.append(node)
++	for child in node.get_children():
++		find_by_class(child, type_name, out)
++
++func _ready() -> void:
++	SM = get_node("/root/SaveManager")
++	await frames(3)
++
++	# --- Intro: a Nave 47 a voar ---
++	await SM.start_new_run()
++	await open(MAIN)
++	var intro: Node = null
++	for i in 60:
++		intro = find_intro(scene())
++		if intro != null: break
++		await frames(1)
++	Engine.time_scale = 4.0
++	var appeared: bool = await wait_until(func(): return intro.screen_root != null and intro.screen_root.get_node_or_null("FlyingShip") != null, 40.0)
++	var ship: Node2D = intro.screen_root.get_node_or_null("FlyingShip") if appeared else null
++	var line: String = intro.dialogue_label.text if is_instance_valid(intro.dialogue_label) else ""
++	check("S6.1", "intro: a Nave 47 entra quando a frase da missão começa", ship != null and ship.style == "nave47_voo" and ship.interference == 0.0, line)
++	var x0: float = ship.position.x if ship != null else 0.0
++	await get_tree().create_timer(1.0).timeout
++	check("S6.2", "intro: a nave atravessa o ecrã da esquerda para a direita", ship != null and ship.position.x > x0 + 30.0, "%.0f -> %.0f" % [x0, ship.position.x if ship != null else 0.0])
++	var ship_ref: WeakRef = weakref(ship)
++	var shaking: bool = await wait_until(func(): return ship_ref.get_ref() != null and ship_ref.get_ref().interference >= 1.0, 40.0)
++	check("S6.3", "intro: na última frase (interferência) os motores falham", shaking and intro.dialogue_label.text.begins_with("M"), intro.dialogue_label.text)
++	var gone: bool = await wait_until(func(): return ship_ref.get_ref() == null, 30.0)
++	check("S6.4", "intro: a nave sai com o resto da primeira cena", gone)
++	Engine.time_scale = 1.0
++	intro.request_skip()
++	await wait_until(func(): return is_instance_valid(intro.tutorial_player), 10.0)
++	await frames(5)
++
++	# --- Menu principal ---
++	await open(MENU)
++	var menu: Control = scene()
++	var backdrop: Control = menu.find_child("MenuBackdrop", true, false)
++	var menu_ship: Node2D = menu.find_child("MenuShip", true, false)
++	check("S6.5", "menu: fundo com estrelas e a Nave 47 a voar, sem apanhar o rato",
++		backdrop != null and menu_ship != null and menu_ship.style == "nave47_voo" and backdrop.mouse_filter == Control.MOUSE_FILTER_IGNORE)
++	# O estado com mais botões (DIÁRIOS): 8 botões têm de caber no ecrã.
++	if menu.find_child("DIÁRIOS", true, false) == null:
++		menu.create_menu_button("DIÁRIOS", func(): pass)
++	await frames(5)
++	var buttons: Array = []
++	find_by_class(menu, "Button", buttons)
++	var view := menu.get_viewport_rect()
++	var outside := buttons.filter(func(b): return not view.encloses(b.get_global_rect()))
++	var column_height: float = menu.root_container.get_parent().size.y
++	check("S6.6", "menu: com 8 botões, a caixa cabe num ecrã de 720 px de altura", buttons.size() >= 8 and outside.is_empty() and column_height <= 700.0,
++		"%d botões, %d fora, caixa com %.0f px" % [buttons.size(), outside.size(), column_height])
++	var ship_rect := Rect2(menu_ship.global_position - menu_ship.size / 2.0, menu_ship.size)
++	var frame: Control = menu.root_container.get_parent()
++	check("S6.7", "menu: os botões estão numa caixa e a nave não fica por cima deles",
++		frame is PanelContainer and not frame.get_global_rect().intersects(ship_rect), str(frame.get_global_rect()) + " " + str(ship_rect))
++	var first: Button = buttons[0]
++	check("S6.8", "menu: os botões continuam a receber cliques", first.mouse_filter == Control.MOUSE_FILTER_STOP and not first.disabled or first.text == "CONTINUAR JOGO")
++
++	# --- Minijogos: moldura comum ---
++	await SM.start_new_run()
++	for k in ["intro_completed", "surface_recovery_complete", "protocol_door_opened", "facility_security_unlocked", "hide_initial_complete"]:
++		SM.set_run_value("story", k, true)
++	await open(MAIN)
++	await frames(15)
++	var hack: Node = scene().get_node("HackManager")
++	hack.create_base_ui()
++	await frames(3)
++	var backdrop_art: Control = hack.overlay.get_node_or_null("HackFrame_backdrop")
++	var panel_art: Control = hack.main_panel.get_node_or_null("HackFrame_panel")
++	check("S6.9", "minijogos: fundo com linhas de varrimento e moldura de terminal no painel",
++		backdrop_art != null and panel_art != null and hack.main_panel.has_theme_stylebox_override("panel"))
++	check("S6.10", "minijogos: a moldura fica por trás do conteúdo e não apanha o rato",
++		panel_art.get_index() < hack.content.get_parent().get_index() and panel_art.mouse_filter == Control.MOUSE_FILTER_IGNORE
++		and backdrop_art.mouse_filter == Control.MOUSE_FILTER_IGNORE)
++	hack.destroy_ui()
++
++	var passed := results.filter(func(r): return r).size()
++	print("RESULTADO S6: %d / %d PASS" % [passed, results.size()])
++	get_tree().quit()
+diff --git a/game/zz_tests/s6_runner.gd b/game/zz_tests/s6_runner.gd
+new file mode 100644
+index 0000000..35e28f5
+--- /dev/null
++++ b/game/zz_tests/s6_runner.gd
+@@ -0,0 +1,5 @@
++extends Node
++func _ready():
++	var t = load("res://zz_tests/s6_tests.gd").new()
++	t.name = "S6Tests"
++	get_tree().root.add_child.call_deferred(t)
+diff --git a/game/zz_tests/s6_runner.tscn b/game/zz_tests/s6_runner.tscn
+new file mode 100644
+index 0000000..e022fbd
+--- /dev/null
++++ b/game/zz_tests/s6_runner.tscn
+@@ -0,0 +1,4 @@
++[gd_scene format=3]
++[ext_resource type="Script" path="res://zz_tests/s6_runner.gd" id="1"]
++[node name="R" type="Node"]
++script = ExtResource("1")

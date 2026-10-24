@@ -3,6 +3,8 @@ extends Node
 const TutorialCard := preload("res://scripts/tutorial_card.gd")
 const CharacterSprite := preload("res://scripts/character_sprite.gd")
 const UISprite := preload("res://scripts/ui_sprite.gd")
+const CreatureActor := preload("res://scripts/creature_actor.gd")
+const DecorProps := preload("res://scripts/decor_props.gd")
 
 
 # =========================================================
@@ -249,9 +251,28 @@ var hide_initial_time_remaining: float = 0.0
 
 var hide_initial_spot: Area2D = null
 var hide_initial_atlas_parked: bool = false
-var hide_initial_creature_visual: Polygon2D = null
+var hide_initial_creature_visual: Node2D = null
+
+var corridor_vents: Dictionary = {}
+var room_vents: Dictionary = {}
+var creature: Node2D = null
+# Só para o aspeto (onde a criatura procura); não mexe nos sorteios do jogo.
+var visual_rng := RandomNumberGenerator.new()
 # Distância (px) que a criatura anda ao aparecer no primeiro encontro.
 const HIDE_INITIAL_CREATURE_WALK := 220.0
+
+# Criatura no mundo (creature_actor.gd). Sai de uma conduta no chão: uma por
+# corredor (criadas aqui, um pouco à frente do gatilho) e uma por sala
+# (postas pela decoração, room_decor.gd, que as regista aqui).
+const CORRIDOR_VENT_AHEAD := 150.0
+const CORRIDOR_SEARCH_TIME := 1.2
+const CREATURE_STOP_DISTANCE := 85.0
+const CREATURE_ATTACK_TIME := 0.5
+
+# Caixas dos esconderijos: por cima das personagens (z 8 e 9) quando há
+# alguém lá dentro, por baixo nos outros casos.
+const HIDE_COVER_FRONT_Z := 10
+const HIDE_COVER_BEHIND_Z := -6
 
 
 
@@ -640,6 +661,7 @@ func _ready():
 
 
 	rng.randomize()
+	visual_rng.randomize()
 
 	# Recupera o estado do HIDEINICIAL nesta run.
 	hide_initial_completed = bool(
@@ -788,6 +810,8 @@ func _ready():
 func _process(
 	delta: float
 ):
+	update_hide_covers()
+
 	# Com um tutorial aberto, os temporizadores param.
 	if TutorialCard.is_open(get_tree()):
 		return
@@ -1096,6 +1120,11 @@ func create_corridor_trigger(
 		on_corridor_trigger_exited.bind(
 			trigger
 		)
+	)
+
+	create_corridor_vent(
+		corridor_id,
+		path
 	)
 
 
@@ -1815,6 +1844,11 @@ func create_hide_spot(
 		visual
 	)
 
+	add_hide_cover(
+		spot,
+		index
+	)
+
 
 	return spot
 
@@ -1947,6 +1981,10 @@ func start_hide_event():
 
 	if hide_instruction_label != null:
 		hide_instruction_label.text = "SIGA ATLAS ATÉ AO ESCONDERIJO"
+
+	# A criatura entra pela conduta da sala e procura, longe dos esconderijos.
+	spawn_creature(get_room_vent(current_room_id))
+	creature.emerge_then_search(room_search_points(current_room_id))
 
 	TutorialCard.show_once(self, "hide")
 
@@ -2380,8 +2418,9 @@ func complete_hide_event():
 
 	atlas_hide_target = null
 
-	encounter_active = false
+	send_creature_home()
 
+	encounter_active = false
 
 	room_cooldown_remaining = (
 		room_stalk_cooldown
@@ -2433,6 +2472,8 @@ func fail_hide_event(
 
 	room_failure_mode = true
 
+	# A criatura encontra-os e aproxima-se antes da escolha.
+	await creature_catch_player()
 
 	get_tree().paused = true
 
@@ -2478,6 +2519,14 @@ func start_corridor_encounter(
 		corridor_id
 	)
 
+	# A criatura sai da conduta, procura e vem até ao Player; só depois
+	# aparece a escolha RUN / FIGHT.
+	await play_corridor_creature(
+		corridor_id
+	)
+
+	if not encounter_active:
+		return
 
 	get_tree().paused = true
 
@@ -2517,6 +2566,8 @@ func create_threat_choice_ui(
 	description_text: String
 ):
 	destroy_encounter_ui()
+
+	destroy_creature()
 
 	encounter_layer = CanvasLayer.new()
 
@@ -4014,9 +4065,8 @@ func run_timeout():
 
 		hack_manager.cancel_hack()
 
-
 	call_deferred(
-		"show_run_game_over"
+		"capture_then_game_over"
 	)
 
 
@@ -4025,6 +4075,7 @@ func run_timeout():
 # =========================================================
 
 func show_run_game_over():
+	destroy_creature()
 
 	get_tree().paused = true
 
@@ -4536,50 +4587,22 @@ func update_hide_initial_ui() -> void:
 
 
 func create_hide_initial_creature_visual() -> void:
-	if hide_initial_creature_visual != null and is_instance_valid(hide_initial_creature_visual):
-		hide_initial_creature_visual.queue_free()
-		hide_initial_creature_visual = null
+	destroy_hide_initial_creature_visual()
 
 	if underground_root == null or player == null:
 		return
 
-	# Silhueta temporária da ameaça; não possui colisão nem bloqueia o jogador.
-	hide_initial_creature_visual = Polygon2D.new()
-	hide_initial_creature_visual.name = "HideInitialCreatureSilhouette"
-	hide_initial_creature_visual.polygon = PackedVector2Array([
-		Vector2(-24.0, 20.0),
-		Vector2(-18.0, -12.0),
-		Vector2(-7.0, -25.0),
-		Vector2(0.0, -12.0),
-		Vector2(8.0, -26.0),
-		Vector2(20.0, -10.0),
-		Vector2(25.0, 20.0),
-		Vector2(10.0, 14.0),
-		Vector2(0.0, 25.0),
-		Vector2(-10.0, 14.0)
-	])
-	hide_initial_creature_visual.color = Color(0.65, 0.025, 0.035, 0.92)
-	hide_initial_creature_visual.z_index = 30
-	# Com o sprite da criatura, a silhueta fica só como reserva.
-	var creature_sprite := CharacterSprite.monster(hide_initial_creature_visual, "walk_side", 120.0)
-	if creature_sprite != null:
-		hide_initial_creature_visual.color = Color(0, 0, 0, 0)
-	underground_root.add_child(hide_initial_creature_visual)
-	var target := player.global_position + Vector2(150.0, -35.0)
-	hide_initial_creature_visual.global_position = target
-	if creature_sprite != null:
-		# Entra a andar da direita (espelhada: as frames olham para a direita)
-		# e ruge ao parar perto do Player. Só visual.
-		creature_sprite.flip_h = true
-		hide_initial_creature_visual.global_position = target + Vector2(HIDE_INITIAL_CREATURE_WALK, 0.0)
-		var tween := hide_initial_creature_visual.create_tween()
-		tween.tween_property(hide_initial_creature_visual, "global_position", target, HIDE_INITIAL_CREATURE_WALK / 220.0)
-		tween.tween_callback(func(): creature_sprite.play("roar"))
+	# A criatura sai da conduta da Sala Técnica e procura pela sala enquanto
+	# o Atlas leva o Player ao esconderijo. Só visual.
+	hide_initial_creature_visual = spawn_creature(get_room_vent("TechnicalRoom"))
+	hide_initial_creature_visual.emerge_then_search(room_search_points("TechnicalRoom"))
 
 
 func destroy_hide_initial_creature_visual() -> void:
 	if hide_initial_creature_visual != null and is_instance_valid(hide_initial_creature_visual):
 		hide_initial_creature_visual.queue_free()
+	if creature == hide_initial_creature_visual:
+		creature = null
 	hide_initial_creature_visual = null
 
 
@@ -4600,9 +4623,10 @@ func fail_hide_initial(reason: String) -> void:
 		atlas.stop_scripted_move_to()
 
 	destroy_hide_ui()
-	destroy_hide_initial_creature_visual()
+	hide_initial_creature_visual = null
+	# A criatura encontra-os e aproxima-se antes da escolha.
+	await creature_catch_player()
 	get_tree().paused = true
-
 	create_threat_choice_ui(
 		"A CRIATURA ENCONTROU VOCÊ",
 		reason + "\nRUN é a única forma de escapar."
@@ -4626,7 +4650,8 @@ func complete_hide_initial(message: String) -> void:
 		atlas.stop_scripted_move_to()
 
 	destroy_hide_ui()
-	destroy_hide_initial_creature_visual()
+	hide_initial_creature_visual = null
+	send_creature_home()
 
 	SaveManager.set_run_value(
 		"story",
@@ -4685,3 +4710,235 @@ func send_encounter_context(event_id: String, event_type: String, description: S
 func register_behavior(event: String) -> void:
 	if main != null and main.has_method("register_behavior"):
 		main.register_behavior(event)
+
+
+# ---------------------------------------------------------------------------
+# Criatura no mundo e condutas
+# ---------------------------------------------------------------------------
+
+func register_room_vent(room_id: String, vent_global: Vector2) -> void:
+	room_vents[room_id] = vent_global
+
+
+func get_room_vent(room_id: String) -> Vector2:
+	if room_vents.has(room_id):
+		return room_vents[room_id]
+
+	# Sem conduta registada (a decoração ainda não correu): perto da parede de cima.
+	if room_definitions.has(room_id) and underground_root != null:
+		var data: Dictionary = room_definitions[room_id]
+		return underground_root.to_global(data["position"] + Vector2(0.0, -data["size"].y * 0.3))
+
+	if player != null:
+		return player.global_position + Vector2(220.0, 0.0)
+
+	return Vector2.ZERO
+
+
+func create_corridor_vent(corridor_id: String, path: Array) -> void:
+	if underground_root == null:
+		return
+
+	var total := 0.0
+
+	for index in range(path.size() - 1):
+		total += path[index].distance_to(path[index + 1])
+
+	var distance := clampf(total / 2.0 + CORRIDOR_VENT_AHEAD, total / 2.0, maxf(total / 2.0, total - 110.0))
+	var vent := CreatureActor.make_vent()
+	vent.name = "Vent_" + corridor_id
+	add_child(vent)
+	vent.global_position = underground_root.to_global(path_point_at(path, distance))
+	corridor_vents[corridor_id] = vent.global_position
+
+
+func path_point_at(path: Array, distance: float) -> Vector2:
+	var travelled := 0.0
+
+	for index in range(path.size() - 1):
+		var start: Vector2 = path[index]
+		var end: Vector2 = path[index + 1]
+		var length := start.distance_to(end)
+
+		if travelled + length >= distance:
+			return start.lerp(end, (distance - travelled) / maxf(length, 0.001))
+
+		travelled += length
+
+	return path[path.size() - 1]
+
+
+func nearest_vent(point: Vector2) -> Vector2:
+	var best := point + Vector2(220.0, 0.0)
+	var best_distance := INF
+
+	for vent in room_vents.values() + corridor_vents.values():
+		var distance := point.distance_to(vent)
+
+		if distance < best_distance:
+			best = vent
+			best_distance = distance
+
+	return best
+
+
+# Pontos ao acaso na sala para a criatura procurar, longe dos esconderijos:
+# procura, mas não olha lá para dentro.
+func room_search_points(room_id: String, count: int = 4) -> Array:
+	var points: Array = []
+
+	if not room_definitions.has(room_id) or underground_root == null:
+		return points
+
+	var data: Dictionary = room_definitions[room_id]
+	var center := underground_root.to_global(data["position"])
+	var half: Vector2 = data["size"] / 2.0 - Vector2(90.0, 90.0)
+	var spots: Array = room_safe_spots.get(room_id, [])
+
+	for attempt in 40:
+		if points.size() >= count:
+			break
+
+		var point := center + Vector2(
+			visual_rng.randf_range(-half.x, half.x),
+			visual_rng.randf_range(-half.y, half.y)
+		)
+		var near_spot := false
+
+		for spot in spots:
+			if is_instance_valid(spot) and spot.global_position.distance_to(point) < hide_spot_radius + 110.0:
+				near_spot = true
+
+		if not near_spot:
+			points.append(point)
+
+	return points
+
+
+func spawn_creature(vent_global: Vector2) -> Node2D:
+	destroy_creature()
+	creature = CreatureActor.spawn(underground_root if underground_root != null else self, vent_global)
+	return creature
+
+
+func destroy_creature() -> void:
+	if creature != null and is_instance_valid(creature):
+		creature.queue_free()
+
+	creature = null
+
+
+# A criatura volta à conduta e desaparece sozinha.
+func send_creature_home() -> void:
+	if creature != null and is_instance_valid(creature):
+		creature.go_back()
+
+	creature = null
+
+
+# O Player fica parado e a criatura vem até ele (se ainda não estiver no
+# mundo, sai da conduta mais próxima). Dura no máximo uns 4 s.
+func creature_catch_player() -> void:
+	if player == null or not is_instance_valid(player) or underground_root == null:
+		return
+
+	set_player_frozen(true)
+
+	if creature == null or not is_instance_valid(creature):
+		spawn_creature(nearest_vent(player.global_position))
+		creature.emerge_then_search([])
+		await wait_for_signal(creature.emerged, 2.0)
+
+	if creature != null and is_instance_valid(creature):
+		creature.approach(player, CREATURE_STOP_DISTANCE)
+		await wait_for_signal(creature.reached, 3.5)
+		await wait_seconds(CREATURE_ATTACK_TIME)
+
+	set_player_frozen(false)
+
+
+# Encontro no corredor: sai da conduta, procura um instante e vem até ao Player.
+func play_corridor_creature(corridor_id: String) -> void:
+	if player == null or not is_instance_valid(player) or underground_root == null:
+		return
+
+	var vent: Vector2 = corridor_vents.get(corridor_id, nearest_vent(player.global_position))
+
+	set_player_frozen(true)
+	spawn_creature(vent)
+	creature.emerge_then_search([])
+	await wait_for_signal(creature.emerged, 2.0)
+	await wait_seconds(CORRIDOR_SEARCH_TIME)
+
+	await creature_catch_player()
+
+
+# Game Over do RUN: a criatura apanha o Player e só depois aparece o ecrã.
+func capture_then_game_over() -> void:
+	if not get_tree().paused:
+		await creature_catch_player()
+
+	show_run_game_over()
+
+
+func set_player_frozen(frozen: bool) -> void:
+	if player != null and is_instance_valid(player) and player.has_method("set_tutorial_locked"):
+		player.set_tutorial_locked(frozen)
+
+
+func wait_seconds(seconds: float) -> void:
+	await get_tree().create_timer(seconds, false).timeout
+
+
+# Espera por um sinal, no máximo "seconds" de jogo (a pausa não conta).
+func wait_for_signal(sig: Signal, seconds: float) -> void:
+	var state := {"done": false}
+	var on_signal := func(_a = null, _b = null): state["done"] = true
+	sig.connect(on_signal, CONNECT_ONE_SHOT)
+	var waited := 0.0
+
+	while not state["done"] and waited < seconds:
+		await get_tree().process_frame
+
+		if not get_tree().paused:
+			waited += get_process_delta_time()
+
+	if is_instance_valid(sig.get_object()) and sig.is_connected(on_signal):
+		sig.disconnect(on_signal)
+
+
+# Caixas à frente de cada esconderijo: quem está lá dentro (Player ou Atlas)
+# fica tapado da cintura para baixo, para se perceber que não está à vista.
+func add_hide_cover(spot: Area2D, index: int) -> void:
+	var cover := Node2D.new()
+	cover.name = "Cover"
+	cover.z_as_relative = false
+	cover.z_index = HIDE_COVER_BEHIND_Z
+	spot.add_child(cover)
+
+	var big := DecorProps.make("crate", Vector2(60.0, 52.0), false, index)
+	big.position = Vector2(-28.0, 6.0)
+	cover.add_child(big)
+
+	var small := DecorProps.make("crate", Vector2(48.0, 40.0), false, index + 1)
+	small.position = Vector2(30.0, 12.0)
+	cover.add_child(small)
+
+	spot.set_meta("cover", cover)
+
+
+# As caixas ficam à frente das personagens só quando alguém está dentro do
+# esconderijo; quem passa ao lado continua a ser desenhado por cima delas.
+func update_hide_covers() -> void:
+	for spots in room_safe_spots.values():
+		for spot in spots:
+			if not is_instance_valid(spot) or not spot.has_meta("cover"):
+				continue
+
+			var inside := false
+
+			for body in [player, atlas]:
+				if body != null and is_instance_valid(body) and body.global_position.distance_to(spot.global_position) <= hide_spot_radius:
+					inside = true
+
+			spot.get_meta("cover").z_index = HIDE_COVER_FRONT_Z if inside else HIDE_COVER_BEHIND_Z

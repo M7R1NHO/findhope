@@ -56,12 +56,12 @@ const TUTORIALS := {
 	"fight": {
 		"title": "LUTA SONORA (FIGHT)",
 		"steps": [
-			["1. AJUSTE", "Antes de cada ataque escolhe uma carta: +10 VIDA, +3 DANO SONORO, ou +5 VIDA e +2 DANO."],
-			["2. DESVIAR", "Durante 6 s desvia-te das garras e mordidas com W A S D. [1] controla o Player, [2] o Atlas. Cada golpe tira 3 de VIDA."],
-			["3. POSIÇÃO", "Em 5 s leva o Player para a zona AZUL e o Atlas para a zona VERMELHA. Player fora da zona: -1 VIDA."],
-			["VITÓRIA", "Atlas na zona vermelha com DANO SONORO de 10 ou mais: a onda sonora afasta a criatura."],
+			["1. FUGIR", "A criatura persegue o Player. [1] controla o Player: foge com W A S D."],
+			["2. APONTAR", "[2] controla o Atlas. Aponta com o rato para a criatura."],
+			["3. DISPARAR", "Com o Atlas, carrega E para disparar o dispositivo sónico. Depois espera 2 s de recarga."],
+			["VITÓRIA", "10 golpes sónicos na criatura e ela recua."],
 		],
-		"tip": "O dano começa em 1: três cartas de +3 chegam aos 10. A VIDA é partilhada; se chegar a 0, perdem.",
+		"tip": "Garras, mordidas e o toque da criatura tiram VIDA. A VIDA é partilhada; se chegar a 0, perdem.",
 	},
 	"hide": {
 		"title": "ESCONDER (HIDE)",

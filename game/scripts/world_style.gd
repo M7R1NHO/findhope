@@ -54,8 +54,6 @@ func style_node(node: Node) -> void:
 		style_polygon(node)
 	elif node is Line2D:
 		style_line(node)
-	elif node is Label and node.name == "RoomName":
-		style_room_label(node)
 
 
 func should_skip(node: CanvasItem) -> bool:
@@ -153,14 +151,6 @@ func style_line(line: Line2D) -> void:
 	outline.show_behind_parent = true
 	outline.set_meta("world_style", true)
 	line.add_child(outline)
-
-
-func style_room_label(label: Label) -> void:
-	label.set_meta("world_style", true)
-	label.add_theme_color_override("font_color", Color(0.92, 0.9, 0.82))
-	label.add_theme_color_override("font_outline_color", OUTLINE)
-	label.add_theme_constant_override("outline_size", 8)
-	label.modulate.a = 0.75
 
 
 func add_outline(poly: Polygon2D, width: float) -> void:

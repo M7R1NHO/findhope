@@ -20,7 +20,20 @@ const CharacterFrames := preload("res://scripts/character_frames.gd")
 const VIEW_SIZE := Vector2(1000.0, 300.0)
 const ROOM := Rect2(200.0, 14.0, 600.0, 272.0)
 const WALL := 12.0
-const DOOR_HEIGHT := 92.0
+# Mesma proporção que as aberturas da Sala de Controlo no mundo (228 em 453).
+const DOOR_HEIGHT := 136.0
+
+# Planta da sala, em coordenadas desta vista. A Sala de Controlo do mundo
+# (phase3_layout.gd + control_room_art.gd) é construída a partir destes
+# números com to_room(), para a sala onde se anda ser a mesma do confronto.
+const CONSOLE := Rect2(420.0, 26.0, 160.0, 40.0)
+const PLAYER_FEET := Vector2(470.0, 122.0)
+const ATLAS_FEET := Vector2(532.0, 122.0)
+const RING_CENTER := Vector2(500.0, 205.0)
+const RING_RADIUS := 46.0
+const THERMO_SIZE := Vector2(12.0, 150.0)
+const THERMO_TOP := 40.0
+const THERMO_INSET := {"left": 34.0, "right": 46.0}
 const DOOR_SPEED := 6.0            # fração da porta por segundo (~0,17 s)
 const INTRUDER_TIME := 1.4         # quanto tempo a criatura fica à vista ao entrar
 const INTRUDER_WALK := 0.5         # dos quais a passar a porta
@@ -96,6 +109,21 @@ func heat_of(side: String) -> float:
 	return clamp((float(boss.sensor_readings[side]) - 12.0) / 27.0, 0.0, 1.0)
 
 
+# Tamanho da sala no mundo com a mesma proporção desta planta.
+static func room_size_for(width: float) -> Vector2:
+	return Vector2(width, width * ROOM.size.y / ROOM.size.x)
+
+
+# Ponto da planta -> posição local na sala do mundo (centro da sala = 0, 0).
+static func to_room(view_point: Vector2, room_size: Vector2) -> Vector2:
+	return (view_point - ROOM.get_center()) * (room_size.x / ROOM.size.x)
+
+
+static func thermo_rect(side: String) -> Rect2:
+	var x: float = ROOM.position.x + THERMO_INSET["left"] if side == "left" else ROOM.end.x - THERMO_INSET["right"]
+	return Rect2(Vector2(x, ROOM.position.y + THERMO_TOP), THERMO_SIZE)
+
+
 func door_rect(side: String) -> Rect2:
 	var y := ROOM.get_center().y - DOOR_HEIGHT / 2.0
 	var x := ROOM.position.x - WALL / 2.0 if side == "left" else ROOM.end.x - WALL / 2.0
@@ -118,8 +146,8 @@ func _draw() -> void:
 		draw_thermometer(side)
 	draw_hangar_ring()
 	draw_console()
-	draw_player(Vector2(470.0, 96.0))
-	draw_atlas(Vector2(532.0, 96.0))
+	draw_player(PLAYER_FEET - Vector2(0.0, 26.0))
+	draw_atlas(ATLAS_FEET - Vector2(0.0, 26.0))
 	if intruder_time > 0.0:
 		draw_intruder(intruder_side)
 	if boss.power_out:
@@ -199,8 +227,7 @@ func draw_door(side: String) -> void:
 
 func draw_thermometer(side: String) -> void:
 	var heat := heat_of(side)
-	var x := ROOM.position.x + 34.0 if side == "left" else ROOM.end.x - 46.0
-	var tube := Rect2(x, ROOM.position.y + 40.0, 12.0, 150.0)
+	var tube := thermo_rect(side)
 	draw_rect(tube, Color(0.05, 0.06, 0.08))
 	var fill_height: float = tube.size.y * max(0.08, heat)
 	var cold := Color(0.25, 0.55, 0.9)
@@ -218,10 +245,10 @@ func draw_thermometer(side: String) -> void:
 
 
 func draw_hangar_ring() -> void:
-	var center := Vector2(500.0, 205.0)
+	var center := RING_CENTER
 	var progress: float = 1.0 - float(boss.time_left) / float(boss.DURATION)
-	draw_arc(center, 46.0, 0.0, TAU, 48, Color(0.18, 0.22, 0.26), 8.0)
-	draw_arc(center, 46.0, -PI / 2.0, -PI / 2.0 + TAU * progress, 48, UIStyle.ACCENT, 8.0)
+	draw_arc(center, RING_RADIUS, 0.0, TAU, 48, Color(0.18, 0.22, 0.26), 8.0)
+	draw_arc(center, RING_RADIUS, -PI / 2.0, -PI / 2.0 + TAU * progress, 48, UIStyle.ACCENT, 8.0)
 	var font := get_theme_default_font()
 	var seconds := str(int(ceil(float(boss.time_left)))) + " s"
 	draw_string(font, center + Vector2(-46.0, 6.0), seconds, HORIZONTAL_ALIGNMENT_CENTER, 92.0, 20, UIStyle.TEXT)
@@ -229,7 +256,7 @@ func draw_hangar_ring() -> void:
 
 
 func draw_console() -> void:
-	var desk := Rect2(420.0, 26.0, 160.0, 40.0)
+	var desk := CONSOLE
 	draw_rect(desk, Color(0.2, 0.24, 0.29))
 	for i in 3:
 		var screen := Rect2(desk.position.x + 10.0 + i * 50.0, desk.position.y + 7.0, 40.0, 24.0)
