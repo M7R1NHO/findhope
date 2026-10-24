@@ -1,6 +1,8 @@
 
 extends CharacterBody2D
 
+const CharacterSprite := preload("res://scripts/character_sprite.gd")
+
 @export var speed: float = 200.0
 @export var min_x: float = -3400.0
 @export var max_x: float = 1940.0
@@ -16,6 +18,7 @@ var tutorial_target: Node2D = null
 func _ready():
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
 	atlas = get_parent().get_node_or_null("Atlas")
+	CharacterSprite.attach(self, "player")
 
 
 func _physics_process(_delta):

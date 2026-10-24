@@ -20,24 +20,23 @@ var interaction_prompt_layer: CanvasLayer = null
 var interaction_prompt_label: Label = null
 var phase3_exit_doors: Array[Dictionary] = []
 var exit_doors_open: bool = false
-var alien: Node2D
-var alien_encounter_active := false
-var alien_encounter_done := false
-var alien_attack_clock := 0.0
-var alien_attacks := 0
-var alien_hud: CanvasLayer
-var alien_message: Label
-var creature_node: Node2D = null
-var encounter_active: bool = false
-var encounter_finished: bool = false
-var encounter_time: float = 0.0
-var encounter_wave: int = 0
-var encounter_attack_timer: float = 0.0
-var encounter_attack_direction: Vector2 = Vector2.ZERO
-var encounter_hud_layer: CanvasLayer = null
-var encounter_hud_label: Label = null
-var encounter_hint_label: Label = null
-var encounter_intro_done: bool = false
+
+# Confronto da Sala de Controlo (P3.3).
+const Phase3Boss := preload("res://scripts/phase3_boss.gd")
+const CharacterFrames := preload("res://scripts/character_frames.gd")
+var boss_done: bool = false
+var boss_active: bool = false
+var atlas_damaged: bool = false
+var boss_ui: CanvasLayer = null
+var hangar_door: Dictionary = {}
+
+# Hangar e escolha final (P3.4).
+const Phase3Hangar := preload("res://scripts/phase3_hangar.gd")
+const EndingScreen := preload("res://scripts/ending_screen.gd")
+var hangar_active: bool = false
+var hangar_ui: CanvasLayer = null
+var final_outcome: String = ""
+var ending_screen: CanvasLayer = null
 
 @export var room_size: Vector2 = Vector2(1000.0, 600.0)
 @export var corridor_width: float = 180.0
@@ -62,8 +61,14 @@ func _ready() -> void:
 	if not Engine.is_editor_hint():
 		# A revelação já vista continua vista depois de carregar um save.
 		twist_stage = int(SaveManager.get_run_value("world", "phase3_twist_stage", 0))
+		boss_done = bool(SaveManager.get_run_value("story", "phase3_boss_done", false))
+		atlas_damaged = bool(SaveManager.get_run_value("story", "atlas_damaged", false))
 		rebuild_layout()
+		call_deferred("apply_atlas_damage_visual")
 		create_interaction_prompt()
+		if twist_stage >= 3:
+			# Repetir o facto ao carregar: o backend ignora marcos duplicados.
+			call_deferred("send_distress_revealed_event")
 
 
 func _process(_delta: float) -> void:
@@ -74,7 +79,6 @@ func _process(_delta: float) -> void:
 		return
 
 	update_phase3_exit_door()
-	update_alien_encounter(_delta)
 
 	var player_node := get_tree().current_scene.find_child("Player", true, false)
 	if player_node == null or not player_node is Node2D:
@@ -132,9 +136,9 @@ func rebuild_layout() -> void:
 	var room_2_x: float = step_x
 	var room_3_x: float = step_x * 2.0
 
-	create_room("Sala_1_Android", Vector2(room_1_x, 0.0), true, true, "SALA 1 - ANDROID")
-	create_room("Sala_2_Criatura", Vector2(room_2_x, 0.0), true, true, "SALA 2 - CRIATURA")
-	create_room("Sala_3_Nave", Vector2(room_3_x, 0.0), true, false, "SALA 3 - NAVE")
+	create_room("Sala_1_Android", Vector2(room_1_x, 0.0), true, true, "ALA DE COMUNICAÇÕES")
+	create_room("Sala_2_Criatura", Vector2(room_2_x, 0.0), true, true, "SALA DE CONTROLO")
+	create_room("Sala_3_Nave", Vector2(room_3_x, 0.0), true, false, "HANGAR")
 
 	create_corridor("Corredor_Android_Criatura", Vector2(room_1_x + room_size.x / 2.0 + corridor_length / 2.0, 0.0))
 	create_corridor("Corredor_Criatura_Nave", Vector2(room_2_x + room_size.x / 2.0 + corridor_length / 2.0, 0.0))
@@ -146,11 +150,14 @@ func rebuild_layout() -> void:
 
 	# Criar os objetos narrativos interativos da Sala 1.
 	create_phase3_story_objects()
-	create_alien_encounter()
 	phase3_exit_doors.clear()
 	# Portas nas duas extremidades do corredor entre o Android e a Criatura.
 	create_phase3_exit_door("Porta_Saida_Android", Vector2(room_size.x / 2.0, 0.0))
 	create_phase3_exit_door("Porta_Entrada_Criatura", Vector2(step_x - room_size.x / 2.0, 0.0))
+	create_boss_trigger(Vector2(room_2_x, 0.0))
+	create_hangar_door(Vector2(room_2_x + room_size.x / 2.0, 0.0))
+	create_explorer_ship(Vector2(room_3_x + 250.0, 0.0))
+	create_hangar_trigger(Vector2(room_3_x - 150.0, 0.0))
 
 	# Limites invisiveis exteriores da Fase 3.
 	var left_edge: float = -room_size.x / 2.0
@@ -167,106 +174,6 @@ func rebuild_layout() -> void:
 	create_invisible_wall("Limite_Direito", Vector2(right_edge + thickness / 2.0, 0.0), Vector2(thickness, room_size.y + thickness * 2.0))
 
 	print("PHASE 3: salas, corredores, estruturas e limites invisiveis criados.")
-
-
-func create_alien_encounter() -> void:
-	var room_x := room_size.x + corridor_length
-	alien = Node2D.new()
-	alien.name = "Criatura_Alienigena"
-	alien.position = Vector2(room_x, -60)
-	alien.add_to_group("phase3_generated")
-	add_child(alien)
-
-	var body := Polygon2D.new()
-	body.name = "Corpo"
-	body.polygon = PackedVector2Array([Vector2(-45,-55), Vector2(-20,-95), Vector2(18,-90), Vector2(45,-45), Vector2(52,15), Vector2(20,55), Vector2(-25,45), Vector2(-50,5)])
-	body.color = Color(0.18, 0.27, 0.23)
-	alien.add_child(body)
-	var head := Polygon2D.new()
-	head.name = "Cabeca"
-	head.polygon = PackedVector2Array([Vector2(-30,-75), Vector2(-18,-115), Vector2(15,-120), Vector2(34,-85), Vector2(20,-55), Vector2(-20,-52)])
-	head.color = Color(0.30, 0.40, 0.31)
-	alien.add_child(head)
-	for x in [-12.0, 13.0]:
-		var eye := Polygon2D.new()
-		eye.polygon = PackedVector2Array([Vector2(-5,-3),Vector2(5,-3),Vector2(5,3),Vector2(-5,3)])
-		eye.position = Vector2(x,-91)
-		eye.color = Color(1.0,0.86,0.22)
-		alien.add_child(eye)
-
-	var trigger := Area2D.new()
-	trigger.name = "ConfrontoTrigger"
-	trigger.position = Vector2(room_x, 0)
-	trigger.collision_layer = 0
-	trigger.collision_mask = 1
-	trigger.add_to_group("phase3_generated")
-	var shape_node := CollisionShape2D.new()
-	var shape := CircleShape2D.new()
-	shape.radius = 300.0
-	shape_node.shape = shape
-	trigger.add_child(shape_node)
-	add_child(trigger)
-	trigger.body_entered.connect(_on_alien_trigger_entered)
-
-
-func _on_alien_trigger_entered(body: Node2D) -> void:
-	if body.name != "Player" or alien_encounter_active or alien_encounter_done:
-		return
-	alien_encounter_active = true
-	alien_attack_clock = 2.0
-	alien_attacks = 0
-	alien_hud = CanvasLayer.new()
-	alien_hud.name = "AlienEncounterHUD"
-	alien_hud.layer = 750
-	add_child(alien_hud)
-	var message := Label.new()
-	message.name = "AlienEncounterText"
-	message.text = "ATLAS: Não é uma criatura perdida. Está a proteger alguma coisa."
-	message.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	message.position = Vector2(25, 25)
-	message.size = Vector2(1050, 55)
-	message.add_theme_font_size_override("font_size", 22)
-	message.add_theme_color_override("font_color", Color.WHITE)
-	alien_hud.add_child(message)
-	alien_message = message
-
-
-func update_alien_encounter(delta: float) -> void:
-	if not alien_encounter_active or alien_encounter_done or get_tree().paused or not is_instance_valid(alien):
-		return
-	var player := get_tree().current_scene.find_child("Player", true, false)
-	if not player is Node2D:
-		return
-	alien_attack_clock -= delta
-	var distance := alien.global_position.distance_to(player.global_position)
-	if alien_attack_clock <= 0.0:
-		alien_attacks += 1
-		if distance < 85.0:
-			# A investida falha se o jogador se afastar a tempo; sem alterar a VIDA existente.
-			if is_instance_valid(alien_message):
-				alien_message.text = "ATLAS: AFASTA-TE! A criatura está a preparar outra investida."
-		else:
-			if is_instance_valid(alien_message):
-				alien_message.text = "ATLAS: Boa! Desviámo-nos. Não a deixes encurralar-te."
-		alien.global_position += (player.global_position - alien.global_position).normalized() * 115.0
-		alien_attack_clock = 2.6
-		if alien_attacks >= 3:
-			alien_encounter_active = false
-			alien_encounter_done = true
-			if is_instance_valid(alien_message):
-				alien_message.text = "ATLAS: Está a recuar... e deixou algo junto à parede."
-			alien.modulate = Color(0.55,0.65,0.58,0.55)
-			alien.position += Vector2(-180,-70)
-			await get_tree().create_timer(3.0).timeout
-			if is_instance_valid(alien_hud):
-				alien_hud.queue_free()
-			alien_hud = null
-			alien_message = null
-			return
-	# A criatura aproxima-se lentamente entre as investidas.
-	var direction: Vector2 = player.global_position - alien.global_position
-	if direction.length() > 100.0:
-		alien.global_position += direction.normalized() * 28.0 * delta
 
 
 func create_room(room_name: String, center: Vector2, opening_left: bool, opening_right: bool, label_text: String) -> void:
@@ -471,32 +378,29 @@ func rectangle(size: Vector2) -> PackedVector2Array:
 
 func create_phase3_story_objects() -> void:
 	# Objetos provisórios sem sprites: serão substituídos pela arte final depois.
-	var ship := Phase3Interactable.new()
-	ship.name = "Nave_Registo_Socorro"
-	ship.add_to_group("phase3_generated")
-	ship.position = Vector2(-220.0, 80.0)
-	ship.object_type = "ship"
-	ship.layout = self
-	ship.add_to_group("interactable")
-	add_child(ship)
+	# Terminal onde ficou gravado o pedido de socorro (não é a nave do Hangar).
+	var terminal := Phase3Interactable.new()
+	terminal.name = "Terminal_Comunicacoes"
+	terminal.add_to_group("phase3_generated")
+	terminal.position = Vector2(-220.0, 80.0)
+	terminal.object_type = "terminal"
+	terminal.layout = self
+	terminal.add_to_group("interactable")
+	add_child(terminal)
 
-	var ship_visual := Polygon2D.new()
-	ship_visual.name = "PlaceholderVisual"
-	ship_visual.polygon = PackedVector2Array([
-		Vector2(-190.0, -45.0), Vector2(125.0, -45.0),
-		Vector2(190.0, 0.0), Vector2(125.0, 45.0),
-		Vector2(-190.0, 45.0), Vector2(-145.0, 0.0)
-	])
-	ship_visual.color = Color(0.22, 0.34, 0.42, 1.0)
-	ship_visual.z_index = 2
-	ship.add_child(ship_visual)
+	var terminal_visual := Polygon2D.new()
+	terminal_visual.name = "PlaceholderVisual"
+	terminal_visual.polygon = rectangle(Vector2(150.0, 90.0))
+	terminal_visual.color = Color(0.22, 0.34, 0.42, 1.0)
+	terminal_visual.z_index = 2
+	terminal.add_child(terminal_visual)
 
-	var ship_label := Label.new()
-	ship_label.text = "NAVE / REGISTO"
-	ship_label.position = Vector2(-100.0, 50.0)
-	ship_label.size = Vector2(200.0, 30.0)
-	ship_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ship.add_child(ship_label)
+	var terminal_label := Label.new()
+	terminal_label.text = "TERMINAL DE COMUNICAÇÕES"
+	terminal_label.position = Vector2(-140.0, 50.0)
+	terminal_label.size = Vector2(280.0, 30.0)
+	terminal_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	terminal.add_child(terminal_label)
 
 	var android := Phase3Interactable.new()
 	android.name = "Android_Danificado"
@@ -529,6 +433,21 @@ func create_phase3_story_objects() -> void:
 	android_head.z_index = 2
 	android.add_child(android_head)
 
+	# O outro androide usa o sprite do Atlas, caído e mais escuro.
+	var android_texture := CharacterFrames.first_texture("atlas", "idle_front")
+	if android_texture != null:
+		android_body.visible = false
+		android_head.visible = false
+		var android_sprite := Sprite2D.new()
+		android_sprite.name = "AndroidSprite"
+		android_sprite.texture = android_texture
+		android_sprite.scale = Vector2(0.8, 0.8)
+		android_sprite.rotation_degrees = -78.0
+		android_sprite.position = Vector2(0.0, 40.0)
+		android_sprite.modulate = Color(0.55, 0.5, 0.48)
+		android_sprite.z_index = 2
+		android.add_child(android_sprite)
+
 	var android_label := Label.new()
 	android_label.text = "UNIDADE DANIFICADA"
 	android_label.position = Vector2(-110.0, 80.0)
@@ -545,10 +464,10 @@ func show_twist_dialogue(object_type: String) -> void:
 	dialogue_index = 0
 	dialogue_final_stage = twist_stage
 
-	if object_type == "ship":
+	if object_type == "terminal":
 		if twist_stage == 0:
 			dialogue_lines = [
-				"ATLAS: Este registo foi preservado na memória de bordo.",
+				"ATLAS: Este registo ficou preservado na memória do terminal.",
 				"REGISTO: A alteração de rota não foi provocada por uma falha de navegação.",
 				"ATLAS: Recebi um pedido de socorro. Alguém transmitiu um sinal deliberado... e eu respondi."
 			]
@@ -562,10 +481,10 @@ func show_twist_dialogue(object_type: String) -> void:
 			]
 			dialogue_final_stage = 3
 		else:
-			dialogue_lines = ["Os registos da nave já foram analisados. Não há mais dados recuperáveis neste terminal."]
+			dialogue_lines = ["Os registos do terminal já foram analisados. Não há mais dados recuperáveis."]
 	else:
 		if twist_stage == 0:
-			dialogue_lines = ["ATLAS: Devo analisar primeiro os registos da nave. O sinal pode ter ficado guardado lá."]
+			dialogue_lines = ["ATLAS: Devo analisar primeiro o terminal de comunicações. O sinal pode ter ficado guardado lá."]
 		elif twist_stage == 1:
 			dialogue_lines = [
 				"ATLAS: A unidade está danificada, mas o emissor de socorro é compatível com a sua arquitetura.",
@@ -637,6 +556,8 @@ func create_twist_dialogue_ui() -> void:
 	dialogue_button.pressed.connect(_on_twist_dialogue_button_pressed)
 	content.add_child(dialogue_button)
 
+	# Bíblia 4.5: não se grava durante cutscenes.
+	SaveManager.set_manual_save_block("cutscene", true)
 	get_tree().paused = true
 
 func update_twist_dialogue() -> void:
@@ -652,6 +573,7 @@ func _on_twist_dialogue_button_pressed() -> void:
 		update_twist_dialogue()
 		return
 
+	var previous_stage := twist_stage
 	twist_stage = max(twist_stage, dialogue_final_stage)
 	SaveManager.set_run_value("world", "phase3_twist_stage", twist_stage)
 	if dialogue_layer != null and is_instance_valid(dialogue_layer):
@@ -659,5 +581,247 @@ func _on_twist_dialogue_button_pressed() -> void:
 	dialogue_layer = null
 	dialogue_label = null
 	dialogue_button = null
+	SaveManager.set_manual_save_block("cutscene", false)
 	get_tree().paused = false
 	# O prompt volta a ser atualizado pelo _process quando o jogo retomar.
+
+	if previous_stage < 3 and twist_stage >= 3:
+		send_distress_revealed_event()
+		var main := get_tree().current_scene
+		if main != null and main.has_method("request_atlas_spontaneous"):
+			main.request_atlas_spontaneous("phase3_distress_revealed")
+
+
+# A revelação completa é um facto confirmado pelo jogo: leva o Atlas
+# ao estágio narrativo 7 ("algo_mais"). O Atlas só a conhece a partir daqui.
+func send_distress_revealed_event() -> void:
+	var main := get_tree().current_scene
+	if main == null or not main.has_method("send_gameplay_context_event"):
+		return
+	main.send_gameplay_context_event(
+		"phase3_distress_revealed",
+		"discovery",
+		"Os registos confirmaram que o desvio da Nave 47 foi a resposta de Atlas a um pedido de socorro de outro androide, capturado nesta instalação com um humano. A criatura era esse humano."
+	)
+
+
+# =========================================================
+# CONFRONTO DA SALA DE CONTROLO (estilo FNAF)
+# =========================================================
+
+func create_boss_trigger(center: Vector2) -> void:
+	var trigger := Area2D.new()
+	trigger.name = "ConfrontoSalaControlo"
+	trigger.position = center
+	trigger.collision_layer = 0
+	trigger.collision_mask = 1
+	trigger.add_to_group("phase3_generated")
+	var shape_node := CollisionShape2D.new()
+	var shape := CircleShape2D.new()
+	shape.radius = 220.0
+	shape_node.shape = shape
+	trigger.add_child(shape_node)
+	add_child(trigger)
+	trigger.body_entered.connect(_on_boss_trigger_entered)
+
+
+# Porta do Hangar: só abre quando o Atlas termina de a abrir durante o confronto.
+func create_hangar_door(center: Vector2) -> void:
+	var door := StaticBody2D.new()
+	door.name = "Porta_Hangar"
+	door.position = center
+	door.add_to_group("phase3_generated")
+	add_child(door)
+	var door_size := Vector2(wall_width + 8.0, corridor_width + wall_width * 2.0 + 12.0)
+	var visual := Polygon2D.new()
+	visual.name = "Visual"
+	visual.polygon = rectangle(door_size)
+	visual.color = Color(0.55, 0.32, 0.22, 1.0)
+	visual.z_index = 5
+	door.add_child(visual)
+	var collision := CollisionShape2D.new()
+	collision.name = "Collision"
+	var shape := RectangleShape2D.new()
+	shape.size = door_size
+	collision.shape = shape
+	door.add_child(collision)
+	hangar_door = {"body": door, "visual": visual, "collision": collision}
+	set_hangar_door_open(boss_done)
+
+
+func set_hangar_door_open(open: bool) -> void:
+	if hangar_door.is_empty():
+		return
+	hangar_door["visual"].visible = not open
+	hangar_door["collision"].set_deferred("disabled", open)
+
+
+func _on_boss_trigger_entered(body: Node2D) -> void:
+	if body.name != "Player":
+		return
+	start_boss()
+
+
+func start_boss(seed: int = 0) -> void:
+	if boss_done or boss_active or twist_stage < 3:
+		return
+	boss_active = true
+	SaveManager.set_manual_save_block("confronto", true)
+	var player := get_tree().current_scene.find_child("Player", true, false)
+	if player is CharacterBody2D:
+		player.velocity = Vector2.ZERO
+
+	# Autosave antes do confronto: sair do jogo a meio volta a este ponto.
+	await SaveManager.autosave_when_safe("phase3_boss_start")
+	if not is_inside_tree():
+		return
+
+	boss_ui = Phase3Boss.new()
+	boss_ui.name = "Phase3BossUI"
+	get_tree().current_scene.add_child(boss_ui)
+	boss_ui.finished.connect(_on_boss_finished)
+	get_tree().paused = true
+	boss_ui.open_briefing(seed)
+
+
+func _on_boss_finished(damaged: bool, stats: Dictionary) -> void:
+	# Deixar o Player ler a última fala do Atlas antes de fechar a consola.
+	await get_tree().create_timer(2.5, true, false, true).timeout
+	boss_done = true
+	atlas_damaged = damaged
+	SaveManager.set_run_value("story", "phase3_boss_done", true)
+	SaveManager.set_run_value("story", "atlas_damaged", damaged)
+	SaveManager.set_run_value("story", "phase3_boss_stats", stats)
+	if is_instance_valid(boss_ui):
+		boss_ui.queue_free()
+	boss_ui = null
+	boss_active = false
+	SaveManager.set_manual_save_block("confronto", false)
+	get_tree().paused = false
+	set_hangar_door_open(true)
+	apply_atlas_damage_visual()
+
+	var main := get_tree().current_scene
+	if main != null and main.has_method("send_gameplay_context_event"):
+		main.send_gameplay_context_event(
+			"phase3_boss_survived",
+			"event",
+			(
+				"Atlas e o jogador sobreviveram ao confronto na Sala de Controlo. "
+				+ (
+					"A criatura entrou e o Atlas ficou danificado ao proteger o jogador."
+					if damaged
+					else "A criatura nunca chegou a entrar e o Atlas saiu inteiro."
+				)
+			)
+		)
+	SaveManager.autosave_when_safe("phase3_boss_completed")
+
+
+# Sem sprites: o Atlas danificado fica mais escuro e avermelhado.
+func apply_atlas_damage_visual() -> void:
+	if not atlas_damaged or not is_inside_tree():
+		return
+	var atlas_node := get_tree().current_scene.find_child("Atlas", true, false)
+	if atlas_node is CanvasItem:
+		atlas_node.modulate = Color(0.85, 0.45, 0.4, 1.0)
+
+
+# =========================================================
+# HANGAR: NAVE DO EXPLORADOR E ESCOLHA FINAL
+# =========================================================
+
+func create_explorer_ship(center: Vector2) -> void:
+	var ship := Node2D.new()
+	ship.name = "Nave_Explorador"
+	ship.position = center
+	ship.add_to_group("phase3_generated")
+	add_child(ship)
+	var hull := Polygon2D.new()
+	hull.name = "PlaceholderVisual"
+	hull.polygon = PackedVector2Array([
+		Vector2(-170.0, -70.0), Vector2(90.0, -70.0), Vector2(190.0, 0.0),
+		Vector2(90.0, 70.0), Vector2(-170.0, 70.0), Vector2(-120.0, 0.0)
+	])
+	hull.color = Color(0.30, 0.36, 0.40, 1.0)
+	hull.z_index = 2
+	ship.add_child(hull)
+	var label := Label.new()
+	label.text = "NAVE DO EXPLORADOR"
+	label.position = Vector2(-120.0, 80.0)
+	label.size = Vector2(240.0, 30.0)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ship.add_child(label)
+
+
+func create_hangar_trigger(center: Vector2) -> void:
+	var trigger := Area2D.new()
+	trigger.name = "EntradaHangar"
+	trigger.position = center
+	trigger.collision_layer = 0
+	trigger.collision_mask = 1
+	trigger.add_to_group("phase3_generated")
+	var shape_node := CollisionShape2D.new()
+	var shape := CircleShape2D.new()
+	shape.radius = 200.0
+	shape_node.shape = shape
+	trigger.add_child(shape_node)
+	add_child(trigger)
+	trigger.body_entered.connect(_on_hangar_trigger_entered)
+
+
+func _on_hangar_trigger_entered(body: Node2D) -> void:
+	if body.name != "Player":
+		return
+	start_hangar()
+
+
+func start_hangar() -> void:
+	if not boss_done or hangar_active or not final_outcome.is_empty():
+		return
+	hangar_active = true
+	# A partir daqui a run caminha para o final: não há mais saves.
+	SaveManager.set_manual_save_block("final", true)
+	var main := get_tree().current_scene
+	var player_node := main.find_child("Player", true, false)
+	var atlas_node := main.find_child("Atlas", true, false)
+	if player_node is CharacterBody2D:
+		player_node.velocity = Vector2.ZERO
+	var room_3_x := (room_size.x + corridor_length) * 2.0
+	if atlas_damaged and atlas_node is Node2D:
+		# O Atlas danificado fica caído à entrada do Hangar.
+		atlas_node.global_position = global_position + Vector2(room_3_x - 400.0, 140.0)
+		atlas_node.rotation = deg_to_rad(80.0)
+
+	var vida := 100
+	var fight_manager := main.get_node_or_null("FightManager")
+	if fight_manager != null and fight_manager.has_method("get_shared_life"):
+		vida = int(fight_manager.get_shared_life())
+
+	hangar_ui = Phase3Hangar.new()
+	hangar_ui.name = "Phase3HangarUI"
+	hangar_ui.atlas_damaged = atlas_damaged
+	hangar_ui.vida = vida
+	hangar_ui.player = player_node
+	hangar_ui.atlas = atlas_node
+	hangar_ui.ship_position = global_position + Vector2(room_3_x + 150.0, 0.0)
+	main.add_child(hangar_ui)
+	hangar_ui.outcome_chosen.connect(_on_final_outcome_chosen)
+	get_tree().paused = true
+	hangar_ui.start()
+
+
+func _on_final_outcome_chosen(outcome: String, facts: Dictionary) -> void:
+	final_outcome = outcome
+	SaveManager.set_run_value("story", "final_outcome", outcome)
+	SaveManager.set_run_value("story", "final_choice", str(facts.get("choice", "")))
+	SaveManager.set_run_value("story", "final_vida", int(facts.get("vida", 0)))
+	print("PHASE 3 FINAL OUTCOME: ", facts)
+	if is_instance_valid(hangar_ui):
+		hangar_ui.queue_free()
+	hangar_ui = null
+	# P3.6: o ecrã do final pede ao backend a variante do Atlas e as falas.
+	ending_screen = EndingScreen.new()
+	ending_screen.name = "EndingScreen"
+	get_tree().current_scene.add_child(ending_screen)
+	ending_screen.start(facts)

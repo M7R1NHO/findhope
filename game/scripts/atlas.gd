@@ -1,5 +1,7 @@
 extends CharacterBody2D
 
+const CharacterSprite := preload("res://scripts/character_sprite.gd")
+
 
 signal sensor_message(message: String)
 
@@ -36,6 +38,7 @@ var ancient_sculpture_discovered: bool = false
 
 func _ready():
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
+	CharacterSprite.attach(self, "atlas")
 
 	player = get_parent().get_node(
 		"Player"

@@ -1,5 +1,7 @@
 extends Node
 
+const TutorialCard := preload("res://scripts/tutorial_card.gd")
+
 
 # =========================================================
 # SINAIS
@@ -217,6 +219,10 @@ func _process(delta):
 	if not hack_active:
 		return
 
+	# Com um tutorial aberto, os temporizadores param.
+	if TutorialCard.is_open(get_tree()):
+		return
+
 	if finishing_hack:
 		return
 
@@ -318,6 +324,8 @@ func start_hack(
 
 
 	create_base_ui()
+
+	TutorialCard.show_once(self, "hack")
 
 	# Hacks normais iniciam diretamente um unico minijogo sorteado.
 	# A sobrecarga so pode ser iniciada explicitamente durante RUN,
@@ -2061,6 +2069,10 @@ func play_memory_sequence(
 		false
 	)
 
+
+	# A sequência só passa depois de fechado o tutorial.
+	while TutorialCard.is_open(get_tree()):
+		await get_tree().process_frame
 
 	await get_tree().create_timer(
 		0.6,

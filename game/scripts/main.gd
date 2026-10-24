@@ -1,6 +1,8 @@
 
 extends Node2D
 
+const WorldStyle := preload("res://scripts/world_style.gd")
+
 
 @onready var atlas_api: HTTPRequest = $AtlasAPI
 @onready var autonomy_api: HTTPRequest = $AutonomyAPI
@@ -112,6 +114,9 @@ var scanner_hint_layer: CanvasLayer
 
 
 func _ready():
+	# Contornos e painéis no estilo das folhas de sprites (só aspeto).
+	add_child(WorldStyle.new())
+
 	atlas_api.request_completed.connect(
 		_on_atlas_api_request_completed
 	)

@@ -19,6 +19,7 @@ const MANUAL_SLOT_PATTERN := "user://findhope_slot_%d.json"
 const ATLAS_STATE_URL := "http://127.0.0.1:8000/atlas/state"
 const ATLAS_RESET_RUN_URL := "http://127.0.0.1:8000/atlas/reset-run"
 const SAVES_API_URL := "http://127.0.0.1:8000/saves"
+const ATLAS_DISCARD_RUN_URL := "http://127.0.0.1:8000/atlas/discard-run"
 
 
 var profile: Dictionary = {}
@@ -1134,6 +1135,111 @@ func add_android_diary(
 	profile["android_diaries"] = diaries
 
 	save_profile()
+
+
+# =========================================================
+# FIM DE UMA RUN COMPLETA (Phase 3)
+# =========================================================
+
+# Ordem: primeiro guarda o que sobrevive no perfil global (Diário do Android
+# e conclusão completa); só depois apaga a run. Se o perfil não ficar
+# gravado, nada é apagado. Os 5 slots manuais nunca são tocados.
+func finish_completed_run(ending: Dictionary) -> bool:
+	if active_run_data.is_empty():
+		return _fail("Nenhuma run ativa para terminar.")
+	var run_id := str(active_run_data.get("run_id", ""))
+	set_run_value("story", "ending", ending.duplicate(true))
+	set_run_value("story", "run_ended", true)
+	set_run_value("story", "full_completion", true)
+
+	# Estado do Atlas mais recente para o diário (se falhar, usa o último).
+	await capture_backend_state()
+
+	if not has_android_diary(run_id):
+		add_android_diary(build_android_diary(ending))
+	mark_full_completion()
+	var stored := read_json_file(PROFILE_PATH)
+	var stored_ok := false
+	for diary in stored.get("android_diaries", []):
+		if diary is Dictionary and str(diary.get("run_id", "")) == run_id:
+			stored_ok = true
+	if not stored_ok:
+		return _fail("Não foi possível guardar o Diário do Android. A run não foi apagada.")
+
+	# A partir daqui só se apaga. Falhas remotas não desfazem o fim da run:
+	# o autosave local desaparece e o CONTINUAR passa a ignorar o remoto.
+	clear_current_autosave()
+	if not await _delete_remote_autosave():
+		push_warning("O autosave remoto não foi apagado; fica ignorado pelo CONTINUAR.")
+	if not await _discard_backend_run(run_id):
+		push_warning("O backend não confirmou que esqueceu a run " + run_id + ".")
+	reset_active_run()
+	print("RUN TERMINADA: ", run_id, " | diário guardado | slots manuais preservados")
+	return true
+
+
+func has_android_diary(run_id: String) -> bool:
+	for diary in profile.get("android_diaries", []):
+		if diary is Dictionary and str(diary.get("run_id", "")) == run_id:
+			return true
+	return false
+
+
+# O diário guarda os factos reais da run (o texto em vários parágrafos dos
+# Diários fica para essa funcionalidade; estes dados chegam para o gerar).
+func build_android_diary(ending: Dictionary) -> Dictionary:
+	var story: Dictionary = active_run_data.get("story", {})
+	var atlas_state: Dictionary = backend_state_cache
+	var narrative: Dictionary = atlas_state.get("narrative", {})
+	var behavior: Dictionary = atlas_state.get("behavior", {})
+	return {
+		"run_id": str(active_run_data.get("run_id", "")),
+		"created_at": current_datetime(),
+		"started_at": str(active_run_data.get("created_at", "")),
+		"ending": ending.duplicate(true),
+		"final": {
+			"outcome": str(story.get("final_outcome", "")),
+			"choice": str(story.get("final_choice", "")),
+			"vida": int(story.get("final_vida", 0)),
+			"atlas_damaged": bool(story.get("atlas_damaged", false)),
+			"boss": story.get("phase3_boss_stats", {})
+		},
+		"player_profile": get_player_profile(),
+		"stats": active_run_data.get("stats", {}).duplicate(true),
+		"atlas": {
+			"relationship": atlas_state.get("relationship", {}).duplicate(true),
+			"autonomy": atlas_state.get("autonomy", {}).duplicate(true),
+			"narrative_stage": int(narrative.get("narrative_stage", 0)),
+			"behavior_counters": behavior.get("counters", {}).duplicate(true)
+		}
+	}
+
+
+func _delete_remote_autosave() -> bool:
+	var profile_key := str(profile.get("profile_key", "")).strip_edges()
+	if profile_key.length() < 32:
+		return false
+	return await _simple_request(SAVES_API_URL + "/" + profile_key + "/auto", HTTPClient.METHOD_DELETE, "")
+
+
+func _discard_backend_run(run_id: String) -> bool:
+	if run_id.is_empty():
+		return false
+	return await _simple_request(ATLAS_DISCARD_RUN_URL, HTTPClient.METHOD_POST, JSON.stringify({"run_id": run_id}))
+
+
+func _simple_request(url: String, method: int, body: String) -> bool:
+	var request := HTTPRequest.new()
+	request.process_mode = Node.PROCESS_MODE_ALWAYS
+	request.timeout = 10.0
+	add_child(request)
+	var error := request.request(url, ["Content-Type: application/json"], method, body)
+	if error != OK:
+		request.queue_free()
+		return false
+	var result = await request.request_completed
+	request.queue_free()
+	return int(result[0]) == HTTPRequest.RESULT_SUCCESS and int(result[1]) == 200
 
 
 func mark_full_completion():

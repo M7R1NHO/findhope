@@ -1,5 +1,9 @@
 extends Node
 
+const TutorialCard := preload("res://scripts/tutorial_card.gd")
+const CharacterSprite := preload("res://scripts/character_sprite.gd")
+const UISprite := preload("res://scripts/ui_sprite.gd")
+
 
 # =========================================================
 # SINAIS
@@ -246,6 +250,8 @@ var hide_initial_time_remaining: float = 0.0
 var hide_initial_spot: Area2D = null
 var hide_initial_atlas_parked: bool = false
 var hide_initial_creature_visual: Polygon2D = null
+# Distância (px) que a criatura anda ao aparecer no primeiro encontro.
+const HIDE_INITIAL_CREATURE_WALK := 220.0
 
 
 
@@ -782,6 +788,10 @@ func _ready():
 func _process(
 	delta: float
 ):
+	# Com um tutorial aberto, os temporizadores param.
+	if TutorialCard.is_open(get_tree()):
+		return
+
 
 	# -----------------------------------------------------
 	# RUN
@@ -1938,6 +1948,8 @@ func start_hide_event():
 	if hide_instruction_label != null:
 		hide_instruction_label.text = "SIGA ATLAS ATÉ AO ESCONDERIJO"
 
+	TutorialCard.show_once(self, "hide")
+
 
 	print("")
 	print(
@@ -2560,6 +2572,11 @@ func create_threat_choice_ui(
 		container
 	)
 
+	var creature_sprite := UISprite.make("monster", "roar", 190.0)
+	if creature_sprite != null:
+		creature_sprite.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		container.add_child(creature_sprite)
+
 	var title = Label.new()
 
 	title.text = title_text
@@ -2657,6 +2674,8 @@ func create_threat_choice_ui(
 	container.add_child(
 		encounter_status
 	)
+
+	TutorialCard.show_once(self, "encounter")
 
 
 # =========================================================
@@ -3112,6 +3131,16 @@ func start_run_minigame():
 	)
 
 
+	# Perseguição: a criatura atrás, o Player à frente.
+	var chase_row := HBoxContainer.new()
+	chase_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	chase_row.add_theme_constant_override("separation", 120)
+	for sprite in [UISprite.make("monster", "walk_side", 150.0), UISprite.make("player", "walk_front", 120.0)]:
+		if sprite != null:
+			sprite.size_flags_vertical = Control.SIZE_SHRINK_END
+			chase_row.add_child(sprite)
+	container.add_child(chase_row)
+
 	var title = Label.new()
 
 
@@ -3202,6 +3231,8 @@ func start_run_minigame():
 
 
 	update_run_progress()
+
+	TutorialCard.show_once(self, "run")
 
 
 # =========================================================
@@ -4063,6 +4094,12 @@ func show_run_game_over():
 	)
 
 
+	var creature_sprite := UISprite.make("monster", "roar", 200.0)
+	if creature_sprite != null:
+		creature_sprite.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		container.add_child(creature_sprite)
+
+
 	var title = Label.new()
 
 
@@ -4347,6 +4384,7 @@ func try_start_hide_initial() -> void:
 	create_hide_initial_creature_visual()
 	create_hide_initial_ui()
 	update_hide_initial_ui()
+	TutorialCard.show_once(self, "hide")
 
 	if main != null and main.has_method("add_chat_message"):
 		main.add_chat_message(
@@ -4522,8 +4560,21 @@ func create_hide_initial_creature_visual() -> void:
 	])
 	hide_initial_creature_visual.color = Color(0.65, 0.025, 0.035, 0.92)
 	hide_initial_creature_visual.z_index = 30
+	# Com o sprite da criatura, a silhueta fica só como reserva.
+	var creature_sprite := CharacterSprite.monster(hide_initial_creature_visual, "walk_side", 120.0)
+	if creature_sprite != null:
+		hide_initial_creature_visual.color = Color(0, 0, 0, 0)
 	underground_root.add_child(hide_initial_creature_visual)
-	hide_initial_creature_visual.global_position = player.global_position + Vector2(150.0, -35.0)
+	var target := player.global_position + Vector2(150.0, -35.0)
+	hide_initial_creature_visual.global_position = target
+	if creature_sprite != null:
+		# Entra a andar da direita (espelhada: as frames olham para a direita)
+		# e ruge ao parar perto do Player. Só visual.
+		creature_sprite.flip_h = true
+		hide_initial_creature_visual.global_position = target + Vector2(HIDE_INITIAL_CREATURE_WALK, 0.0)
+		var tween := hide_initial_creature_visual.create_tween()
+		tween.tween_property(hide_initial_creature_visual, "global_position", target, HIDE_INITIAL_CREATURE_WALK / 220.0)
+		tween.tween_callback(func(): creature_sprite.play("roar"))
 
 
 func destroy_hide_initial_creature_visual() -> void:

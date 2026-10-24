@@ -1,5 +1,7 @@
 extends Area2D
 
+const CharacterSprite := preload("res://scripts/character_sprite.gd")
+
 
 # =========================================================
 # CONFIGURAÇÃO
@@ -134,6 +136,11 @@ func create_creature_placeholder():
 	add_child(
 		creature_visual
 	)
+
+	# Sprite da criatura por cima do polígono, que fica só como reserva.
+	var sprite := CharacterSprite.monster(creature_visual, "idle_front", creature_size.y * 1.6)
+	if sprite != null:
+		creature_visual.color = Color(0, 0, 0, 0)
 
 
 # =========================================================

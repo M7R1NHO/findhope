@@ -12,6 +12,7 @@ var collected_part_ids: Array[String] = []
 
 var context_request: HTTPRequest
 var context_request_in_progress: bool = false
+var context_update_pending: bool = false
 
 
 func _ready():
@@ -151,12 +152,11 @@ func show_collection_message(
 
 func send_progress_to_backend():
 	if context_request_in_progress:
-		print(
-			"Atualização das peças adiada: "
-			+ "pedido anterior ainda em curso."
-		)
-
+		# Reenviar com a contagem mais recente quando o pedido acabar.
+		context_update_pending = true
 		return
+
+	context_update_pending = false
 
 	var current_count = (
 		get_collected_count()
@@ -179,6 +179,7 @@ func send_progress_to_backend():
 		)
 
 	var body = JSON.stringify({
+		"run_id": str(SaveManager.active_run_data.get("run_id", "")),
 		"event_id": "ship_parts_progress",
 		"event_type": "ship_repair_progress",
 		"description": description,
@@ -214,6 +215,9 @@ func _on_context_request_completed(
 	body
 ):
 	context_request_in_progress = false
+
+	if context_update_pending:
+		send_progress_to_backend()
 
 	if response_code != 200:
 		push_warning(

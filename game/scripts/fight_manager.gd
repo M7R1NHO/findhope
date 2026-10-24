@@ -1,5 +1,8 @@
 extends Node
 
+const TutorialCard := preload("res://scripts/tutorial_card.gd")
+const UISprite := preload("res://scripts/ui_sprite.gd")
+
 
 signal fight_won(atlas_hp)
 signal atlas_destroyed
@@ -69,6 +72,8 @@ var arena_size := Vector2(
 
 var player_token: ColorRect = null
 var atlas_token: ColorRect = null
+var player_sprite: TextureRect = null
+var atlas_sprite: TextureRect = null
 
 var actor_size := Vector2(
 	24,
@@ -121,6 +126,10 @@ func _ready():
 
 func _process(delta: float):
 	if not fight_active:
+		return
+
+	# Com um tutorial aberto, os temporizadores param.
+	if TutorialCard.is_open(get_tree()):
 		return
 
 	player_hit_cooldown = max(
@@ -204,6 +213,8 @@ func start_fight():
 	reset_actor_positions()
 
 	start_choice_phase()
+
+	TutorialCard.show_once(self, "fight")
 
 	print("")
 	print("======================================")
@@ -1122,7 +1133,42 @@ func update_actor_visuals():
 		)
 
 
+# Sprites da luta. Os quadrados continuam a ser a área de colisão (ficam
+# meio transparentes por baixo dos pés); os sprites são só o aspeto.
+func add_fight_sprites(arena_background: ColorRect) -> void:
+	var creature := UISprite.make("monster", "attack", arena_background.size.y * 0.9)
+	if creature != null:
+		creature.modulate = Color(1.0, 1.0, 1.0, 0.18)
+		creature.position = (arena_background.size - creature.custom_minimum_size) / 2.0
+		creature.size = creature.custom_minimum_size
+		arena_background.add_child(creature)
+
+	player_sprite = add_token_sprite(player_token, "player")
+	atlas_sprite = add_token_sprite(atlas_token, "atlas")
+
+
+func add_token_sprite(token: ColorRect, character: String) -> TextureRect:
+	var sprite := UISprite.make(character, "idle_front", actor_size.y * 2.6)
+	if sprite == null:
+		return null
+	token.color.a = 0.35
+	sprite.size = sprite.custom_minimum_size
+	# Pés na base do quadrado de colisão.
+	sprite.position = Vector2(
+		(actor_size.x - sprite.size.x) / 2.0,
+		actor_size.y - sprite.size.y + 4.0
+	)
+	token.add_child(sprite)
+	return sprite
+
+
 func update_actor_selection():
+	# A personagem controlada anda; a outra fica parada.
+	if player_sprite != null:
+		player_sprite.play("walk_front" if selected_actor == 1 else "idle_front")
+	if atlas_sprite != null:
+		atlas_sprite.play("walk_front" if selected_actor == 2 else "idle_front")
+
 	if player_token != null:
 
 		if selected_actor == 1:
@@ -1275,6 +1321,11 @@ func show_shared_defeat():
 	center.add_child(
 		container
 	)
+
+	var creature_sprite := UISprite.make("monster", "roar", 200.0)
+	if creature_sprite != null:
+		creature_sprite.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		container.add_child(creature_sprite)
 
 	var title = Label.new()
 
@@ -1741,6 +1792,8 @@ func create_fight_ui():
 		atlas_token
 	)
 
+	add_fight_sprites(arena_background)
+
 	cards_container = HBoxContainer.new()
 
 	cards_container.alignment = (
@@ -1860,6 +1913,8 @@ func destroy_fight_ui():
 
 	player_token = null
 	atlas_token = null
+	player_sprite = null
+	atlas_sprite = null
 
 	red_zone = null
 	blue_zone = null

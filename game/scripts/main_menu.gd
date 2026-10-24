@@ -1,5 +1,7 @@
 extends Control
 
+const UIStyle := preload("res://scripts/ui_style.gd")
+
 
 @export_file("*.tscn") var game_scene_path: String
 
@@ -33,6 +35,7 @@ func create_menu():
 		1.0
 	)
 	add_child(background)
+	UIStyle.apply(background)
 
 	var center = CenterContainer.new()
 	center.set_anchors_and_offsets_preset(
@@ -60,6 +63,7 @@ func create_menu():
 		"font_size",
 		44
 	)
+	UIStyle.title(title)
 	root_container.add_child(title)
 
 	var subtitle = Label.new()
@@ -71,6 +75,7 @@ func create_menu():
 		"font_size",
 		16
 	)
+	UIStyle.subtitle(subtitle)
 	root_container.add_child(subtitle)
 
 	var spacer = Control.new()
@@ -285,6 +290,7 @@ func open_load_menu():
 		0.92
 	)
 	modal_layer.add_child(overlay)
+	UIStyle.apply(overlay)
 
 	var center = CenterContainer.new()
 	center.set_anchors_and_offsets_preset(
@@ -312,6 +318,7 @@ func open_load_menu():
 		"font_size",
 		30
 	)
+	UIStyle.title(title)
 	container.add_child(title)
 
 	var description = Label.new()
@@ -549,6 +556,7 @@ func create_information_modal(
 		0.92
 	)
 	modal_layer.add_child(overlay)
+	UIStyle.apply(overlay)
 
 	var center = CenterContainer.new()
 	center.set_anchors_and_offsets_preset(
@@ -576,6 +584,7 @@ func create_information_modal(
 		"font_size",
 		30
 	)
+	UIStyle.title(title)
 	container.add_child(title)
 
 	var body = Label.new()
@@ -631,6 +640,7 @@ func create_confirmation_modal(
 		0.94
 	)
 	modal_layer.add_child(overlay)
+	UIStyle.apply(overlay)
 
 	var center = CenterContainer.new()
 	center.set_anchors_and_offsets_preset(
@@ -658,6 +668,7 @@ func create_confirmation_modal(
 		"font_size",
 		30
 	)
+	UIStyle.title(title)
 	container.add_child(title)
 
 	var body = Label.new()

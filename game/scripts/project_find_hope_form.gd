@@ -2,6 +2,8 @@ extends Control
 
 signal completed(answers: Dictionary)
 
+const UIStyle := preload("res://scripts/ui_style.gd")
+
 const QUESTIONS := [
 	{"key": "volunteer_reason", "text": "Qual é a principal razão para se voluntariar?", "options": ["Salvar a Terra", "Proteger alguém", "Explorar o desconhecido", "Cumprir o dever", "Mudar de vida"]},
 	{"key": "worked_with_android", "text": "Já trabalhou diretamente com um androide PYSSOA?", "options": ["Sim", "Não"]},
@@ -33,6 +35,7 @@ func play() -> Dictionary:
 func _build_ui() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	UIStyle.apply(self)
 
 	var background := ColorRect.new()
 	background.color = Color.BLACK

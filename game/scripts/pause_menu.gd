@@ -1,5 +1,8 @@
 extends Node
 
+const UIStyle := preload("res://scripts/ui_style.gd")
+const TutorialCard := preload("res://scripts/tutorial_card.gd")
+
 
 @export_file("*.tscn") var main_menu_scene_path: String
 
@@ -39,6 +42,12 @@ func _unhandled_input(event):
 	if event.keycode != KEY_ESCAPE:
 		return
 
+	# Hack, FIGHT, terminais, Game Over e cutscenes pausam o jogo com a sua
+	# própria interface. Abrir a pausa por cima e fechá-la depois punha
+	# paused = false com essa interface ainda ativa.
+	if not pause_open and get_tree().paused:
+		return
+
 	get_viewport().set_input_as_handled()
 
 	if submenu_layer != null:
@@ -52,7 +61,7 @@ func _unhandled_input(event):
 
 
 func open_pause():
-	if pause_open:
+	if pause_open or get_tree().paused:
 		return
 
 	pause_open = true
@@ -118,6 +127,7 @@ func create_pause_ui():
 	pause_layer.add_child(
 		overlay
 	)
+	UIStyle.apply(overlay)
 
 	var center = CenterContainer.new()
 
@@ -158,6 +168,7 @@ func create_pause_ui():
 		36
 	)
 
+	UIStyle.title(title)
 	main_container.add_child(
 		title
 	)
@@ -196,6 +207,11 @@ func create_pause_ui():
 	create_pause_button(
 		"CARREGAR JOGO",
 		open_load_menu
+	)
+
+	create_pause_button(
+		"COMO JOGAR",
+		open_how_to_play
 	)
 
 	create_pause_button(
@@ -292,6 +308,7 @@ func open_save_menu():
 		30
 	)
 
+	UIStyle.title(title)
 	container.add_child(
 		title
 	)
@@ -439,6 +456,7 @@ func open_overwrite_confirmation(
 		28
 	)
 
+	UIStyle.title(title)
 	container.add_child(
 		title
 	)
@@ -580,6 +598,7 @@ func open_load_menu():
 		30
 	)
 
+	UIStyle.title(title)
 	container.add_child(
 		title
 	)
@@ -713,6 +732,7 @@ func confirm_load_slot(
 		28
 	)
 
+	UIStyle.title(title)
 	container.add_child(
 		title
 	)
@@ -835,6 +855,7 @@ func open_options():
 		30
 	)
 
+	UIStyle.title(title)
 	container.add_child(
 		title
 	)
@@ -853,6 +874,38 @@ func open_options():
 	container.add_child(
 		body
 	)
+
+	create_back_button(
+		container
+	)
+
+
+# Lista de todos os tutoriais, para rever a qualquer momento.
+func open_how_to_play():
+	close_submenu()
+
+	submenu_layer = create_submenu_base()
+
+	var container = create_submenu_container(
+		submenu_layer
+	)
+
+	var title = Label.new()
+	title.text = "COMO JOGAR"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	UIStyle.title(title)
+	container.add_child(title)
+
+	for tutorial_id in TutorialCard.ORDER:
+		var button = Button.new()
+		button.name = "Tutorial_" + tutorial_id
+		button.text = TutorialCard.TUTORIALS[tutorial_id]["title"]
+		button.custom_minimum_size = Vector2(0, 46)
+		button.pressed.connect(
+			TutorialCard.open.bind(self, tutorial_id)
+		)
+		container.add_child(button)
 
 	create_back_button(
 		container
@@ -930,6 +983,7 @@ func open_confirmation(
 		28
 	)
 
+	UIStyle.title(title)
 	container.add_child(
 		title
 	)
@@ -1033,6 +1087,7 @@ func create_submenu_base() -> CanvasLayer:
 	layer.add_child(
 		overlay
 	)
+	UIStyle.apply(overlay)
 
 	return layer
 
