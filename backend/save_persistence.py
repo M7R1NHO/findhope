@@ -285,3 +285,24 @@ def delete_manual_saves(profile_key: str) -> dict[str, Any]:
             (profile_id,),
         ).fetchall()
     return {"success": True, "deleted": len(rows)}
+
+
+def delete_auto_save(profile_key: str) -> dict[str, Any]:
+    """Apaga só o autosave do perfil (fim de uma run completa).
+
+    Os slots manuais nunca são tocados. Chamado pelo jogo depois de o final
+    e o Diário do Android estarem guardados.
+    """
+    key = _validate_profile_key(profile_key)
+    with get_db_connection() as connection:
+        _lock_profile(connection, key)
+        profile_id = _resolve_profile_id(connection, key)
+        if profile_id is None:
+            return {"success": True, "deleted": 0}
+        rows = connection.execute(
+            """DELETE FROM public.game_saves
+               WHERE profile_id = %s AND slot_type = 'auto'
+               RETURNING slot_type""",
+            (profile_id,),
+        ).fetchall()
+    return {"success": True, "deleted": len(rows)}

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from backend.save_persistence import (
     delete_manual_saves,
+    delete_auto_save,
     list_saves,
     load_snapshot,
     save_snapshot,
@@ -28,16 +29,20 @@ from backend import (
     relationship_engine as relationship_engine_module,
 )
 from backend.sensors import process_godot_scan
-from backend.ia import ask_android, atlas_spontaneous_message
+from backend.ia import ask_android, atlas_spontaneous_message, atlas_choose_ending
+from backend import endings as endings_module
+from backend.relationship_engine import get_relationship_state
 
 from backend.atlas_knowledge import (
     get_atlas_knowledge,
     reset_atlas_knowledge,
+    remove_run_knowledge,
 )
 
 from backend.atlas_memory import (
     get_atlas_memory,
     reset_atlas_memory,
+    remove_run_memory,
     add_memory,
 )
 
@@ -97,6 +102,14 @@ class SpontaneousRequest(BaseModel):
     trigger: str
     run_id: str | None = None
     current_room: str | None = None
+
+
+class EndingRequest(BaseModel):
+    run_id: str
+    outcome: str
+    choice: str
+    atlas_damaged: bool
+    vida: int
 
 
 class SaveRequest(BaseModel):
@@ -407,48 +420,76 @@ def _run_in_isolated_state(run_id: str | None, operation):
 
 
 
+def _reset_run_stores(run_id=None):
+    """Repõe todos os estados do Atlas; com run_id limpa também os dados dessa run."""
+    reset_atlas_knowledge()
+    reset_atlas_memory(run_id=run_id)
+    reset_autonomy_state(run_id=run_id)
+    reset_gameplay_context()
+    reset_discovery_state()
+    narrative_state_module.reset_narrative_state()
+    relationship_engine_module.reset_relationship_state()
+    behavior_state_module.reset_behavior_state()
+    conversation_context_module.reset_conversation_context()
+    PROCESSED_AUTONOMY_EVENT_IDS.clear()
+    WORLD_STATE.clear()
+    WORLD_STATE.update({
+        "player": {"position": {"x": 0.0, "y": 0.0}},
+        "atlas": {"position": {"x": 2.0, "y": 0.0}, "radar_range": 50.0, "current_detections": []},
+        "ship": {"status": "damaged", "position": {"x": 0.0, "y": 0.0}},
+        "environment": {"planet_name": None, "weather": "unknown", "time_of_day": "unknown"},
+        "mission": {"current_objective": "evaluate_crash_site"},
+    })
+    return {
+        "status": "Atlas run reset",
+        "state": _export_atlas_state(run_id),
+    }
+
+
 @app.post("/atlas/reset-run")
 def reset_atlas_run(payload: dict | None = None):
     """Reinicia uma partida; se receber run_id, apenas essa sessão é reiniciada."""
     run_id = _normalise_run_id((payload or {}).get("run_id"))
 
-    def do_reset(run_id=None):
-        reset_atlas_knowledge()
-        reset_atlas_memory(run_id=run_id)
-        reset_autonomy_state(run_id=run_id)
-        reset_gameplay_context()
-        reset_discovery_state()
-        narrative_state_module.reset_narrative_state()
-        relationship_engine_module.reset_relationship_state()
-        behavior_state_module.reset_behavior_state()
-        conversation_context_module.reset_conversation_context()
-        PROCESSED_AUTONOMY_EVENT_IDS.clear()
-        WORLD_STATE.clear()
-        WORLD_STATE.update({
-            "player": {"position": {"x": 0.0, "y": 0.0}},
-            "atlas": {"position": {"x": 2.0, "y": 0.0}, "radar_range": 50.0, "current_detections": []},
-            "ship": {"status": "damaged", "position": {"x": 0.0, "y": 0.0}},
-            "environment": {"planet_name": None, "weather": "unknown", "time_of_day": "unknown"},
-            "mission": {"current_objective": "evaluate_crash_site"},
-        })
-        return {
-            "status": "Atlas run reset",
-            "state": _export_atlas_state(run_id),
-        }
-
     if not run_id:
-        return do_reset()
+        return _reset_run_stores()
 
     with RUN_STATE_LOCK:
         previous = _export_atlas_state()
         try:
-            result = do_reset(run_id)
+            result = _reset_run_stores(run_id)
             RUN_STATES[run_id] = _export_atlas_state(run_id)
             _persist_run_states()
             return result
         finally:
             _restore_atlas_state(previous)
 
+
+@app.post("/atlas/discard-run")
+def discard_atlas_run(payload: dict | None = None):
+    """Fim de uma run completa: esquece o estado do Atlas dessa run.
+
+    Limpa as memórias, a autonomia e o resto do estado guardado por run_id e
+    retira a run de RUN_STATES (e do ficheiro .run_states.json).
+    """
+    run_id = _normalise_run_id((payload or {}).get("run_id"))
+    if not run_id:
+        raise HTTPException(status_code=422, detail="run_id em falta.")
+    with RUN_STATE_LOCK:
+        existed = run_id in RUN_STATES
+        previous = _export_atlas_state()
+        try:
+            _reset_run_stores(run_id)
+            # Retirar as stores da run (o reset deixa-as vazias mas presentes).
+            remove_run_memory(run_id)
+            remove_run_knowledge(run_id)
+            autonomy_state_module.AUTONOMY_STATES.pop(autonomy_state_module._run_key(run_id), None)
+            conversation_context_module.reset_conversation_context(run_id)
+            RUN_STATES.pop(run_id, None)
+            _persist_run_states()
+        finally:
+            _restore_atlas_state(previous)
+    return {"status": "Atlas run discarded", "run_id": run_id, "existed": existed}
 
 
 @app.get("/atlas/state")
@@ -577,6 +618,18 @@ def delete_player_manual_saves(profile_key: str):
     except Exception as exc:
         print("Erro ao apagar slots manuais:", type(exc).__name__)
         raise HTTPException(status_code=500, detail="Não foi possível apagar os slots manuais.") from exc
+
+
+@app.delete("/saves/{profile_key}/auto")
+def delete_player_auto_save(profile_key: str):
+    """Fim de uma run completa: apaga o autosave remoto; os slots manuais ficam."""
+    try:
+        return delete_auto_save(profile_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        print("Erro ao apagar o autosave:", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Não foi possível apagar o autosave.") from exc
 
 
 # =========================================================
@@ -755,6 +808,7 @@ GAMEPLAY_EVENT_MILESTONES = {
     "hide_initial_started": "first_creature_observed",
     "hide_initial_completed": "hide_initial_complete",
     "creature_human_origin_confirmed": "lab_clue_analyzed",
+    "phase3_distress_revealed": "distress_signal_revealed",
 }
 
 # Eventos graves: nas respostas seguintes o Atlas não faz humor.
@@ -762,6 +816,7 @@ GRAVE_GAMEPLAY_EVENTS = {
     "hide_initial_started": 3,
     "alien_life_01_confirmed": 2,
     "creature_human_origin_confirmed": 3,
+    "phase3_distress_revealed": 3,
 }
 
 
@@ -961,6 +1016,11 @@ SPONTANEOUS_TRIGGERS = {
         "grave": False,
         "text": "O jogador acabou de usar a estação de Manutenção e recuperou VIDA. Só pode ser usada uma vez.",
     },
+    "phase3_distress_revealed": {
+        "once": True,
+        "grave": True,
+        "text": "Os registos acabaram de mostrar que o desvio da Nave 47 foi a resposta de Atlas a um pedido de socorro de outro androide. Atlas respondeu sem saber que o fazia.",
+    },
 }
 
 RUN_STREAK_TRIGGER_EVERY = 3
@@ -1013,3 +1073,55 @@ def atlas_spontaneous(data: SpontaneousRequest):
         return {"status": "ok", "trigger": trigger, "response": response}
 
     return _run_in_isolated_state(run_id, speak)
+
+
+
+# =========================================================
+# PHASE 3 - OS 16 FINAIS
+# =========================================================
+
+@app.post("/ending/choose")
+def choose_ending(data: EndingRequest):
+    """O jogo envia o desfecho (A-D); a IA escolhe a variante do Atlas e as falas.
+
+    O backend volta a calcular o desfecho a partir dos factos: se não bater
+    certo com o que o jogo enviou, o pedido é recusado. A IA nunca decide o
+    desfecho, só a variante dentro dele.
+    """
+    run_id = _normalise_run_id(data.run_id)
+    if not run_id:
+        raise HTTPException(status_code=422, detail="run_id em falta.")
+    outcome = str(data.outcome or "").strip().upper()
+    expected = endings_module.outcome_from_facts(data.atlas_damaged, data.choice, data.vida)
+    if outcome not in endings_module.OUTCOMES or outcome != expected:
+        raise HTTPException(
+            status_code=422,
+            detail="O desfecho não corresponde aos factos enviados pelo jogo.",
+        )
+    facts = {"choice": data.choice, "atlas_damaged": data.atlas_damaged, "vida": data.vida}
+
+    def choose():
+        instruction = endings_module.build_choice_instruction(outcome, facts)
+        raw = atlas_choose_ending(instruction, run_id=run_id)
+        parsed = endings_module.parse_choice(raw, outcome)
+        if parsed is not None:
+            result = endings_module.build_result(
+                parsed["variant_id"], parsed["atlas_lines"], parsed["reason"], "ia"
+            )
+        else:
+            variant_id = endings_module.fallback_variant(
+                outcome,
+                get_relationship_state(),
+                get_autonomy_state(),
+                narrative_state_module.get_narrative_stage(),
+            )
+            result = endings_module.build_result(
+                variant_id,
+                endings_module.VARIANTS[variant_id]["fallback_lines"],
+                "Escolha por regra fixa (relação e autonomia): a IA não respondeu de forma válida.",
+                "fallback",
+            )
+        print("\nENDING CHOSEN:", {"run_id": run_id, "ending_id": result["ending_id"], "source": result["source"]})
+        return {"status": "ok", "run_id": run_id, **result}
+
+    return _run_in_isolated_state(run_id, choose)

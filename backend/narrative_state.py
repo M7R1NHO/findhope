@@ -88,7 +88,24 @@ NARRATIVE_STAGES = {
             "A descoberta levanta questoes sobre identidade, transformacao e sofrimento.",
         ],
     },
+    7: {
+        "name": "algo_mais",
+        "personality": (
+            "Abalado por perceber que agiu sem saber porque. "
+            "Pensa em si proprio como alguem, nao apenas como uma maquina, "
+            "e reconhece no outro androide algo parecido consigo."
+        ),
+        "facts": [
+            "A rota da Nave 47 nao mudou por falha de navegacao.",
+            "Outro androide transmitiu um pedido de socorro deliberado e Atlas respondeu-lhe sem ter consciencia disso.",
+            "Esse androide estava nesta instalacao com um humano; os dois foram capturados.",
+            "A criatura era esse humano; o androide ficou para tras, danificado.",
+        ],
+    },
 }
+
+# Ultimo estagio existente (o payoff "Algo mais" da Biblia, secao 6.2).
+MAX_NARRATIVE_STAGE = 7
 
 
 # Os eventos so contam quando sao confirmados pelo jogo.
@@ -100,6 +117,7 @@ NARRATIVE_MILESTONE_ORDER = [
     "first_creature_observed",
     "hide_initial_complete",
     "lab_clue_analyzed",
+    "distress_signal_revealed",
 ]
 
 
@@ -110,6 +128,7 @@ MILESTONE_STAGE = {
     "first_creature_observed": 4,
     "hide_initial_complete": 5,
     "lab_clue_analyzed": 6,
+    "distress_signal_revealed": 7,
 }
 
 
@@ -127,7 +146,7 @@ DEFAULT_NARRATIVE_STATE = {
     # Definido pelo jogo, por exemplo ao ver a criatura ou na revelacao do Laboratorio.
     "grave_turns_remaining": 0,
 
-    # Progressao narrativa 0-6
+    # Progressao narrativa 0-7
     "narrative_stage": 0,
     "narrative_milestones": [],
     "known_story_facts": [],
@@ -167,7 +186,7 @@ def _ensure_narrative_fields():
     except (TypeError, ValueError):
         stage = 0
 
-    NARRATIVE_STATE["narrative_stage"] = max(0, min(6, stage))
+    NARRATIVE_STATE["narrative_stage"] = max(0, min(MAX_NARRATIVE_STAGE, stage))
 
     try:
         grave = int(NARRATIVE_STATE.get("grave_turns_remaining", 0))
@@ -226,7 +245,7 @@ def _calculate_narrative_stage():
             break
         stage += 1
 
-    NARRATIVE_STATE["narrative_stage"] = min(stage, 6)
+    NARRATIVE_STATE["narrative_stage"] = min(stage, MAX_NARRATIVE_STAGE)
     _refresh_story_facts()
 
 
@@ -569,7 +588,7 @@ def build_narrative_context():
 
     return "\n".join([
         "=== PROGRESSAO NARRATIVA DE ATLAS ===",
-        f"Estagio narrativo: {stage}/6",
+        f"Estagio narrativo: {stage}/{MAX_NARRATIVE_STAGE}",
         f"Nome interno do estagio: {stage_info['name']}",
         f"Orientacao de personalidade: {stage_info['personality']}",
         "Factos narrativos confirmados:",

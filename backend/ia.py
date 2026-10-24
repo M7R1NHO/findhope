@@ -871,7 +871,10 @@ def _build_atlas_context(
     )
 
 
-def _complete(dynamic_context, user_content, max_tokens=120):
+def _complete(dynamic_context, user_content, max_tokens=120, temperature=0.4, timeout=None):
+    options = {}
+    if timeout is not None:
+        options["timeout"] = timeout
     completion = client.chat.completions.create(
         model=MODEL,
         messages=[
@@ -880,8 +883,9 @@ def _complete(dynamic_context, user_content, max_tokens=120):
             {"role": "user", "content": user_content},
         ],
         reasoning_effort="none",
-        temperature=0.4,
+        temperature=temperature,
         max_tokens=max_tokens,
+        **options,
     )
 
     if completion.usage:
@@ -1070,3 +1074,31 @@ def atlas_spontaneous_message(
     add_conversation_message(role="atlas", content=resposta)
     consume_grave_turn()
     return resposta
+
+
+ENDING_TIMEOUT_SECONDS = 10.0
+
+
+def atlas_choose_ending(instruction: str, run_id: str | None = None) -> str | None:
+    """Pede ao modelo a variante do final e as últimas falas do Atlas.
+
+    Devolve o texto em bruto (JSON esperado) ou None se o modelo falhar.
+    A validação e o fallback ficam em backend/endings.py.
+    """
+    try:
+        dynamic_context = _build_atlas_context(
+            message=instruction,
+            run_id=run_id,
+            new_memories=[],
+            query_data={},
+        )
+        return _complete(
+            dynamic_context,
+            instruction,
+            max_tokens=400,
+            temperature=0.7,
+            timeout=ENDING_TIMEOUT_SECONDS,
+        )
+    except Exception as e:
+        print(f"Erro ao escolher o final do Atlas: {e}")
+        return None
