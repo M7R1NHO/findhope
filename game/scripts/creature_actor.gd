@@ -29,6 +29,13 @@ const MUTANT_ROOT := "res://sprites/characters/mutant/"
 # Centro da conduta dentro das imagens (píxeis).
 const VENT_CENTER := Vector2(106.0, 162.5)
 const SPRITE_SCALE := 0.75
+# Tamanho da grelha (só a moldura de metal) dentro das imagens, em píxeis.
+const VENT_FOOTPRINT := Vector2(169.0, 101.0)
+# As condutas dos corredores são mais pequenas, para o Player passar ao lado
+# (corredores com 160 px de largura). A criatura sai e desce por elas com
+# este tamanho e cresce para o tamanho normal quando começa a procurar.
+const CORRIDOR_VENT_SCALE := 0.45
+const GROW_TIME := 0.25
 # Os pés, nas frames de procura, ficam um pouco abaixo do centro da conduta.
 const FEET_Y := 10.0
 const WALK_HEIGHT := 118.0
@@ -50,6 +57,7 @@ static var _mutant_frames: SpriteFrames = null
 
 var state: int = State.IDLE
 var vent_position := Vector2.ZERO
+var vent_scale: float = SPRITE_SCALE
 var waypoints: Array = []
 var waypoint_index: int = 0
 var waypoint_wait: float = 0.0
@@ -90,31 +98,46 @@ static func mutant_frames() -> SpriteFrames:
 
 
 # A criatura aparece (ainda escondida) na conduta em vent_global.
-static func spawn(parent: Node, vent_global: Vector2) -> Node2D:
+static func spawn(parent: Node, vent_global: Vector2, scale_of_vent: float = SPRITE_SCALE) -> Node2D:
 	var creature = load("res://scripts/creature_actor.gd").new()
 	creature.name = "CreatureActor"
 	parent.add_child(creature)
 	creature.global_position = vent_global
 	creature.vent_position = vent_global
+	creature.vent_scale = scale_of_vent
 	return creature
 
 
 # Conduta no chão (a imagem vazia da última frame de "recuar"). O nó fica no
-# centro da conduta.
-static func make_vent() -> Node2D:
+# centro da conduta. É sólida: o Player e o Atlas andam à volta dela.
+static func make_vent(vent_scale_value: float = SPRITE_SCALE) -> Node2D:
 	var vent := Node2D.new()
 	vent.name = "Vent"
 	vent.z_index = VENT_Z
+	vent.set_meta("vent_scale", vent_scale_value)
+	var solid := StaticBody2D.new()
+	solid.name = "Solid"
+	var collision := CollisionShape2D.new()
+	var shape := RectangleShape2D.new()
+	shape.size = vent_size(vent_scale_value)
+	collision.shape = shape
+	solid.add_child(collision)
+	vent.add_child(solid)
 	var path := MUTANT_ROOT + "retreat_4.png"
 	if not ResourceLoader.exists(path):
 		return vent
 	var sprite := Sprite2D.new()
 	sprite.name = "VentSprite"
 	sprite.texture = load(path)
-	sprite.scale = Vector2(SPRITE_SCALE, SPRITE_SCALE)
-	sprite.position = (sprite.texture.get_size() / 2.0 - VENT_CENTER) * SPRITE_SCALE
+	sprite.scale = Vector2(vent_scale_value, vent_scale_value)
+	sprite.position = (sprite.texture.get_size() / 2.0 - VENT_CENTER) * vent_scale_value
 	vent.add_child(sprite)
 	return vent
+
+
+# Tamanho da grelha no mundo, para uma escala.
+static func vent_size(vent_scale_value: float = SPRITE_SCALE) -> Vector2:
+	return VENT_FOOTPRINT * vent_scale_value
 
 
 func _ready() -> void:
@@ -202,6 +225,13 @@ func show_body(animation: String) -> void:
 			walker.visible = true
 			walker.play("walk_front")
 		return
+	# A sair ou a descer pela conduta, a imagem (que traz a grelha) fica do
+	# tamanho da conduta; a procurar, do tamanho normal.
+	var wanted := Vector2.ONE * (SPRITE_SCALE if animation == "search" else vent_scale)
+	if body.visible and not body.scale.is_equal_approx(wanted):
+		create_tween().tween_property(body, "scale", wanted, GROW_TIME)
+	else:
+		body.scale = wanted
 	body.visible = true
 	body.play(animation)
 

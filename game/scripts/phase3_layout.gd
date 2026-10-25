@@ -804,8 +804,11 @@ func face(body: Node2D, facing: String, left: bool = false) -> void:
 	if sprite == null or not "facing" in sprite:
 		return
 	sprite.facing = facing
-	sprite.facing_left = left
-	sprite.facing_time = 0.0
+	# Versões mais antigas do character_sprite.gd não têm estes dois.
+	if "facing_left" in sprite:
+		sprite.facing_left = left
+	if "facing_time" in sprite:
+		sprite.facing_time = 0.0
 
 
 func show_control_room_line(index: int) -> void:
@@ -881,7 +884,7 @@ func destroy_control_room_dialogue() -> void:
 	control_room_button = null
 
 
-func start_boss(seed: int = 0) -> void:
+func start_boss(boss_seed: int = 0) -> void:
 	if boss_done or boss_active or twist_stage < 3:
 		return
 	boss_active = true
@@ -900,7 +903,7 @@ func start_boss(seed: int = 0) -> void:
 	get_tree().current_scene.add_child(boss_ui)
 	boss_ui.finished.connect(_on_boss_finished)
 	get_tree().paused = true
-	boss_ui.open_briefing(seed)
+	boss_ui.open_briefing(boss_seed)
 
 
 func _on_boss_finished(damaged: bool, stats: Dictionary) -> void:

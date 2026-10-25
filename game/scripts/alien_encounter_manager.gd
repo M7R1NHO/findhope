@@ -265,6 +265,7 @@ const HIDE_INITIAL_CREATURE_WALK := 220.0
 # corredor (criadas aqui, um pouco à frente do gatilho) e uma por sala
 # (postas pela decoração, room_decor.gd, que as regista aqui).
 const CORRIDOR_VENT_AHEAD := 150.0
+const CORRIDOR_VENT_WALL_GAP := 6.0
 const CORRIDOR_SEARCH_TIME := 1.2
 const CREATURE_STOP_DISTANCE := 85.0
 const CREATURE_ATTACK_TIME := 0.5
@@ -4745,11 +4746,27 @@ func create_corridor_vent(corridor_id: String, path: Array) -> void:
 		total += path[index].distance_to(path[index + 1])
 
 	var distance := clampf(total / 2.0 + CORRIDOR_VENT_AHEAD, total / 2.0, maxf(total / 2.0, total - 110.0))
-	var vent := CreatureActor.make_vent()
+	var vent := CreatureActor.make_vent(CreatureActor.CORRIDOR_VENT_SCALE)
 	vent.name = "Vent_" + corridor_id
 	add_child(vent)
-	vent.global_position = underground_root.to_global(path_point_at(path, distance))
+	vent.global_position = underground_root.to_global(path_point_at(path, distance) + corridor_vent_side(path, distance))
 	corridor_vents[corridor_id] = vent.global_position
+
+
+# A conduta do corredor fica encostada a uma parede (a de cima nos
+# corredores deitados, a da esquerda nos de pé), para sobrar caminho ao lado.
+func corridor_vent_side(path: Array, distance: float) -> Vector2:
+	var before := path_point_at(path, maxf(distance - 20.0, 0.0))
+	var after := path_point_at(path, distance + 20.0)
+	var direction := after - before
+	var half_width := 80.0
+	var layout := underground_root.get_node_or_null("GeneratedLayout")
+	if layout != null and "corridor_width" in layout:
+		half_width = float(layout.corridor_width) / 2.0
+	var vent_size := CreatureActor.vent_size(CreatureActor.CORRIDOR_VENT_SCALE)
+	if absf(direction.x) >= absf(direction.y):
+		return Vector2(0.0, -(half_width - vent_size.y / 2.0 - CORRIDOR_VENT_WALL_GAP))
+	return Vector2(-(half_width - vent_size.x / 2.0 - CORRIDOR_VENT_WALL_GAP), 0.0)
 
 
 func path_point_at(path: Array, distance: float) -> Vector2:
@@ -4817,7 +4834,11 @@ func room_search_points(room_id: String, count: int = 4) -> Array:
 
 func spawn_creature(vent_global: Vector2) -> Node2D:
 	destroy_creature()
-	creature = CreatureActor.spawn(underground_root if underground_root != null else self, vent_global)
+	var scale_of_vent := CreatureActor.SPRITE_SCALE
+	for corridor_vent in corridor_vents.values():
+		if corridor_vent.distance_to(vent_global) < 1.0:
+			scale_of_vent = CreatureActor.CORRIDOR_VENT_SCALE
+	creature = CreatureActor.spawn(underground_root if underground_root != null else self, vent_global, scale_of_vent)
 	return creature
 
 

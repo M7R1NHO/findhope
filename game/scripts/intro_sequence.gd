@@ -4,9 +4,15 @@ extends CanvasLayer
 const TYPE_SPEED := 0.035
 const TEXT_PAUSE := 1.8
 const ShipArt := preload("res://scripts/ship_art.gd")
+const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
 const SHIP_LINE := 2
 const SHIP_SIZE := Vector2(260.0, 100.0)
-const SHIP_SPEED := 75.0
+const SHIP_SPEED := 45.0
+# Entrada da Nave 47: sai da velocidade de salto (estrelas em riscos e um
+# clarão) e trava até esta fração da largura do ecrã; depois segue devagar.
+const SHIP_ARRIVAL_X := 0.3
+const SHIP_ARRIVAL_TIME := 1.2
+const WARP_IN_TIME := 0.35
 const PLAYER_SIZE := Vector2(28, 28)
 const PANEL_SIZE := Vector2(48, 58)
 const TUTORIAL_SPEED := 240.0
@@ -212,10 +218,14 @@ func _play_scene_one() -> void:
 	dialogue_label.text = ""
 	subtitle_label.text = ""
 
-	var stars := _create_stars()
-
-	for star in stars:
-		star.modulate.a = 0.0
+	# O mesmo espaço do menu principal (estrelas, planetas, horizonte), sem a
+	# nave parada: a Nave 47 entra mais à frente.
+	var backdrop := MenuBackdrop.new()
+	backdrop.show_ship = false
+	backdrop.modulate.a = 0.0
+	screen_root.add_child(backdrop)
+	backdrop.name = "IntroBackdrop"
+	screen_root.move_child(backdrop, background.get_index() + 1)
 
 	var background_tween := create_tween()
 	background_tween.tween_property(
@@ -226,14 +236,8 @@ func _play_scene_one() -> void:
 	)
 	await _await_tween(background_tween)
 
-	for star in stars:
-		var star_tween := create_tween()
-		star_tween.tween_property(
-			star,
-			"modulate:a",
-			1.0,
-			randf_range(0.4, 1.4)
-		)
+	var backdrop_tween := create_tween()
+	backdrop_tween.tween_property(backdrop, "modulate:a", 1.0, 1.4)
 
 	title_label.text = "PROJECT FIND HOPE"
 	title_label.modulate.a = 0.0
@@ -267,7 +271,7 @@ func _play_scene_one() -> void:
 		# A Nave 47 entra quando a missão começa e atravessa as estrelas; na
 		# última frase, a interferência faz os motores falhar.
 		if index == SHIP_LINE:
-			ship = _create_flying_ship()
+			ship = _create_flying_ship(backdrop)
 		elif index == narrative.size() - 1 and is_instance_valid(ship):
 			ship.interference = 1.0
 
@@ -990,35 +994,40 @@ func _await_tween(tween: Tween) -> void:
 		tween.custom_step(1000.0)
 
 
-func _create_flying_ship() -> Node2D:
+func _create_flying_ship(backdrop: Control = null) -> Node2D:
 	var viewport_size := get_viewport().get_visible_rect().size
 	var ship := ShipArt.make("nave47_voo", SHIP_SIZE)
 	ship.name = "FlyingShip"
 	ship.position = Vector2(-SHIP_SIZE.x, viewport_size.y * 0.4)
-	ship.drift = Vector2(SHIP_SPEED, -4.0)
 	screen_root.add_child(ship)
+	if backdrop != null:
+		screen_root.move_child(ship, backdrop.get_index() + 1)
+
+	# Clarão ao sair do salto.
+	var flash := ColorRect.new()
+	flash.name = "WarpFlash"
+	flash.color = Color(0.75, 0.95, 1.0, 0.0)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	screen_root.add_child(flash)
+	var flash_tween := create_tween()
+	flash_tween.tween_property(flash, "color:a", 0.55, 0.08)
+	flash_tween.tween_property(flash, "color:a", 0.0, 0.45)
+	flash_tween.tween_callback(flash.queue_free)
+
+	# As estrelas esticam-se e voltam ao normal enquanto a nave trava.
+	if backdrop != null:
+		var warp_tween := create_tween()
+		warp_tween.tween_property(backdrop, "warp", 1.0, WARP_IN_TIME)
+		warp_tween.tween_property(backdrop, "warp", 0.0, SHIP_ARRIVAL_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	var arrive := create_tween()
+	arrive.tween_interval(WARP_IN_TIME * 0.5)
+	arrive.tween_property(ship, "position:x", viewport_size.x * SHIP_ARRIVAL_X, SHIP_ARRIVAL_TIME).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	arrive.tween_callback(func():
+		if is_instance_valid(ship):
+			ship.drift = Vector2(SHIP_SPEED, -4.0))
 	return ship
-
-
-func _create_stars() -> Array[ColorRect]:
-	var stars: Array[ColorRect] = []
-	var viewport_size := get_viewport().get_visible_rect().size
-
-	for i in range(100):
-		var star := ColorRect.new()
-		var star_size := randf_range(1.0, 3.0)
-
-		star.size = Vector2(star_size, star_size)
-		star.position = Vector2(
-			randf_range(0.0, viewport_size.x),
-			randf_range(0.0, viewport_size.y)
-		)
-		star.color = Color(0.65, 0.82, 1.0)
-		star.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		screen_root.add_child(star)
-		stars.append(star)
-
-	return stars
 
 
 class IntroMapVisual extends Control:

@@ -1776,10 +1776,10 @@ class FightOverlay extends Control:
 
 		var origin: Vector2 = fight.atlas_position
 		var cooldown := float(fight.sonic_cooldown)
-		var ready := 1.0 - float(fight.sonic_cooldown_left) / maxf(cooldown, 0.01)
-		var ring_color := READY_COLOR if ready >= 1.0 else RELOAD_COLOR
+		var ready_ratio := 1.0 - float(fight.sonic_cooldown_left) / maxf(cooldown, 0.01)
+		var ring_color := READY_COLOR if ready_ratio >= 1.0 else RELOAD_COLOR
 
-		draw_arc(origin, 24.0, -PI / 2.0, -PI / 2.0 + TAU * ready, 32, ring_color, 3.0, true)
+		draw_arc(origin, 24.0, -PI / 2.0, -PI / 2.0 + TAU * ready_ratio, 32, ring_color, 3.0, true)
 
 		if fight.selected_actor != 2:
 			return
@@ -1792,7 +1792,7 @@ class FightOverlay extends Control:
 
 		var angle := direction.angle()
 		var color := ring_color
-		color.a = 0.6 if ready >= 1.0 else 0.35
+		color.a = 0.6 if ready_ratio >= 1.0 else 0.35
 		var faint := color
 		faint.a *= 0.45
 

@@ -26,11 +26,20 @@ const BossView := preload("res://scripts/phase3_boss_view.gd")
 
 const DURATION := 60.0
 const MAX_ENERGY := 100.0
-const DOOR_DRAIN_PER_SEC := 4.0       # por porta fechada
-const SENSOR_INTERVAL := 1.0          # o sensor atualiza a cada segundo
-const MOVE_INTERVAL_START := 4.0      # a criatura mexe-se mais depressa
-const MOVE_INTERVAL_END := 2.5        # à medida que o tempo passa
-const DOOR_WAIT := 2.5                # tempo à porta antes de tentar entrar
+# Valores da etapa 8 (25/10): antes (4 / 1 / 4 / 2,5 / 2,5, sem investida)
+# o Atlas quase nunca ficava danificado sem o Player deixar a porta aberta
+# de propósito (2 % em 2000 simulações). Agora fica em cerca de 1 em 3 a
+# 1 em 2, conforme a rapidez do Player (ver o LEIA-ME da etapa 8).
+const DOOR_DRAIN_PER_SEC := 5.0       # por porta fechada
+const SENSOR_INTERVAL := 1.5          # o sensor atualiza a cada 1,5 s
+const SENSOR_NOISE := 3.0             # ± °C em cada leitura
+const MOVE_INTERVAL_START := 3.0      # a criatura mexe-se mais depressa
+const MOVE_INTERVAL_END := 1.6        # à medida que o tempo passa
+const DOOR_WAIT := 1.6                # tempo à porta antes de tentar entrar
+# Na segunda metade, cada avanço pode ser uma investida (dois passos de uma
+# vez), que salta o aviso "perto" do sensor.
+const RUSH_FROM := 0.5                # fração do tempo já passada
+const RUSH_CHANCE := 0.25
 const BASE_TEMP := 12.0
 const TEMP_PER_STEP := 9.0            # 12, 21, 30, 39 °C
 const DOOR_STEP := 3                  # 0 longe, 1 corredor, 2 perto, 3 à porta
@@ -54,6 +63,7 @@ var sensor_readings: Dictionary = {"left": BASE_TEMP, "right": BASE_TEMP}
 var atlas_damaged: bool = false
 var breaches: int = 0
 var blocked: int = 0
+var rushes: int = 0
 var power_out: bool = false
 
 # Ecrã de instruções e dicas (cada dica aparece uma só vez).
@@ -79,8 +89,8 @@ func _ready() -> void:
 
 # Mostra as instruções com o tempo parado. O confronto só começa quando o
 # Player carrega em COMEÇAR (ou ESPAÇO / ENTER).
-func open_briefing(seed: int = 0) -> void:
-	briefing_seed = seed
+func open_briefing(run_seed: int = 0) -> void:
+	briefing_seed = run_seed
 	briefing_open = true
 	running = false
 	time_left = DURATION
@@ -100,10 +110,10 @@ func close_briefing() -> void:
 	start(briefing_seed)
 
 
-# seed > 0 torna o confronto reprodutível (usado nos testes).
-func start(seed: int = 0) -> void:
-	if seed > 0:
-		rng.seed = seed
+# run_seed > 0 torna o confronto reprodutível (usado nos testes).
+func start(run_seed: int = 0) -> void:
+	if run_seed > 0:
+		rng.seed = run_seed
 	else:
 		rng.randomize()
 	running = true
@@ -189,7 +199,12 @@ func move_creature() -> void:
 	if creature_step == 0 and roll < 0.35:
 		creature_side = "right" if creature_side == "left" else "left"
 	elif roll < 0.8:
-		creature_step += 1
+		var progress := 1.0 - time_left / DURATION
+		if progress >= RUSH_FROM and rng.randf() < RUSH_CHANCE:
+			creature_step += 2
+			rushes += 1
+		else:
+			creature_step += 1
 	elif creature_step > 0:
 		creature_step -= 1
 	if creature_step >= DOOR_STEP:
@@ -224,7 +239,7 @@ func try_enter() -> void:
 func update_sensor() -> void:
 	for side in SIDES:
 		var steps := creature_step if side == creature_side else 0
-		var noise := rng.randf_range(-1.5, 1.5)
+		var noise := rng.randf_range(-SENSOR_NOISE, SENSOR_NOISE)
 		sensor_readings[side] = BASE_TEMP + TEMP_PER_STEP * steps + noise
 	maybe_hint_hot_door()
 
@@ -264,9 +279,18 @@ func get_stats() -> Dictionary:
 		"atlas_damaged": atlas_damaged,
 		"breaches": breaches,
 		"blocked": blocked,
+		"rushes": rushes,
 		"energy_left": int(round(energy)),
 		"power_out": power_out
 	}
+
+
+# 12.5 -> "12,5"; 20.0 -> "20".
+static func seconds_text(value: float) -> String:
+	var rounded := snappedf(value, 0.1)
+	if is_equal_approx(rounded, roundf(rounded)):
+		return str(int(roundf(rounded)))
+	return str(rounded).replace(".", ",")
 
 
 func say(text: String) -> void:
@@ -437,12 +461,12 @@ func create_briefing() -> Control:
 	))
 	grid.add_child(briefing_card(
 		"3. PORTAS E ENERGIA",
-		"[A] fecha/abre a esquerda, [D] a direita. Cada porta fechada gasta energia: uma aguenta 25 s, as duas só 12,5 s. Sem energia, ficam abertas.",
+		"[A] fecha/abre a esquerda, [D] a direita. Cada porta fechada gasta energia: uma aguenta %s s, as duas só %s s. Sem energia, ficam abertas." % [seconds_text(MAX_ENERGY / DOOR_DRAIN_PER_SEC), seconds_text(MAX_ENERGY / DOOR_DRAIN_PER_SEC / 2.0)],
 		keys_illustration()
 	))
 	grid.add_child(briefing_card(
 		"4. SE ELA ENTRAR",
-		"À porta, a criatura espera 2,5 s antes de entrar. Se a porta estiver aberta, o Atlas põe-se à tua frente e fica danificado. Isso muda o final.",
+		"À porta, a criatura espera só %s s antes de entrar, e na segunda metade às vezes avança aos saltos. Se a porta estiver aberta, o Atlas põe-se à tua frente e fica danificado. Isso muda o final." % seconds_text(DOOR_WAIT),
 		danger_illustration()
 	))
 
@@ -554,14 +578,14 @@ func keys_illustration() -> Control:
 	row.add_child(chip("PORTA ESQ.", UIStyle.BUTTON_BG, 110.0))
 	row.add_child(chip("[D]", UIStyle.BUTTON_BG_HOVER, 50.0))
 	row.add_child(chip("PORTA DIR.", UIStyle.BUTTON_BG, 110.0))
-	row.add_child(chip("-4 /s", Color(0.45, 0.33, 0.1), 80.0))
+	row.add_child(chip("-" + seconds_text(DOOR_DRAIN_PER_SEC) + " /s", Color(0.45, 0.33, 0.1), 80.0))
 	return row
 
 
 func danger_illustration() -> Control:
 	var row := illustration_row()
 	row.add_child(chip("À PORTA", Color(0.75, 0.16, 0.16), 110.0))
-	row.add_child(chip("2,5 s", UIStyle.BUTTON_BG, 70.0))
+	row.add_child(chip(seconds_text(DOOR_WAIT) + " s", UIStyle.BUTTON_BG, 70.0))
 	row.add_child(chip("FECHADA: RECUA", Color(0.12, 0.42, 0.3), 150.0))
 	row.add_child(chip("ABERTA: ATLAS DANIFICADO", Color(0.5, 0.12, 0.12), 0.0))
 	return row

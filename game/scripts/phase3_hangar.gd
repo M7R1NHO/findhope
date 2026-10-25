@@ -106,11 +106,11 @@ func move_together(nodes: Array, target: Vector2) -> void:
 	var tween := create_tween()
 	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tween.set_parallel(true)
-	var offset := 0.0
+	var spacing := 0.0
 	for node in nodes:
 		if is_instance_valid(node):
-			tween.tween_property(node, "global_position", target + Vector2(offset, 0.0), 1.4)
-			offset += 70.0
+			tween.tween_property(node, "global_position", target + Vector2(spacing, 0.0), 1.4)
+			spacing += 70.0
 	await tween.finished
 
 

@@ -1,6 +1,8 @@
+import hashlib
 import json
 import os
 import math
+import random
 from copy import deepcopy
 from typing import Literal
 from threading import RLock
@@ -19,6 +21,7 @@ from backend.save_persistence import (
 from backend.world_state import WORLD_STATE
 from backend import (
     atlas_knowledge as atlas_knowledge_module,
+    atlas_prompt as atlas_prompt_module,
     atlas_memory as atlas_memory_module,
     autonomy_state as autonomy_state_module,
     behavior_state as behavior_state_module,
@@ -1021,7 +1024,58 @@ SPONTANEOUS_TRIGGERS = {
         "grave": True,
         "text": "Os registos acabaram de mostrar que o desvio da Nave 47 foi a resposta de Atlas a um pedido de socorro de outro androide. Atlas respondeu sem saber que o fazia.",
     },
+    # Renovação do chat: o jogo pede isto num momento calmo. O texto é
+    # escolhido em _curiosity_text (uma resposta do formulário ou uma fala
+    # antiga do jogador), por isso aqui fica vazio.
+    "player_curiosity": {
+        "once": False,
+        "grave": False,
+        "text": "",
+    },
 }
+
+# Máximo de perguntas por curiosidade numa partida (cada uma é uma chamada
+# ao Groq, por isso há um limite).
+CURIOSITY_MAX_PER_RUN = 8
+CURIOSITY_MIN_LINE_CHARS = 12
+
+
+def _curiosity_text(run_id):
+    """Escolhe sobre o que o Atlas vai perguntar. None = nada a perguntar.
+
+    Primeiro as respostas do formulário que ainda não comentou; depois uma
+    fala antiga do jogador. Cada assunto só é usado uma vez por partida e
+    fica registado no estado do Atlas (vai no save).
+    """
+    used = behavior_state_module.get_behavior_state()["spontaneous_used"]
+    if sum(1 for item in used if item.startswith(("form:", "line:"))) >= CURIOSITY_MAX_PER_RUN:
+        return None, None
+
+    form = [item for item in atlas_prompt_module.list_form_answers(run_id)
+            if "form:" + item[0] not in used]
+    if form:
+        key, label, value = random.choice(form)
+        return "form:" + key, (
+            "O jogo está calmo. No formulário Project Find Hope, o jogador "
+            f"respondeu \"{label}: {value}\". Atlas tem curiosidade sobre esta "
+            "resposta e faz-lhe uma pergunta curta ou um comentário sobre ela."
+        )
+
+    lines = [
+        str(m.get("content", "")).strip()
+        for m in conversation_context_module.get_recent_conversation()
+        if isinstance(m, dict) and m.get("role") == "player"
+    ]
+    for line in reversed(lines[:-1] or lines):
+        tag = "line:" + hashlib.sha1(line.lower().encode("utf-8")).hexdigest()[:10]
+        if len(line) >= CURIOSITY_MIN_LINE_CHARS and tag not in used:
+            return tag, (
+                "O jogo está calmo. Há pouco o jogador disse: \""
+                + line[:200]
+                + "\". Atlas lembrou-se disso e volta ao assunto com uma "
+                "pergunta curta ou um comentário."
+            )
+    return None, None
 
 RUN_STREAK_TRIGGER_EVERY = 3
 
@@ -1055,7 +1109,22 @@ def atlas_spontaneous(data: SpontaneousRequest):
                     "trigger": trigger, "response": None}
 
         behavior = behavior_state_module.get_behavior_state()
-        text = spec["text"].format(run_streak=behavior["run_streak"])
+        used_tag = trigger
+        if trigger == "player_curiosity":
+            # Sem perguntas em momentos graves ou de tensão alta.
+            narrative = narrative_state_module.get_narrative_state()
+            if (
+                narrative.get("grave_turns_remaining", 0) > 0
+                or not narrative.get("casual_interaction_allowed", True)
+            ):
+                return {"status": "skipped", "reason": "not_calm",
+                        "trigger": trigger, "response": None}
+            used_tag, text = _curiosity_text(run_id)
+            if text is None:
+                return {"status": "skipped", "reason": "nothing_to_ask",
+                        "trigger": trigger, "response": None}
+        else:
+            text = spec["text"].format(run_streak=behavior["run_streak"])
         if spec["grave"]:
             narrative_state_module.set_grave_moment(2)
 
@@ -1069,7 +1138,10 @@ def atlas_spontaneous(data: SpontaneousRequest):
             return {"status": "skipped", "reason": "no_response",
                     "trigger": trigger, "response": None}
 
-        behavior_state_module.mark_spontaneous_used(trigger, spec["once"])
+        if trigger == "player_curiosity":
+            behavior_state_module.mark_spontaneous_used(used_tag, True)
+        else:
+            behavior_state_module.mark_spontaneous_used(trigger, spec["once"])
         return {"status": "ok", "trigger": trigger, "response": response}
 
     return _run_in_isolated_state(run_id, speak)

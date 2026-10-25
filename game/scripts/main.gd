@@ -69,7 +69,15 @@ const FORM_MEMORY_FIELDS := {
 const NORMAL_PLACEHOLDER := "Escreva uma mensagem..."
 const WAITING_PLACEHOLDER := "Android está a responder..."
 
-const MAX_VISIBLE_MESSAGES := 10
+const MAX_VISIBLE_MESSAGES := 30
+
+# Curiosidade do Atlas: depois de algum tempo de silêncio num momento calmo,
+# o Atlas pergunta algo sobre o formulário ou sobre uma fala antiga do
+# jogador. O backend escolhe o assunto e limita a 8 por partida.
+const CURIOSITY_SILENCE_SEC := 150.0
+const CURIOSITY_CHECK_SEC := 15.0
+
+const AtlasChatUI = preload("res://scripts/atlas_chat_ui.gd")
 
 
 const ALLOWED_AUTONOMY_EVENTS := [
@@ -101,6 +109,11 @@ var spontaneous_queue: Array[String] = []
 var spontaneous_in_progress: bool = false
 
 var visible_messages: Array[String] = []
+
+var chat_ui: Node = null
+var last_chat_activity_msec: int = 0
+var curiosity_exhausted: bool = false
+var curiosity_timer: Timer = null
 
 var surface_recovery_active: bool = false
 var surface_recovery_step: int = 0
@@ -171,6 +184,19 @@ func _ready():
 	chat_input.placeholder_text = NORMAL_PLACEHOLDER
 
 	chat_history.clear()
+
+	chat_ui = AtlasChatUI.new()
+	chat_ui.name = "AtlasChatUI"
+	add_child(chat_ui)
+	chat_ui.setup($UI, $UI/ChatPanel, chat_history, chat_input)
+
+	last_chat_activity_msec = Time.get_ticks_msec()
+	curiosity_timer = Timer.new()
+	curiosity_timer.name = "CuriosityTimer"
+	curiosity_timer.wait_time = CURIOSITY_CHECK_SEC
+	curiosity_timer.autostart = true
+	curiosity_timer.timeout.connect(_check_atlas_curiosity)
+	add_child(curiosity_timer)
 
 	add_chat_message(
 		"ANDROID",
@@ -318,6 +344,9 @@ func _run_surface_recovery() -> void:
 	surface_recovery_active = true
 	surface_recovery_step = 0
 	waiting_for_atlas = false
+	# As cinco perguntas precisam de resposta: o chat abre sozinho.
+	if chat_ui != null:
+		chat_ui.set_open(true)
 	chat_input.editable = true
 	chat_input.placeholder_text = "Responde a Atlas..."
 	add_chat_message("ATLAS", "Fica quieto por um momento. Preciso de confirmar o teu estado.")
@@ -1074,6 +1103,11 @@ func add_chat_message(
 	speaker: String,
 	message: String
 ):
+	# Cada fala fica numa só linha, mesmo que o texto traga parágrafos.
+	message = flatten_chat_text(message)
+	if message.is_empty():
+		return
+
 	var formatted_message = (
 		speaker + ": " + message
 	)
@@ -1085,22 +1119,46 @@ func add_chat_message(
 	if visible_messages.size() > MAX_VISIBLE_MESSAGES:
 		visible_messages.pop_front()
 
-	refresh_chat_history()
+	last_chat_activity_msec = Time.get_ticks_msec()
+
+	if chat_ui != null:
+		chat_ui.push(speaker, message)
 
 
-func refresh_chat_history():
-	chat_history.clear()
+static func flatten_chat_text(text: String) -> String:
+	text = text.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+	return " ".join(text.split(" ", false)).strip_edges()
 
-	for message in visible_messages:
-		chat_history.append_text(
-			message + "\n\n"
-		)
 
-	await get_tree().process_frame
+# =========================================================
+# CURIOSIDADE DO ATLAS
+# =========================================================
 
-	chat_history.scroll_to_line(
-		chat_history.get_line_count()
-	)
+func _check_atlas_curiosity() -> void:
+	if curiosity_exhausted:
+		return
+	var silence := (Time.get_ticks_msec() - last_chat_activity_msec) / 1000.0
+	if silence < CURIOSITY_SILENCE_SEC:
+		return
+	if not can_atlas_be_curious():
+		return
+	# Conta como atividade: a próxima tentativa só depois de outro silêncio.
+	last_chat_activity_msec = Time.get_ticks_msec()
+	request_atlas_spontaneous("player_curiosity")
+
+
+# Só em momentos calmos: sem cutscene, perseguição, hack ou confronto
+# (são os mesmos casos em que o save manual está bloqueado).
+func can_atlas_be_curious() -> bool:
+	if surface_recovery_active or waiting_for_atlas or get_tree().paused:
+		return false
+	if str(SaveManager.active_run_data.get("run_id", "")).is_empty():
+		return false
+	if not bool(SaveManager.get_run_value("story", "surface_recovery_complete", false)):
+		return false
+	if chat_input.has_focus():
+		return false
+	return SaveManager.can_manual_save()
 
 
 # =========================================================
@@ -1304,6 +1362,13 @@ func _on_spontaneous_request_completed(_result, response_code, _headers, body) -
 			var text = data.get("response")
 			if text is String and not text.strip_edges().is_empty():
 				add_chat_message("ATLAS", text.strip_edges())
+		elif (
+			data is Dictionary
+			and str(data.get("trigger", "")) == "player_curiosity"
+			and str(data.get("reason", "")) == "nothing_to_ask"
+		):
+			# Já não há assuntos novos: não voltar a pedir nesta sessão.
+			curiosity_exhausted = true
 
 	_send_next_spontaneous()
 

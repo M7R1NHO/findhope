@@ -35,8 +35,12 @@ const PROP_Z := 3
 # sala, a partir do centro), o primeiro que estiver livre. As dos corredores
 # são postas pelo alien_encounter_manager.gd.
 const VENT_SIZE := Vector2(128, 76)
-# A conduta é uma grelha no chão: não precisa de espaço à volta para passar.
-const VENT_CLEARANCE := 8.0
+# A conduta é sólida (não se anda por cima dela): fica com a mesma folga dos
+# outros objetos sólidos, para nunca fechar uma passagem.
+const VENT_CLEARANCE := 16.0
+# Em salas muito cheias aceita-se uma folga menor (nunca à entrada de um
+# corredor), para todas as salas terem conduta.
+const VENT_CLEARANCE_TIGHT := 8.0
 const VENT_SPOTS := [
 	Vector2(0.3, -0.28), Vector2(-0.3, 0.28), Vector2(-0.3, -0.28), Vector2(0.3, 0.28),
 	Vector2(0.0, -0.3), Vector2(0.0, 0.3), Vector2(0.36, 0.0), Vector2(-0.36, 0.0),
@@ -299,7 +303,8 @@ func place_vent(container: Node2D, room_id: String, center: Vector2, room_size: 
 	for spot in VENT_SPOTS:
 		candidates.append(center + spot * room_size)
 	var grid: Array = []
-	var step := 40.0
+	# Passo fino: em salas cheias o único sítio livre pode ser estreito.
+	var step := 8.0
 	var x := inner.position.x + VENT_SIZE.x / 2.0
 	while x <= inner.end.x - VENT_SIZE.x / 2.0:
 		var y := inner.position.y + VENT_SIZE.y / 2.0
@@ -310,18 +315,18 @@ func place_vent(container: Node2D, room_id: String, center: Vector2, room_size: 
 	var first: Vector2 = candidates[0]
 	grid.sort_custom(func(a, b): return a.distance_to(first) < b.distance_to(first))
 	candidates.append_array(grid)
-	# Se só houver sítio por cima de objetos de chão, esses saem. Em último
-	# caso pode ficar à entrada de um corredor (passa-se por cima da grelha).
-	var no_doors := occupied.filter(func(item): return not item["door"])
+	# Se só houver sítio por cima de objetos de chão, esses saem. Nunca fica à
+	# entrada de um corredor: é sólida e fecharia a passagem.
 	var found := false
 	var rect := Rect2()
-	for taken in [strict, occupied, no_doors]:
+	for attempt in [[strict, VENT_CLEARANCE], [occupied, VENT_CLEARANCE], [occupied, VENT_CLEARANCE_TIGHT]]:
+		var taken: Array = attempt[0]
 		for candidate in candidates:
 			var pos: Vector2 = candidate
 			pos.x = clamp(pos.x, inner.position.x + VENT_SIZE.x / 2.0, inner.end.x - VENT_SIZE.x / 2.0)
 			pos.y = clamp(pos.y, inner.position.y + VENT_SIZE.y / 2.0, inner.end.y - VENT_SIZE.y / 2.0)
 			rect = Rect2(pos - VENT_SIZE / 2.0, VENT_SIZE)
-			if vent_blocker(rect, taken) == "":
+			if vent_blocker(rect, taken, attempt[1]) == "":
 				found = true
 				break
 		if found:
@@ -344,9 +349,9 @@ func place_vent(container: Node2D, room_id: String, center: Vector2, room_size: 
 	return null
 
 
-func vent_blocker(rect: Rect2, taken: Array) -> String:
+func vent_blocker(rect: Rect2, taken: Array, clearance: float = VENT_CLEARANCE) -> String:
 	for item in taken:
-		if rect.grow(VENT_CLEARANCE).intersects(item["rect"]):
+		if rect.grow(clearance).intersects(item["rect"]):
 			return item["what"]
 	return ""
 
@@ -476,7 +481,10 @@ func dress_nave47(ship_body: Node2D) -> void:
 # ---------------------------------------------------------------------------
 
 const SURFACE_AREA := Rect2(-3000.0, -1700.0, 4600.0, 3300.0)
-const SURFACE_ITEMS := [["rock", 22, Vector2(40, 30), Vector2(80, 60), false], ["boulder", 9, Vector2(110, 80), Vector2(170, 120), true], ["crystal", 10, Vector2(50, 60), Vector2(80, 100), false], ["pebbles", 16, Vector2(60, 40), Vector2(110, 70), false]]
+# Na superfície tudo é sólido (pedido do utilizador, 25/10): rochas,
+# pedregulhos, cristais, pedrinhas e chapas da nave. Só o rasto do despiste,
+# que é uma marca no chão por trás da nave, se pode pisar.
+const SURFACE_ITEMS := [["rock", 22, Vector2(40, 30), Vector2(80, 60), true], ["boulder", 9, Vector2(110, 80), Vector2(170, 120), true], ["crystal", 10, Vector2(50, 60), Vector2(80, 100), true], ["pebbles", 16, Vector2(60, 40), Vector2(110, 70), true]]
 
 
 func decorate_surface() -> void:
@@ -509,7 +517,7 @@ func decorate_surface() -> void:
 			var plates := [Vector2(-1.3, 0.7), Vector2(-1.25, -0.8), Vector2(1.25, 1.0), Vector2(-0.3, 1.6), Vector2(0.4, -1.6)]
 			for i in plates.size():
 				var center: Vector2 = bounds.get_center() + plates[i] * bounds.size / 2.0
-				add_surface_prop(container, "plate", Rect2(center - Vector2(36, 24), Vector2(72, 48)), false, i, occupied, ground_points)
+				add_surface_prop(container, "plate", Rect2(center - Vector2(36, 24), Vector2(72, 48)), true, i, occupied, ground_points)
 		dress_nave47(ship)
 
 	var random := RandomNumberGenerator.new()
@@ -539,7 +547,7 @@ func add_surface_prop(container: Node2D, kind: String, rect: Rect2, solid: bool,
 	container.add_child(prop)
 	prop.global_position = rect.get_center()
 	placed.append({"room": "Surface", "kind": kind, "rect": rect, "solid": solid, "node": prop})
-	if not Props.is_floor_kind(kind):
+	if solid or not Props.is_floor_kind(kind):
 		occupied.append({"rect": rect, "important": false, "door": false, "what": "decor " + kind})
 	return true
 
