@@ -1,5 +1,12 @@
 extends Area2D
 
+const DepthSort := preload("res://scripts/depth_sort.gd")
+const Props := preload("res://scripts/decor_props.gd")
+# Desenho da escotilha no chão (decor_props.gd "hatch"), centrado no
+# polígono antigo da porta.
+const HATCH_SIZE := Vector2(112, 68)
+const HATCH_OFFSET := Vector2(22, 1)
+
 
 @export var interaction_distance: float = 200.0
 
@@ -12,11 +19,15 @@ extends Area2D
 
 
 const SAVE_ID := "protocol_door"
+# Insistências positivas no chat para o Atlas aceitar abrir a porta.
+# Igual a backend/door_insistence.py REQUIRED_INSISTENCES.
+const INSISTENCE_REQUIRED := 5
 
 
 @onready var interaction_label: Label = $InteractionLabel
 @onready var status_label: Label = $StatusLabel
 @onready var door_visual: Node2D = $DoorVisual
+var hatch_art: Node2D = null
 
 @onready var terminal_state: Label = \
 	$TerminalPanel/TerminalState
@@ -67,8 +78,31 @@ func _ready():
 		)
 
 	setup_interaction_label()
+	# Textos da porta por cima do Player e do Atlas (depth_sort.gd).
+	for label_node in [interaction_label, status_label, get_node_or_null("TerminalPanel")]:
+		DepthSort.set_label(label_node)
+	setup_hatch_art()
 
 	restore_story_state()
+
+
+# A porta é uma escotilha no chão: fica sempre por baixo do Player e do
+# Atlas. O polígono antigo continua a marcar a posição (labels e distância
+# de interação), mas deixa de se ver.
+func setup_hatch_art():
+	if door_visual == null or hatch_art != null:
+		return
+	hatch_art = Props.make("hatch", HATCH_SIZE, false)
+	hatch_art.name = "HatchArt"
+	add_child(hatch_art)
+	hatch_art.position = door_visual.position + HATCH_OFFSET
+	DepthSort.set_floor(hatch_art)
+	door_visual.self_modulate = Color(1, 1, 1, 0)
+
+
+func set_hatch_open(open: bool):
+	if hatch_art != null:
+		hatch_art.set_variant(1 if open else 0)
 
 
 func setup_interaction_label():
@@ -193,6 +227,20 @@ func set_status_granted():
 	terminal_state.text = "GRANTED"
 
 
+# Enquanto o Atlas não está convencido: quantas insistências já contaram.
+func set_status_insistence(count: int, required: int = INSISTENCE_REQUIRED):
+	status_label.text = "ATLAS HESITA  " + str(count) + " / " + str(required)
+	terminal_state.text = "LOCKED"
+
+
+# Fechada e sem autorização: depois de examinada mostra as insistências.
+func show_locked_status():
+	if bool(SaveManager.get_run_value("story", "protocol_door_examined", false)):
+		set_status_insistence(int(SaveManager.get_run_value("story", "protocol_door_insistence", 0)))
+	else:
+		set_status_restricted()
+
+
 func set_status_sealed():
 	status_label.text = "ACESSO BLOQUEADO"
 	terminal_state.text = "SEALED"
@@ -292,7 +340,7 @@ func on_hack_cancelled():
 		set_status_hack_ready()
 
 	else:
-		set_status_restricted()
+		show_locked_status()
 
 	print(
 		"PROTOCOL DOOR HACK CANCELLED"
@@ -340,6 +388,7 @@ func apply_open_visual_state():
 
 	if door_visual != null:
 		door_visual.visible = false
+	set_hatch_open(true)
 
 	update_interaction_label_position()
 
@@ -357,6 +406,7 @@ func apply_closed_visual_state():
 
 	if door_visual != null:
 		door_visual.visible = true
+	set_hatch_open(false)
 
 	update_interaction_label_position()
 
@@ -552,7 +602,7 @@ func restore_story_state():
 
 	is_open = false
 
-	set_status_restricted()
+	show_locked_status()
 
 	apply_closed_visual_state()
 
@@ -621,6 +671,6 @@ func load_save_data(
 
 		return
 
-	set_status_restricted()
+	show_locked_status()
 
 	apply_closed_visual_state()

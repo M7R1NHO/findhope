@@ -2,6 +2,9 @@ extends Control
 
 const UIStyle := preload("res://scripts/ui_style.gd")
 const MenuBackdrop := preload("res://scripts/menu_backdrop.gd")
+const DiaryBook := preload("res://scripts/diary_book.gd")
+const AchievementsScreen := preload("res://scripts/achievements_screen.gd")
+const OptionsPanel := preload("res://scripts/options_panel.gd")
 
 
 @export_file("*.tscn") var game_scene_path: String
@@ -105,6 +108,25 @@ func create_menu():
 	elif menu_state == "completed":
 		create_standard_menu(true)
 
+	# APAGAR PROGRESSO: pequeno, no canto inferior esquerdo, com dupla
+	# confirmação (confirm_erase_progress).
+	var erase_button := Button.new()
+	erase_button.name = "EraseProgressButton"
+	erase_button.text = "APAGAR PROGRESSO"
+	erase_button.add_theme_font_size_override("font_size", 12)
+	erase_button.add_theme_color_override("font_color", UIStyle.DANGER)
+	erase_button.add_theme_color_override("font_hover_color", UIStyle.DANGER.lightened(0.2))
+	erase_button.anchor_left = 0.0
+	erase_button.anchor_right = 0.0
+	erase_button.anchor_top = 1.0
+	erase_button.anchor_bottom = 1.0
+	erase_button.offset_left = 16.0
+	erase_button.offset_top = -48.0
+	erase_button.offset_right = 186.0
+	erase_button.offset_bottom = -16.0
+	erase_button.pressed.connect(confirm_erase_progress)
+	background.add_child(erase_button)
+
 	status_label = Label.new()
 	status_label.text = ""
 	status_label.horizontal_alignment = (
@@ -171,11 +193,12 @@ func create_standard_menu(
 		open_achievements
 	)
 
-	if show_diaries:
-		create_menu_button(
-			"DIÁRIOS",
-			open_diaries
-		)
+	# DIÁRIOS aparece sempre depois do primeiro jogo: sem diários mostra o
+	# livro com a página em branco (show_diaries fica só por compatibilidade).
+	create_menu_button(
+		"DIÁRIOS",
+		open_diaries
+	)
 
 	create_menu_button(
 		"OPÇÕES",
@@ -467,69 +490,75 @@ func _refresh_continue_button():
 
 func open_achievements():
 	close_modal()
-
-	var achievements: Dictionary = (
-		SaveManager.profile.get(
-			"achievements",
-			{}
-		)
-	)
-
-	var body = ""
-
-	if achievements.is_empty():
-		body = (
-			"Nenhuma conquista desbloqueada."
-		)
-
-	else:
-		body = (
-			"Conquistas desbloqueadas: "
-			+ str(achievements.size())
-		)
-
-	create_information_modal(
-		"CONQUISTAS",
-		body
-	)
+	# As 16 conquistas, bloqueadas e desbloqueadas (achievements_screen.gd).
+	modal_layer = AchievementsScreen.open(self)
 
 
 func open_diaries():
 	close_modal()
-
-	var diaries: Array = (
-		SaveManager.profile.get(
-			"android_diaries",
-			[]
-		)
-	)
-
-	var body = ""
-
-	if diaries.is_empty():
-		body = (
-			"Nenhum Diário de Android "
-			+ "foi registrado."
-		)
-
-	else:
-		body = (
-			"Diários registrados: "
-			+ str(diaries.size())
-		)
-
-	create_information_modal(
-		"DIÁRIOS",
-		body
-	)
+	# Livro com um Diário do Android por run (diary_book.gd).
+	modal_layer = DiaryBook.open(self)
 
 
 func open_options():
+	# Volume geral e da música (options_panel.gd); grava no perfil.
 	create_information_modal(
 		"OPÇÕES",
-		"As opções serão implementadas "
-		+ "durante o refinamento do jogo."
+		"A banda sonora toca no menu e no jogo."
 	)
+	var container: VBoxContainer = modal_layer.find_child("ModalContent", true, false)
+	OptionsPanel.add_controls(container)
+	# O VOLTAR fica no fim, depois dos controlos.
+	var back := container.get_child(2)
+	container.move_child(back, container.get_child_count() - 1)
+
+
+# 1.ª confirmação: diz o que vai ser apagado e o que fica.
+func confirm_erase_progress():
+	create_confirmation_modal(
+		"APAGAR PROGRESSO",
+		"Vai ser apagado TODO o teu progresso:\n"
+		+ "a run atual, os 5 saves manuais, os Diários do Android, "
+		+ "as conquistas e todo o histórico de conversas com o Atlas "
+		+ "(no computador e no servidor).\n\n"
+		+ "As opções de som ficam como estão.",
+		"CANCELAR",
+		"CONTINUAR",
+		confirm_erase_progress_final
+	)
+
+
+# 2.ª confirmação.
+func confirm_erase_progress_final():
+	create_confirmation_modal(
+		"TENS A CERTEZA?",
+		"Esta ação não pode ser desfeita.\n"
+		+ "O jogo volta ao estado inicial, como na primeira vez.",
+		"CANCELAR",
+		"APAGAR TUDO",
+		erase_progress
+	)
+
+
+func erase_progress():
+	close_modal()
+	set_status("A apagar o progresso…")
+	var report: Dictionary = await SaveManager.erase_all_progress()
+	if not report.get("ok", false) and report.has("error"):
+		set_status(str(report["error"]))
+		return
+	var lines := ["O progresso foi apagado. O jogo voltou ao estado inicial."]
+	if not report.get("local_files_left", []).is_empty():
+		lines.append("Alguns ficheiros locais não foram apagados: " + ", ".join(report["local_files_left"]))
+	match str(report.get("backend", "")):
+		"ok":
+			lines.append("O servidor confirmou que apagou as conversas e os saves remotos.")
+		"partial":
+			lines.append("O servidor apagou as conversas com o Atlas, mas a base de dados dos saves não respondeu. O pedido fica guardado e é repetido sozinho; os saves antigos já não voltam a aparecer.")
+		_:
+			lines.append("O servidor não respondeu. O pedido fica guardado e é repetido quando o jogo voltar a abrir com o backend ligado; os saves antigos já não voltam a aparecer.")
+	create_menu()
+	create_information_modal("PROGRESSO APAGADO", "\n\n".join(lines))
 
 
 func open_credits():
@@ -574,6 +603,7 @@ func create_information_modal(
 	overlay.add_child(center)
 
 	var container = VBoxContainer.new()
+	container.name = "ModalContent"
 	container.custom_minimum_size = Vector2(
 		600,
 		0

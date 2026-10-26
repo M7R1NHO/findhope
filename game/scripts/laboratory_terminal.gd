@@ -674,6 +674,8 @@ func process_stage_three():
 
 
 func register_revelation():
+	# Facto da run (Conquista "HUMANO?" e o Diário do Android).
+	SaveManager.set_run_value("story", "creature_human_origin_discovered", true)
 	if (
 		main != null
 		and main.has_method(

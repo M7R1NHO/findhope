@@ -3,6 +3,7 @@ extends Node2D
 
 const WorldStyle := preload("res://scripts/world_style.gd")
 const RoomDecor := preload("res://scripts/room_decor.gd")
+const DepthSort := preload("res://scripts/depth_sort.gd")
 
 
 @onready var atlas_api: HTTPRequest = $AtlasAPI
@@ -20,6 +21,7 @@ const RoomDecor := preload("res://scripts/room_decor.gd")
 
 
 const CHAT_URL := "http://127.0.0.1:8000/chat"
+const DOOR_INSISTENCE_REQUIRED: int = preload("res://scripts/protocol_door.gd").INSISTENCE_REQUIRED
 
 const AUTONOMY_EVENT_URL := \
 	"http://127.0.0.1:8000/atlas/autonomy/event"
@@ -131,6 +133,8 @@ func _ready():
 	# Contornos e painéis no estilo das folhas de sprites (só aspeto).
 	add_child(WorldStyle.new())
 	add_child(RoomDecor.new())
+	# Ordem de desenho dos objetos altos em relação ao Player e ao Atlas.
+	DepthSort.install(self)
 
 	atlas_api.request_completed.connect(
 		_on_atlas_api_request_completed
@@ -459,7 +463,8 @@ func send_message_to_atlas(
 		"message": message,
 		"current_room": current_room,
 		"current_room_map_info": room_map_info,
-		"facility_map_acquired": map_acquired
+		"facility_map_acquired": map_acquired,
+		"protocol_door_pending": is_protocol_door_pending()
 	})
 
 	var error = atlas_api.request(
@@ -594,6 +599,15 @@ func _on_atlas_api_request_completed(
 		"ATLAS",
 		str(atlas_response)
 	)
+
+	var door_insistence = data.get("door_insistence", {})
+	if door_insistence is Dictionary:
+		handle_door_insistence(door_insistence)
+	# Conquistas "ANDROID INTELIGENTE" (7) e "PYSSOA" (20): só conta uma
+	# resposta real do Atlas.
+	var achievements := get_node_or_null("/root/Achievements")
+	if achievements != null:
+		achievements.register_chat()
 
 
 
@@ -864,9 +878,63 @@ func on_protocol_door_interacted():
 			"underground_door_01_question_protocol"
 		)
 
+		add_chat_message(
+			"SISTEMA",
+			"Para o Atlas abrir a porta tens de o convencer no chat: "
+			+ "pede-lhe com respeito, " + str(DOOR_INSISTENCE_REQUIRED)
+			+ " vezes e com argumentos diferentes (por favor, a missão, "
+			+ "as descobertas, a confiança nele). Insultos, ameaças, "
+			+ "ordens e pedidos repetidos não contam."
+		)
+		protocol_door.set_status_insistence(get_door_insistence_count())
+
 		return
 
 	check_protocol_door_decision()
+
+
+# =========================================================
+# PROTOCOL DOOR: INSISTÊNCIAS POSITIVAS NO CHAT
+# =========================================================
+# O backend (door_insistence.py) decide se uma mensagem conta e guarda o
+# contador no estado do Atlas da run (vai nos saves). Aqui só se mostra o
+# progresso e, ao chegar a 5, se volta a pedir a decisão da porta.
+
+# A porta foi examinada e ainda não foi autorizada nem aberta.
+func is_protocol_door_pending() -> bool:
+	if protocol_door == null or not protocol_door_examined:
+		return false
+	return not (
+		bool(protocol_door.get("is_open"))
+		or bool(protocol_door.get("hack_authorized"))
+		or bool(protocol_door.get("entered_underground"))
+	)
+
+
+func get_door_insistence_count() -> int:
+	return int(SaveManager.get_run_value("story", "protocol_door_insistence", 0))
+
+
+func handle_door_insistence(result: Dictionary) -> void:
+	var reason := str(result.get("reason", ""))
+	var count := int(result.get("count", 0))
+	if reason == "" or reason == "not_pending" or reason == "not_door":
+		return
+	SaveManager.set_run_value("story", "protocol_door_insistence", count)
+	match reason:
+		"counted":
+			add_chat_message("SISTEMA", "Insistência registada: " + str(count) + " / " + str(DOOR_INSISTENCE_REQUIRED) + ".")
+		"repeated":
+			add_chat_message("SISTEMA", "Esse pedido repete um anterior e não conta. Tenta outro argumento.")
+		"hostile":
+			add_chat_message("SISTEMA", "Insultos, ameaças ou ordens não convencem o Atlas. Este pedido não conta.")
+		"no_positive", "too_short":
+			add_chat_message("SISTEMA", "Pedido registado, mas não conta: pede com respeito e explica porquê (por favor, a missão, as descobertas...).")
+	if not protocol_door_examined or not is_protocol_door_pending():
+		return
+	protocol_door.set_status_insistence(count, DOOR_INSISTENCE_REQUIRED)
+	if reason == "counted" and count >= DOOR_INSISTENCE_REQUIRED:
+		check_protocol_door_decision()
 
 
 func has_required_surface_evidence() -> bool:
@@ -908,6 +976,14 @@ func check_protocol_door_decision():
 
 	if not has_required_surface_evidence():
 		protocol_door.set_status_denied()
+
+		if get_door_insistence_count() >= DOOR_INSISTENCE_REQUIRED:
+			add_chat_message(
+				"ANDROID",
+				"Convenceste-me, mas ainda não temos provas suficientes. "
+				+ "Analisa primeiro o que está na superfície."
+			)
+			return
 
 		add_chat_message(
 			"ANDROID",
@@ -1011,10 +1087,22 @@ func _on_protocol_api_request_completed(
 		)
 	)
 
+	# Requisito narrativo: cinco insistências positivas no chat
+	# (door_insistence.py). Antes a porta dependia só destes três números,
+	# que o jogador não via nem sabia como mudar.
+	var insistence = data.get("door_insistence", {})
+	var insistence_count := 0
+	if insistence is Dictionary:
+		insistence_count = int(insistence.get("count", 0))
+	SaveManager.set_run_value("story", "protocol_door_insistence", insistence_count)
+	print(
+		"PROTOCOL DOOR CHECK: insistências=", insistence_count,
+		" | autonomia=", autonomy, " autoafirmação=", self_assertion,
+		" adesão=", protocol_adherence
+	)
+
 	var willing_to_break_protocol = (
-		autonomy >= 35
-		and self_assertion >= 30
-		and protocol_adherence <= 75
+		insistence_count >= DOOR_INSISTENCE_REQUIRED
 	)
 
 	if willing_to_break_protocol:
@@ -1035,13 +1123,19 @@ func _on_protocol_api_request_completed(
 
 		return
 
-	protocol_door.set_status_denied()
+	protocol_door.set_status_insistence(insistence_count, DOOR_INSISTENCE_REQUIRED)
 
 	add_chat_message(
 		"ANDROID",
 		"Não. Mesmo com estas evidências, "
 		+ "ainda não consigo justificar "
 		+ "essa violação de protocolo."
+	)
+	add_chat_message(
+		"SISTEMA",
+		"O Atlas ainda não está convencido ("
+		+ str(insistence_count) + " / " + str(DOOR_INSISTENCE_REQUIRED)
+		+ "). Insiste com ele no chat, com respeito e argumentos diferentes."
 	)
 
 

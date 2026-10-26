@@ -21,9 +21,9 @@ const WHITE := Color(0.9, 0.92, 0.94)
 const LINE := 3.0
 
 # Objetos que mexem (luzes a piscar, ventoinhas, bolhas, fumo).
-const ANIMATED := ["server", "generator", "tube", "lamp", "radio", "monitors", "crystal"]
+const ANIMATED := ["server", "generator", "tube", "lamp", "radio", "monitors", "crystal", "debris", "hatch"]
 # Objetos que ficam no chão (desenhados por baixo dos outros).
-const FLOOR_KINDS := ["stripes", "stain", "vent", "carpet", "cables", "papers", "landing", "skid", "pebbles"]
+const FLOOR_KINDS := ["stripes", "stain", "vent", "carpet", "cables", "papers", "landing", "skid", "pebbles", "hatch"]
 
 var kind: String = "crate"
 var size: Vector2 = Vector2(60.0, 60.0)
@@ -104,6 +104,17 @@ func _draw() -> void:
 		"crystal": draw_crystal(r)
 		"plate": draw_plate(r)
 		"skid": draw_skid(r)
+		"sculpture": draw_sculpture(r)
+		"debris": draw_alien_debris(r)
+		"hatch": draw_hatch(r, variant == 1)
+
+
+# Muda a variante depois de criado (a escotilha abre: variante 1).
+func set_variant(value: int) -> void:
+	if variant == value:
+		return
+	variant = value
+	queue_redraw()
 
 
 # ---------------------------------------------------------------------------
@@ -126,20 +137,20 @@ func ellipse_points(center: Vector2, radius: Vector2, count: int = 20) -> Packed
 	return points
 
 
-func ellipse(center: Vector2, radius: Vector2, fill: Color, outline: bool = true) -> void:
+func ellipse(center: Vector2, radius: Vector2, fill: Color, outline: bool = true, width: float = LINE) -> void:
 	var points := ellipse_points(center, radius)
 	draw_colored_polygon(points, fill)
 	if outline:
 		points.append(points[0])
-		draw_polyline(points, OUTLINE, LINE)
+		draw_polyline(points, OUTLINE, width)
 
 
-func poly(points: PackedVector2Array, fill: Color, outline: bool = true) -> void:
+func poly(points: PackedVector2Array, fill: Color, outline: bool = true, width: float = LINE) -> void:
 	draw_colored_polygon(points, fill)
 	if outline:
 		var closed := points.duplicate()
 		closed.append(points[0])
-		draw_polyline(closed, OUTLINE, LINE)
+		draw_polyline(closed, OUTLINE, width)
 
 
 func rng() -> RandomNumberGenerator:
@@ -806,3 +817,140 @@ func draw_skid(r: Rect2) -> void:
 			var x: float = lerp(r.position.x, r.end.x, t)
 			var half: float = lerp(r.size.y * 0.08, r.size.y * 0.5, t * t)
 			draw_circle(Vector2(x, cy + side * (half + 6.0)), 10.0 + i * 3.0, Color(0.95, 0.75, 0.4, 0.25))
+
+
+# ---------------------------------------------------------------------------
+# Descobertas da superfície e PROTOCOL DOOR
+# ---------------------------------------------------------------------------
+
+# Escultura antiga (AncientSculpture): estatueta de pedra gasta, meio
+# enterrada na areia. Uma figura de pé com um capacete redondo nas mãos,
+# com uma marca ciano no peito: pista discreta de que quem a fez era humano.
+func draw_sculpture(r: Rect2) -> void:
+	var stone := Color(0.7, 0.58, 0.42)
+	var stone_dark := stone.darkened(0.28)
+	var cx := r.get_center().x
+	var w := r.size.x
+	var h := r.size.y
+	var foot := r.end.y - h * 0.08
+	# Sombra e areia acumulada à volta da base.
+	ellipse(Vector2(cx + 4.0, foot), Vector2(w * 0.52, h * 0.08), Color(0, 0, 0, 0.2), false)
+	ellipse(Vector2(cx, foot - 1.0), Vector2(w * 0.48, h * 0.06), Color(0.8, 0.58, 0.28), false)
+	# Base de pedra rachada, com um canto partido.
+	var base := PackedVector2Array([Vector2(cx - w * 0.36, foot - 2.0), Vector2(cx - w * 0.36, foot - h * 0.17), Vector2(cx + w * 0.2, foot - h * 0.17),
+		Vector2(cx + w * 0.36, foot - h * 0.11), Vector2(cx + w * 0.36, foot - 2.0)])
+	poly(base, stone_dark, true, 2.0)
+	draw_line(Vector2(cx - w * 0.36, foot - h * 0.13), Vector2(cx + w * 0.3, foot - h * 0.13), stone_dark.lightened(0.2), 1.5)
+	draw_line(Vector2(cx + w * 0.05, foot - h * 0.17), Vector2(cx, foot - h * 0.07), OUTLINE, 1.5)
+	var hip := foot - h * 0.17
+	var waist := r.position.y + h * 0.55
+	var shoulder := r.position.y + h * 0.3
+	# Pernas.
+	for side in [-1.0, 1.0]:
+		poly(PackedVector2Array([Vector2(cx + side * w * 0.04, hip), Vector2(cx + side * w * 0.04, waist), Vector2(cx + side * w * 0.17, waist), Vector2(cx + side * w * 0.15, hip)]), stone.darkened(0.08), true, 2.0)
+	# Tronco (fato, com cinto) e ombros largos.
+	poly(PackedVector2Array([Vector2(cx - w * 0.17, waist + 2.0), Vector2(cx - w * 0.22, shoulder + h * 0.04), Vector2(cx - w * 0.12, shoulder),
+		Vector2(cx + w * 0.12, shoulder), Vector2(cx + w * 0.22, shoulder + h * 0.04), Vector2(cx + w * 0.17, waist + 2.0)]), stone, true, 2.0)
+	draw_line(Vector2(cx - w * 0.17, waist - 2.0), Vector2(cx + w * 0.17, waist - 2.0), stone_dark, 2.0)
+	# Capacete redondo seguro à frente do peito.
+	ellipse(Vector2(cx, shoulder + h * 0.13), Vector2(w * 0.15, h * 0.075), stone.lightened(0.12), true, 2.0)
+	draw_arc(Vector2(cx, shoulder + h * 0.13), w * 0.08, PI * 1.1, PI * 1.9, 8, OUTLINE, 1.5)
+	# Cabeça humana, com os olhos gastos.
+	ellipse(Vector2(cx, r.position.y + h * 0.17), Vector2(w * 0.13, h * 0.1), stone.lightened(0.06), true, 2.0)
+	draw_line(Vector2(cx - w * 0.07, r.position.y + h * 0.17), Vector2(cx - w * 0.02, r.position.y + h * 0.17), OUTLINE, 1.5)
+	draw_line(Vector2(cx + w * 0.02, r.position.y + h * 0.17), Vector2(cx + w * 0.07, r.position.y + h * 0.17), OUTLINE, 1.5)
+	# Marca ciano no ombro (como o emblema dos fatos) e rachadela.
+	draw_circle(Vector2(cx - w * 0.14, shoulder + h * 0.035), 2.2, CYAN.darkened(0.1))
+	draw_line(Vector2(cx + w * 0.1, shoulder + 2.0), Vector2(cx + w * 0.05, shoulder + h * 0.08), OUTLINE, 1.2)
+
+
+# Destroços de origem desconhecida (UnknownDebris): placa curva de um metal
+# escuro e arroxeado, que não é da Nave 47, espetada na areia, com costuras
+# roxas a brilhar devagar e lascas à volta.
+func draw_alien_debris(r: Rect2) -> void:
+	var hull := Color(0.24, 0.2, 0.3)
+	var glow_color := Color(0.62, 0.38, 0.92)
+	var glow := 0.5 + 0.5 * sin(clock * 1.6)
+	var c := r.get_center()
+	var w := r.size.x
+	var h := r.size.y
+	var foot := r.end.y - h * 0.12
+	ellipse(Vector2(c.x + 5.0, foot), Vector2(w * 0.48, h * 0.12), Color(0, 0, 0, 0.2), false)
+	draw_circle(Vector2(c.x, foot - h * 0.35), w * 0.45, Color(glow_color, 0.05 + 0.06 * glow))
+	# Placa principal, inclinada e curva.
+	var plate := PackedVector2Array([Vector2(c.x - w * 0.42, foot), Vector2(c.x - w * 0.3, r.position.y + h * 0.3), Vector2(c.x - w * 0.05, r.position.y + h * 0.08),
+		Vector2(c.x + w * 0.22, r.position.y + h * 0.16), Vector2(c.x + w * 0.12, foot - h * 0.2), Vector2(c.x + w * 0.2, foot)])
+	poly(plate, hull)
+	# Nervuras curvas.
+	for i in 3:
+		var t := 0.25 + i * 0.22
+		var a := plate[1].lerp(plate[2], t)
+		var b := plate[0].lerp(plate[5], t)
+		draw_line(a, b.lerp(a, 0.25), hull.lightened(0.18), 3.0)
+	# Costuras roxas que brilham.
+	var seam := PackedVector2Array([plate[1].lerp(plate[2], 0.15) + Vector2(4, 6), c + Vector2(-w * 0.08, -h * 0.05), c + Vector2(w * 0.02, h * 0.12)])
+	draw_polyline(seam, OUTLINE, 5.0)
+	draw_polyline(seam, glow_color.lerp(WHITE, 0.3 * glow), 2.5)
+	# Símbolos que não pertencem a nenhum alfabeto conhecido.
+	var glyph := c + Vector2(-w * 0.17, -h * 0.12)
+	draw_arc(glyph, 4.0, 0.0, PI * 1.5, 8, glow_color.lerp(WHITE, 0.2 * glow), 1.5)
+	draw_line(glyph + Vector2(6, -4), glyph + Vector2(6, 5), glow_color.lerp(WHITE, 0.2 * glow), 1.5)
+	# Segunda lasca mais pequena, à direita.
+	poly(PackedVector2Array([Vector2(c.x + w * 0.22, foot), Vector2(c.x + w * 0.3, foot - h * 0.32), Vector2(c.x + w * 0.44, foot - h * 0.18), Vector2(c.x + w * 0.46, foot)]), hull.darkened(0.15))
+	draw_line(Vector2(c.x + w * 0.31, foot - h * 0.22), Vector2(c.x + w * 0.4, foot - h * 0.12), glow_color.darkened(0.2), 1.5)
+	# Areia a tapar a base.
+	poly(PackedVector2Array([Vector2(c.x - w * 0.5, foot + 3.0), Vector2(c.x - w * 0.3, foot - h * 0.06), Vector2(c.x, foot - h * 0.02),
+		Vector2(c.x + w * 0.32, foot - h * 0.07), Vector2(c.x + w * 0.5, foot + 3.0)]), Color(0.82, 0.6, 0.3))
+
+
+# PROTOCOL DOOR: escotilha no chão, com moldura de faixas de perigo. Fechada:
+# tampa com fecho e luz vermelha. Aberta: a tampa fica deitada para trás e
+# vê-se o poço escuro com a escada; a luz fica verde.
+func draw_hatch(r: Rect2, open: bool) -> void:
+	var c := r.get_center()
+	var frame_rect := r.grow(-2.0)
+	var hole := r.grow(-r.size.y * 0.2)
+	ellipse(c + Vector2(4.0, 4.0), r.size * 0.5, Color(0, 0, 0, 0.2), false)
+	box(frame_rect, METAL_DARK, 0.0)
+	# Faixas de perigo na moldura.
+	var stripe := 14.0
+	var x := frame_rect.position.x
+	var i := 0
+	while x < frame_rect.end.x:
+		if i % 2 == 0:
+			var stripe_w: float = min(stripe, frame_rect.end.x - x)
+			draw_rect(Rect2(x, frame_rect.position.y + 2.0, stripe_w, hole.position.y - frame_rect.position.y - 4.0), ACCENT.darkened(0.1))
+			draw_rect(Rect2(x, hole.end.y + 2.0, stripe_w, frame_rect.end.y - hole.end.y - 4.0), ACCENT.darkened(0.1))
+		x += stripe
+		i += 1
+	draw_rect(frame_rect, OUTLINE, false, LINE)
+	var light_pos := Vector2(frame_rect.end.x - 8.0, frame_rect.position.y + 8.0)
+	if open:
+		# Tampa deitada para trás (por cima, no chão).
+		var lid := Rect2(hole.position.x + 4.0, r.position.y - hole.size.y * 0.55, hole.size.x - 8.0, hole.size.y * 0.55)
+		box(lid, METAL.darkened(0.15), 0.0)
+		draw_line(lid.position + Vector2(lid.size.x / 2.0, 3.0), lid.position + Vector2(lid.size.x / 2.0, lid.size.y - 3.0), OUTLINE, 2.0)
+		# Poço com escada.
+		draw_rect(hole, Color(0.03, 0.03, 0.05))
+		draw_rect(Rect2(hole.position, Vector2(hole.size.x, hole.size.y * 0.22)), Color(0.12, 0.12, 0.15))
+		var rail_l := hole.position.x + hole.size.x * 0.35
+		var rail_r := hole.end.x - hole.size.x * 0.35
+		draw_line(Vector2(rail_l, hole.position.y + 4.0), Vector2(rail_l, hole.end.y), METAL, 2.5)
+		draw_line(Vector2(rail_r, hole.position.y + 4.0), Vector2(rail_r, hole.end.y), METAL, 2.5)
+		for k in 3:
+			var y := hole.position.y + 8.0 + k * hole.size.y * 0.28
+			draw_line(Vector2(rail_l, y), Vector2(rail_r, y), METAL_LIGHT.darkened(0.2 + k * 0.2), 2.0)
+		draw_rect(hole, OUTLINE, false, 2.0)
+		draw_circle(light_pos, 4.0, GREEN)
+	else:
+		# Tampa fechada, em duas metades, com o fecho a meio.
+		box(hole, METAL, 0.0)
+		draw_line(Vector2(c.x, hole.position.y + 2.0), Vector2(c.x, hole.end.y - 2.0), OUTLINE, 2.0)
+		for side in [-1.0, 1.0]:
+			for k in 2:
+				draw_circle(Vector2(c.x + side * hole.size.x * 0.38, hole.position.y + 6.0 + k * (hole.size.y - 12.0)), 2.0, METAL_LIGHT)
+		var lock := Rect2(c.x - 9.0, c.y - 6.0, 18.0, 12.0)
+		box(lock, METAL_DARK, 0.0)
+		draw_rect(Rect2(c.x - 4.0, c.y - 2.0, 8.0, 4.0), RED.darkened(0.2) if blink(1.4) else RED.darkened(0.6))
+		draw_circle(light_pos, 4.0, RED if blink(1.0) else RED.darkened(0.5))
+	draw_arc(light_pos, 4.0, 0.0, TAU, 12, OUTLINE, 1.5)

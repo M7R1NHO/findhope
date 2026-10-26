@@ -7,6 +7,8 @@ signal load_applied
 signal save_failed(reason: String)
 signal profile_changed
 signal remote_saves_updated
+# Um valor da run mudou (as Conquistas ouvem isto: achievements.gd).
+signal run_value_changed(section: String, key: String, value)
 
 
 const SAVE_VERSION: int = 1
@@ -20,6 +22,10 @@ const ATLAS_STATE_URL := "http://127.0.0.1:8000/atlas/state"
 const ATLAS_RESET_RUN_URL := "http://127.0.0.1:8000/atlas/reset-run"
 const SAVES_API_URL := "http://127.0.0.1:8000/saves"
 const ATLAS_DISCARD_RUN_URL := "http://127.0.0.1:8000/atlas/discard-run"
+const PROGRESS_ERASE_URL := "http://127.0.0.1:8000/progress/erase"
+# Quantas runs o perfil lembra (para o APAGAR PROGRESSO as apagar no backend).
+const MAX_TRACKED_RUNS := 200
+const DiaryWriter := preload("res://scripts/diary_writer.gd")
 
 
 var profile: Dictionary = {}
@@ -46,6 +52,8 @@ func _ready():
 	load_profile()
 	# Não bloquear a inicialização do autoload à espera da rede.
 	call_deferred("_sync_remote_saves_in_background")
+	# Um APAGAR PROGRESSO que não chegou ao backend é repetido aqui.
+	call_deferred("retry_pending_erase")
 
 	print("")
 	print("SAVE MANAGER READY")
@@ -155,6 +163,7 @@ func start_new_run() -> bool:
 	clear_current_autosave()
 	manual_save_blocks.clear()
 	profile["has_started_game"] = true
+	track_run_id(str(active_run_data["run_id"]))
 	save_profile()
 	load_in_progress = false
 	return true
@@ -1036,6 +1045,7 @@ func set_run_value(
 
 	active_run_data[section][key] = value
 	active_run_data["updated_at"] = current_datetime()
+	run_value_changed.emit(section, key, value)
 
 	print(
 		"[SAVE MANAGER] ",
@@ -1165,6 +1175,10 @@ func finish_completed_run(ending: Dictionary) -> bool:
 			stored_ok = true
 	if not stored_ok:
 		return _fail("Não foi possível guardar o Diário do Android. A run não foi apagada.")
+	# Conquistas "OBRIGADO POR JOGAR" e "EU ACHEI ESPERANÇA" (finais vistos).
+	var achievements := get_node_or_null("/root/Achievements")
+	if achievements != null:
+		achievements.register_ending(str(ending.get("ending_id", "")))
 
 	# A partir daqui só se apaga. Falhas remotas não desfazem o fim da run:
 	# o autosave local desaparece e o CONTINUAR passa a ignorar o remoto.
@@ -1192,7 +1206,8 @@ func build_android_diary(ending: Dictionary) -> Dictionary:
 	var atlas_state: Dictionary = backend_state_cache
 	var narrative: Dictionary = atlas_state.get("narrative", {})
 	var behavior: Dictionary = atlas_state.get("behavior", {})
-	return {
+	var world: Dictionary = active_run_data.get("world", {})
+	var diary := {
 		"run_id": str(active_run_data.get("run_id", "")),
 		"created_at": current_datetime(),
 		"started_at": str(active_run_data.get("created_at", "")),
@@ -1211,8 +1226,52 @@ func build_android_diary(ending: Dictionary) -> Dictionary:
 			"autonomy": atlas_state.get("autonomy", {}).duplicate(true),
 			"narrative_stage": int(narrative.get("narrative_stage", 0)),
 			"behavior_counters": behavior.get("counters", {}).duplicate(true)
+		},
+		# Factos da história que o texto do diário pode contar.
+		"facts": {
+			"unknown_debris_discovered": bool(story.get("unknown_debris_discovered", false)),
+			"ancient_sculpture_discovered": bool(story.get("ancient_sculpture_discovered", false)),
+			"protocol_door_insistence": int(story.get("protocol_door_insistence", 0)),
+			"protocol_door_opened": bool(story.get("protocol_door_opened", false)),
+			"hide_initial_complete": bool(story.get("hide_initial_complete", false)),
+			"creature_human": bool(story.get("creature_human_origin_discovered", false)),
+			"sonic_equipment_connected": bool(story.get("sonic_equipment_connected", false)),
+			"distress_revealed": int(world.get("phase3_twist_stage", 0)) >= 3
 		}
 	}
+	# O texto (Bíblia 6.4) é escrito agora, uma vez, e fica imutável.
+	var text := DiaryWriter.write(diary)
+	diary["title"] = text["title"]
+	diary["paragraphs"] = text["paragraphs"]
+	return diary
+
+
+# Diários para o menu DIÁRIOS: um por run (sem repetidos), do mais antigo
+# para o mais recente. Diários antigos, gravados antes de haver texto, ganham
+# o texto agora (a partir dos factos que já tinham) e ficam assim gravados.
+func get_android_diaries() -> Array:
+	var seen := {}
+	var out: Array = []
+	var changed := false
+	for diary in profile.get("android_diaries", []):
+		if not diary is Dictionary:
+			changed = true
+			continue
+		var run_id := str(diary.get("run_id", ""))
+		if run_id != "" and seen.has(run_id):
+			changed = true
+			continue
+		seen[run_id] = true
+		if not diary.get("paragraphs") is Array or diary.get("paragraphs", []).is_empty():
+			var text := DiaryWriter.write(diary)
+			diary["title"] = text["title"]
+			diary["paragraphs"] = text["paragraphs"]
+			changed = true
+		out.append(diary)
+	if changed:
+		profile["android_diaries"] = out
+		save_profile()
+	return out
 
 
 func _delete_remote_autosave() -> bool:
@@ -1471,3 +1530,152 @@ func _fail(message: String) -> bool:
 	push_warning(message)
 	save_failed.emit(message)
 	return false
+
+
+# =========================================================
+# APAGAR PROGRESSO
+# =========================================================
+#
+# Onde está o progresso do jogador (tudo o que o botão apaga):
+#   local, em user://
+#     findhope_profile.json (+ .bak/.tmp): conquistas e contadores, Diários
+#       do Android, finais vistos, "já começou"/"já terminou", runs
+#       conhecidas, profile_key. As OPÇÕES (volume) ficam: são configuração.
+#     findhope_current_run.json (+ .bak/.tmp): a run atual (autosave).
+#     findhope_slot_1..5.json (+ .bak/.tmp): os 5 saves manuais.
+#   backend
+#     estado do Atlas por run (conversas, memórias, relação, autonomia,
+#       insistências na porta...): RUN_STATES e backend/.run_states.json;
+#     saves remotos (public.game_saves) e o perfil (public.player_profiles).
+#
+# Segurança: o perfil novo recebe outra profile_key, por isso os saves
+# remotos antigos nunca mais são pedidos, mesmo que a base de dados não
+# responda. Se o backend não confirmar, o pedido fica guardado e é repetido
+# no arranque seguinte (retry_pending_erase).
+
+func track_run_id(run_id: String) -> void:
+	if run_id.strip_edges().is_empty():
+		return
+	var runs = profile.get("run_ids", [])
+	if not runs is Array:
+		runs = []
+	if not run_id in runs:
+		runs.append(run_id)
+	while runs.size() > MAX_TRACKED_RUNS:
+		runs.pop_front()
+	profile["run_ids"] = runs
+
+
+func local_progress_paths() -> Array:
+	var paths: Array = []
+	for base in [CURRENT_RUN_PATH] + range(1, SLOT_COUNT + 1).map(func(slot): return MANUAL_SLOT_PATTERN % slot):
+		for suffix in ["", ".bak", ".tmp"]:
+			paths.append(base + suffix)
+	return paths
+
+
+# Todas as runs deste perfil que o jogo conhece.
+func known_run_ids() -> Array:
+	var ids: Array = []
+	var add := func(value):
+		var run_id := str(value).strip_edges()
+		if run_id != "" and run_id != "<null>" and not run_id in ids:
+			ids.append(run_id)
+	add.call(active_run_data.get("run_id", ""))
+	for run_id in profile.get("run_ids", []):
+		add.call(run_id)
+	for diary in profile.get("android_diaries", []):
+		if diary is Dictionary:
+			add.call(diary.get("run_id", ""))
+	for path in [CURRENT_RUN_PATH] + range(1, SLOT_COUNT + 1).map(func(slot): return MANUAL_SLOT_PATTERN % slot):
+		var snapshot := read_json_file(path)
+		var run_data = snapshot.get("run_data", {})
+		if run_data is Dictionary:
+			add.call(run_data.get("run_id", ""))
+	for info in remote_save_metadata:
+		if info is Dictionary:
+			add.call(info.get("run_id", ""))
+	return ids
+
+
+# Apaga todo o progresso (depois da dupla confirmação no menu). Devolve um
+# relatório: o que foi apagado localmente e o que o backend confirmou.
+func erase_all_progress() -> Dictionary:
+	if save_in_progress or load_in_progress:
+		return {"ok": false, "error": "Aguarda a conclusão da operação em curso."}
+	load_in_progress = true
+	var old_key := str(profile.get("profile_key", ""))
+	var run_ids := known_run_ids()
+
+	# 1. Local: só os ficheiros de progresso do jogo, um a um (nada mais).
+	var removed := 0
+	for path in local_progress_paths():
+		if FileAccess.file_exists(path):
+			if DirAccess.remove_absolute(ProjectSettings.globalize_path(path)) == OK:
+				removed += 1
+			else:
+				push_warning("Não foi possível apagar " + path)
+	var left: Array = local_progress_paths().filter(func(path): return FileAccess.file_exists(path))
+
+	# 2. Perfil novo, com outra profile_key; ficam só as opções.
+	var options = profile.get("options", {})
+	profile = default_profile()
+	profile["options"] = options.duplicate(true) if options is Dictionary else {}
+	ensure_profile_key()
+	profile["pending_remote_erase"] = {"profile_key": old_key, "run_ids": run_ids}
+	active_run_data = {}
+	pending_snapshot = {}
+	backend_state_cache.clear()
+	manual_save_blocks.clear()
+	remote_upload_queue.clear()
+	remote_save_metadata = []
+	remote_save_metadata_loaded = false
+	save_profile()
+
+	# 3. Backend.
+	var remote := await _request_remote_erase(old_key, run_ids)
+	load_in_progress = false
+	profile_changed.emit()
+	print("PROGRESSO APAGADO | ficheiros locais: ", removed, " | runs: ", run_ids.size(), " | backend: ", remote)
+	return {
+		"ok": left.is_empty(),
+		"local_files_removed": removed,
+		"local_files_left": left,
+		"runs": run_ids.size(),
+		"backend": remote,
+		"new_profile_key": str(profile.get("profile_key", "")) != old_key
+	}
+
+
+# Pede ao backend para apagar; só tira o pedido pendente quando o backend
+# confirma as runs E a base de dados. Devolve "ok", "partial" ou "offline".
+func _request_remote_erase(old_key: String, run_ids: Array) -> String:
+	var request := HTTPRequest.new()
+	request.process_mode = Node.PROCESS_MODE_ALWAYS
+	request.timeout = 15.0
+	add_child(request)
+	var body := JSON.stringify({"profile_key": old_key if old_key.length() >= 32 else "", "run_ids": run_ids})
+	var error := request.request(PROGRESS_ERASE_URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
+	if error != OK:
+		request.queue_free()
+		return "offline"
+	var result = await request.request_completed
+	request.queue_free()
+	if int(result[0]) != HTTPRequest.RESULT_SUCCESS or int(result[1]) != 200:
+		return "offline"
+	var data = JSON.parse_string((result[3] as PackedByteArray).get_string_from_utf8())
+	if not data is Dictionary:
+		return "offline"
+	var status := "ok" if str(data.get("database", "")) in ["ok", "skipped"] else "partial"
+	if status == "ok":
+		profile.erase("pending_remote_erase")
+		save_profile()
+	return status
+
+
+func retry_pending_erase() -> void:
+	var pending = profile.get("pending_remote_erase")
+	if not pending is Dictionary:
+		return
+	var status := await _request_remote_erase(str(pending.get("profile_key", "")), pending.get("run_ids", []))
+	print("APAGAR PROGRESSO (pendente): ", status)

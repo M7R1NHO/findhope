@@ -2627,6 +2627,10 @@ func finish_success():
 	)
 
 	_register_behavior("hack_success")
+	# Conquista "MESTRE HACKER": cada minijogo diferente concluído na run.
+	var achievements := get_node_or_null("/root/Achievements")
+	if achievements != null:
+		achievements.register_minigame(current_hack)
 
 
 	hack_session_id += 1

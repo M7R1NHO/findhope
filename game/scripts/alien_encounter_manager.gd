@@ -258,6 +258,11 @@ var room_vents: Dictionary = {}
 var creature: Node2D = null
 # Só para o aspeto (onde a criatura procura); não mexe nos sorteios do jogo.
 var visual_rng := RandomNumberGenerator.new()
+
+# Proteção do Player (por exemplo, durante a entrada animada na Phase 3).
+# Enquanto houver um motivo ativo, nenhum HIDE, encontro, captura ou Game
+# Over pode começar. Cada motivo é retirado por quem o pôs.
+var protection_reasons: Dictionary = {}
 # Distância (px) que a criatura anda ao aparecer no primeiro encontro.
 const HIDE_INITIAL_CREATURE_WALK := 220.0
 
@@ -1586,6 +1591,10 @@ func update_room_stalk_system(
 		return
 
 
+	if is_player_protected():
+		return
+
+
 	if encounter_active:
 		return
 
@@ -1927,6 +1936,10 @@ func choose_hide_spot_for_room(room_id: String) -> Area2D:
 func start_hide_event():
 
 	if current_room_id.is_empty():
+		return
+
+
+	if is_player_protected():
 		return
 
 
@@ -2439,6 +2452,11 @@ func fail_hide_event(
 	reason: String
 ):
 
+	# Protegido (entrada na Phase 3): o HIDE acaba sem ataque nem castigo.
+	if is_player_protected():
+		cancel_hide_event()
+		return
+
 	register_behavior("hide_failed")
 
 	print(
@@ -2476,6 +2494,13 @@ func fail_hide_event(
 	# A criatura encontra-os e aproxima-se antes da escolha.
 	await creature_catch_player()
 
+	# A proteção pode ter começado durante a aproximação (entrada na Phase 3).
+	if is_player_protected():
+		room_failure_mode = false
+		send_creature_home()
+		encounter_active = false
+		return
+
 	get_tree().paused = true
 
 
@@ -2494,6 +2519,10 @@ func start_corridor_encounter(
 	corridor_id: String,
 	trigger: Area2D
 ):
+
+	if is_player_protected():
+		return
+
 
 	if encounter_active:
 		return
@@ -4863,6 +4892,9 @@ func creature_catch_player() -> void:
 	if player == null or not is_instance_valid(player) or underground_root == null:
 		return
 
+	if is_player_protected():
+		return
+
 	set_player_frozen(true)
 
 	if creature == null or not is_instance_valid(creature):
@@ -4896,6 +4928,9 @@ func play_corridor_creature(corridor_id: String) -> void:
 
 # Game Over do RUN: a criatura apanha o Player e só depois aparece o ecrã.
 func capture_then_game_over() -> void:
+	if is_player_protected():
+		return
+
 	if not get_tree().paused:
 		await creature_catch_player()
 
@@ -4963,3 +4998,53 @@ func update_hide_covers() -> void:
 					inside = true
 
 			spot.get_meta("cover").z_index = HIDE_COVER_FRONT_Z if inside else HIDE_COVER_BEHIND_Z
+
+
+# =========================================================
+# PROTEÇÃO DO PLAYER
+# =========================================================
+
+func set_player_protected(reason: String, active: bool) -> void:
+	if active:
+		protection_reasons[reason] = true
+		abort_active_threats()
+	else:
+		protection_reasons.erase(reason)
+		# Ao sair da proteção, o temporizador da sala recomeça do zero.
+		reset_room_stalk_timer()
+
+
+func is_player_protected() -> bool:
+	return not protection_reasons.is_empty()
+
+
+# Acaba, sem castigo, o que pudesse atacar o Player: um HIDE a decorrer e a
+# criatura no mundo. Também esquece a sala atual, para o temporizador do
+# HIDE não continuar a contar depois de o Player sair dali.
+func abort_active_threats() -> void:
+	if hide_event_active:
+		cancel_hide_event()
+	elif not run_minigame_active and not run_closing_active and not hide_initial_active:
+		send_creature_home()
+	current_room_id = ""
+	room_stay_time = 0.0
+
+
+# Termina um HIDE sem sucesso nem falha: a criatura volta à conduta, o Atlas
+# deixa o esconderijo e não fica registado como HIDE falhado.
+func cancel_hide_event() -> void:
+	if not hide_event_active:
+		return
+	show_hide_spots(current_room_id, false)
+	destroy_hide_ui()
+	hide_event_active = false
+	hide_phase = HidePhase.NONE
+	active_hide_spot = null
+	if atlas != null and is_instance_valid(atlas) and atlas.has_method("stop_scripted_move_to"):
+		atlas.stop_scripted_move_to()
+	atlas_hide_target = null
+	send_creature_home()
+	encounter_active = false
+	room_cooldown_remaining = room_stalk_cooldown
+	reset_room_stalk_timer()
+	print("HIDE CANCELADO (Player protegido)")

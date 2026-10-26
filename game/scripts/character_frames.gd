@@ -7,7 +7,9 @@ extends RefCounted
 # personagem, frame 0 = IDLE, frames 1 a 4 = WALK; "side" olha para a
 # direita). As vistas que faltavam nas folhas (Player de lado, Atlas de
 # costas e de lado) foram feitas no mesmo estilo pela ferramenta
-# 3_vistas_em_falta.py. Para trocar um sprite,
+# 3_vistas_em_falta.py. O Player de costas (back_0..4) vem do sprite enviado
+# pelo utilizador em 25/10/2026 (ferramentas_ultimas/1_player_costas.py),
+# com as passadas feitas como as de frente. Para trocar um sprite,
 # basta substituir o PNG com o mesmo nome; o código não muda.
 #
 # Se uma pasta não existir, frames_for() devolve null e quem a usa mantém o
@@ -30,8 +32,11 @@ const ANIMATIONS := {
 		"walk_front": [["front_1", "front_2", "front_3", "front_4"], 8.0, true],
 		"idle_back": [["back_0"], 1.0, true],
 		"walk_back": [["back_1", "back_2", "back_3", "back_4"], 8.0, true],
-		"idle_side": [["side_0"], 1.0, true],
-		"walk_side": [["side_1", "side_2", "side_3", "side_2"], 8.0, true],
+		# De lado, o Atlas usa a mesma animação de andar para baixo (pedido
+		# do utilizador, 25/10/2026); o character_sprite.gd vira-o para o lado
+		# para onde anda e inclina-o um pouco nessa direção.
+		"idle_side": [["front_0"], 1.0, true],
+		"walk_side": [["front_1", "front_2", "front_3", "front_4"], 8.0, true],
 	},
 	"monster": {
 		"idle_front": [["front_0"], 1.0, true],
@@ -44,6 +49,10 @@ const ANIMATIONS := {
 		"roar": [["alert_3", "alert_4"], 4.0, true],
 	},
 }
+
+# Personagens cuja vista de lado reutiliza as frames de frente: inclinam-se
+# para o lado do movimento (character_sprite.gd SIDE_LEAN).
+const SIDE_FROM_FRONT := ["atlas"]
 
 static var _cache: Dictionary = {}
 

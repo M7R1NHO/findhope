@@ -27,6 +27,7 @@ const BossView := preload("res://scripts/phase3_boss_view.gd")
 const ControlRoomArt := preload("res://scripts/control_room_art.gd")
 const UIStyle := preload("res://scripts/ui_style.gd")
 const CharacterFrames := preload("res://scripts/character_frames.gd")
+const DepthSort := preload("res://scripts/depth_sort.gd")
 var boss_done: bool = false
 var boss_active: bool = false
 var atlas_damaged: bool = false
@@ -309,7 +310,9 @@ func create_phase3_exit_door(door_name: String, center: Vector2) -> void:
 	visual.name = "Visual"
 	visual.polygon = rectangle(door_size)
 	visual.color = wall_color
-	visual.z_index = 5
+	# Porta numa parede lateral: desenhada como as paredes, por baixo das
+	# personagens (antes ficava por cima delas, z 5).
+	visual.z_index = 1
 	door.add_child(visual)
 
 	var collision := CollisionShape2D.new()
@@ -382,7 +385,6 @@ func create_phase3_story_objects() -> void:
 	terminal_visual.name = "PlaceholderVisual"
 	terminal_visual.polygon = rectangle(Vector2(150.0, 90.0))
 	terminal_visual.color = Color(0.22, 0.34, 0.42, 1.0)
-	terminal_visual.z_index = 2
 	terminal.add_child(terminal_visual)
 
 	var terminal_label := Label.new()
@@ -391,6 +393,11 @@ func create_phase3_story_objects() -> void:
 	terminal_label.size = Vector2(280.0, 30.0)
 	terminal_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	terminal.add_child(terminal_label)
+	# O terminal é ordenado pela base (depth_sort.gd); o nome fica por cima.
+	DepthSort.register(terminal)
+	DepthSort.set_label(terminal_label)
+	# Sólido, para o Player e o Atlas andarem à volta dele.
+	terminal.add_child(make_solid(Vector2(150.0, 90.0)))
 
 	var android := Phase3Interactable.new()
 	android.name = "Android_Danificado"
@@ -409,7 +416,6 @@ func create_phase3_story_objects() -> void:
 		Vector2(-18.0, 72.0), Vector2(-35.0, 55.0)
 	])
 	android_body.color = Color(0.38, 0.42, 0.45, 1.0)
-	android_body.z_index = 2
 	android.add_child(android_body)
 
 	var android_head := Polygon2D.new()
@@ -420,7 +426,6 @@ func create_phase3_story_objects() -> void:
 		Vector2(-15.0, -8.0), Vector2(-28.0, -20.0)
 	])
 	android_head.color = Color(0.48, 0.54, 0.58, 1.0)
-	android_head.z_index = 2
 	android.add_child(android_head)
 
 	# O outro androide usa o sprite do Atlas, caído e mais escuro.
@@ -435,7 +440,6 @@ func create_phase3_story_objects() -> void:
 		android_sprite.rotation_degrees = -78.0
 		android_sprite.position = Vector2(0.0, 40.0)
 		android_sprite.modulate = Color(0.55, 0.5, 0.48)
-		android_sprite.z_index = 2
 		android.add_child(android_sprite)
 
 	var android_label := Label.new()
@@ -444,6 +448,24 @@ func create_phase3_story_objects() -> void:
 	android_label.size = Vector2(220.0, 30.0)
 	android_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	android.add_child(android_label)
+	DepthSort.register(android)
+	DepthSort.set_label(android_label)
+	# O corpo caído no chão é sólido.
+	android.add_child(make_solid(Vector2(110.0, 50.0), Vector2(0.0, 40.0)))
+
+
+# Corpo estático retangular ("Solid"), como os da decoração.
+func make_solid(size: Vector2, offset: Vector2 = Vector2.ZERO) -> StaticBody2D:
+	var body := StaticBody2D.new()
+	body.name = "Solid"
+	body.position = offset
+	var collision := CollisionShape2D.new()
+	collision.name = "Collision"
+	var shape := RectangleShape2D.new()
+	shape.size = size
+	collision.shape = shape
+	body.add_child(collision)
+	return body
 
 
 func show_twist_dialogue(object_type: String) -> void:
@@ -627,7 +649,9 @@ func create_hangar_door(center: Vector2) -> void:
 	visual.name = "Visual"
 	visual.polygon = rectangle(door_size)
 	visual.color = Color(0.55, 0.32, 0.22, 1.0)
-	visual.z_index = 5
+	# Porta numa parede lateral: desenhada como as paredes, por baixo das
+	# personagens (antes ficava por cima delas, z 5).
+	visual.z_index = 1
 	door.add_child(visual)
 	var collision := CollisionShape2D.new()
 	collision.name = "Collision"
@@ -682,15 +706,9 @@ func create_control_room(center: Vector2) -> void:
 	console.position = center + desk.get_center()
 	console.add_to_group("phase3_generated")
 	add_child(console)
-	var collision := CollisionShape2D.new()
-	collision.name = "Collision"
-
-	var shape := RectangleShape2D.new()
-	shape.size = desk.size
-
-	collision.shape = shape
-	collision.position = Vector2.ZERO
-	console.add_child(collision)
+	# A colisão tem de estar dentro de um StaticBody2D: pendurada num
+	# Node2D (como estava) não bloqueava nada e atravessava-se a consola.
+	console.add_child(make_solid(desk.size))
 
 	# As portas da sala ganham as riscas das portas do confronto.
 	var door_visuals: Array = []
@@ -971,7 +989,6 @@ func create_explorer_ship(center: Vector2) -> void:
 		Vector2(90.0, 70.0), Vector2(-170.0, 70.0), Vector2(-120.0, 0.0)
 	])
 	hull.color = Color(0.30, 0.36, 0.40, 1.0)
-	hull.z_index = 2
 	ship.add_child(hull)
 	var label := Label.new()
 	label.text = "NAVE DO EXPLORADOR"
@@ -979,6 +996,8 @@ func create_explorer_ship(center: Vector2) -> void:
 	label.size = Vector2(240.0, 30.0)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ship.add_child(label)
+	DepthSort.register(ship, 75.0)
+	DepthSort.set_label(label)
 
 
 func create_hangar_trigger(center: Vector2) -> void:

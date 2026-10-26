@@ -49,7 +49,9 @@ const RETURN_TIMEOUT := 4.0
 
 # Ordem de desenho: por cima da conduta e das personagens.
 const CREATURE_Z := 30
-const VENT_Z := 2
+# A conduta é um buraco no chão: fica sempre por baixo do Player e do Atlas
+# (z 3/5). 0 = depth_sort.gd FLOOR_Z. Antes era 2, por cima deles (z 0).
+const VENT_Z := 0
 
 enum State { IDLE, EMERGE, SEARCH, APPROACH, ATTACK, RETURN, RETREAT, GONE }
 
@@ -113,6 +115,7 @@ static func spawn(parent: Node, vent_global: Vector2, scale_of_vent: float = SPR
 static func make_vent(vent_scale_value: float = SPRITE_SCALE) -> Node2D:
 	var vent := Node2D.new()
 	vent.name = "Vent"
+	vent.z_as_relative = false
 	vent.z_index = VENT_Z
 	vent.set_meta("vent_scale", vent_scale_value)
 	var solid := StaticBody2D.new()

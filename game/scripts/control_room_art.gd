@@ -36,7 +36,9 @@ var beam_from: Node2D = null
 
 func _ready() -> void:
 	name = "ControlRoomArt"
-	z_index = 2
+	# Chão, paredes e consola encostada à parede de cima: tudo por baixo do
+	# Player e do Atlas (z 3/5, depth_sort.gd). Antes (z 2) tapava-os.
+	z_index = 1
 
 
 func _process(delta: float) -> void:

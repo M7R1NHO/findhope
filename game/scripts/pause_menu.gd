@@ -2,6 +2,7 @@ extends Node
 
 const UIStyle := preload("res://scripts/ui_style.gd")
 const TutorialCard := preload("res://scripts/tutorial_card.gd")
+const OptionsPanel := preload("res://scripts/options_panel.gd")
 
 
 @export_file("*.tscn") var main_menu_scene_path: String
@@ -860,20 +861,8 @@ func open_options():
 		title
 	)
 
-	var body = Label.new()
-
-	body.text = (
-		"As opções serão implementadas "
-		+ "durante o refinamento."
-	)
-
-	body.horizontal_alignment = (
-		HORIZONTAL_ALIGNMENT_CENTER
-	)
-
-	container.add_child(
-		body
-	)
+	# Volume geral e da música, os mesmos do menu principal.
+	OptionsPanel.add_controls(container)
 
 	create_back_button(
 		container

@@ -596,6 +596,11 @@ func teleport_to_phase3() -> void:
 		show_password_feedback("Palavra-passe aceite, mas o jogador não foi encontrado.")
 		return
 
+	# Durante a entrada animada o Player fica protegido: um HIDE que já
+	# estivesse a decorrer na sala do MainCore acaba sem ataque, e nada novo
+	# começa até ao fim da caminhada (play_phase3_entry).
+	set_phase3_entry_protection(true)
+
 	var entry_position := PHASE3_SPAWN_POSITION + PHASE3_ENTRY_OFFSET
 	player_node.global_position = entry_position
 	if player_node is CharacterBody2D:
@@ -663,6 +668,15 @@ func play_phase3_entry(player_node: Node) -> void:
 		waited += get_physics_process_delta_time()
 	if is_instance_valid(player_node) and player_node.has_method("stop_scripted_move_to"):
 		player_node.stop_scripted_move_to()
+	set_phase3_entry_protection(false)
+
+
+func set_phase3_entry_protection(active: bool) -> void:
+	var encounters: Node = null
+	if underground_root != null:
+		encounters = underground_root.get_node_or_null("AlienEncounterManager")
+	if encounters != null and encounters.has_method("set_player_protected"):
+		encounters.set_player_protected("phase3_entry", active)
 
 
 func register_discovery():

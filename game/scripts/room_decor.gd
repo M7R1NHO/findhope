@@ -19,6 +19,7 @@ extends Node
 const Props := preload("res://scripts/decor_props.gd")
 const CreatureActor := preload("res://scripts/creature_actor.gd")
 const ShipArt := preload("res://scripts/ship_art.gd")
+const DepthSort := preload("res://scripts/depth_sort.gd")
 
 const WALL_INSET := 26.0      # distância mínima às paredes
 const CLEARANCE := 24.0       # folga à volta do que já existe
@@ -30,7 +31,6 @@ const DOOR_REACH := 130.0     # quanto a entrada fica livre para dentro da sala
 const BIG_TRIGGER_AREA := 120000.0
 # Se o sítio pedido estiver ocupado, experimenta deslizar ao longo da parede.
 const SLIDES := [0.0, 40.0, -40.0, 80.0, -80.0, 120.0, -120.0, 160.0, -160.0]
-const PROP_Z := 3
 # Condutas da criatura: uma por sala, num destes sítios (fração do tamanho da
 # sala, a partir do centro), o primeiro que estiver livre. As dos corredores
 # são postas pelo alien_encounter_manager.gd.
@@ -276,12 +276,22 @@ func place_room(container: Node2D, room_id: String, center: Vector2, room_size: 
 			continue
 		var pos := rect.get_center()
 		var prop := Props.make(kind, prop_size, solid, spec[4])
-		prop.z_index = PROP_Z - (1 if Props.is_floor_kind(kind) else 0)
+		set_prop_depth(prop, kind, prop_size)
 		container.add_child(prop)
 		prop.global_position = pos
 		placed.append({"room": room_id, "kind": kind, "rect": rect, "solid": solid, "node": prop})
 		if solid:
 			occupied.append({"rect": rect, "important": false, "door": false, "what": "decor " + kind})
+
+
+# Profundidade (depth_sort.gd): o que fica no chão está sempre por baixo do
+# Player e do Atlas; o resto é ordenado pela base (o fundo do retângulo), para
+# as personagens passarem por trás e pela frente dos objetos.
+func set_prop_depth(prop: Node2D, kind: String, prop_size: Vector2) -> void:
+	if Props.is_floor_kind(kind):
+		DepthSort.set_floor(prop)
+	else:
+		DepthSort.register(prop, prop_size.y / 2.0)
 
 
 # Conduta da criatura na sala: fica no chão, longe de terminais, esconderijos
@@ -454,7 +464,7 @@ func dress_explorer_ship(endgame: Node2D) -> void:
 	if hull is CanvasItem:
 		hull.visible = false
 	var art := ShipArt.make("explorador", Vector2(380.0, 150.0))
-	art.z_index = 2
+	# Sem z próprio: a nave (Nave_Explorador) é ordenada pelo depth_sort.gd.
 	ship.add_child(art)
 	# Agora a nave é sólida: o Player e o Atlas já não passam por cima.
 	var body := StaticBody2D.new()
@@ -491,6 +501,7 @@ func decorate_surface() -> void:
 	var ground := root.get_node_or_null("Ground")
 	if not ground is Polygon2D:
 		return
+	dress_discoveries()
 	var container := Node2D.new()
 	container.name = "SurfaceDecor"
 	root.add_child(container)
@@ -544,12 +555,49 @@ func add_surface_prop(container: Node2D, kind: String, rect: Rect2, solid: bool,
 			skipped.append({"room": "Surface", "kind": kind, "rect": rect, "because": blocker})
 			return false
 	var prop := Props.make(kind, rect.size, solid, variant)
+	set_prop_depth(prop, kind, rect.size)
 	container.add_child(prop)
 	prop.global_position = rect.get_center()
 	placed.append({"room": "Surface", "kind": kind, "rect": rect, "solid": solid, "node": prop})
 	if solid or not Props.is_floor_kind(kind):
 		occupied.append({"rect": rect, "important": false, "door": false, "what": "decor " + kind})
 	return true
+
+
+# As duas descobertas da superfície (AncientSculpture e UnknownDebris)
+# eram polígonos de 7 a 20 píxeis. Ganham um desenho a condizer com o resto
+# (decor_props.gd), ordenado pelos pés e com uma colisão só na base: o
+# Player e o Atlas passam por trás e pela frente, mas não por cima. O nó e a
+# posição não mudam (o scan do Atlas continua a encontrá-los pelo nome).
+const DISCOVERY_ART := {"AncientSculpture": ["sculpture", Vector2(52, 76)], "UnknownDebris": ["debris", Vector2(100, 60)]}
+
+
+func dress_discoveries() -> void:
+	for node_name in DISCOVERY_ART:
+		var discovery := root.get_node_or_null(node_name)
+		if not discovery is Node2D or discovery.get_node_or_null("Art") != null:
+			continue
+		var kind: String = DISCOVERY_ART[node_name][0]
+		var art_size: Vector2 = DISCOVERY_ART[node_name][1]
+		var old := discovery.get_node_or_null("Polygon2D")
+		if old is CanvasItem:
+			old.visible = false
+		var art := Props.make(kind, art_size, false)
+		art.name = "Art"
+		# Os pés do desenho (8 a 12% acima do fundo) ficam na posição do nó.
+		var foot := art_size.y * (0.42 if kind == "sculpture" else 0.38)
+		art.position = Vector2(0.0, -foot)
+		discovery.add_child(art)
+		DepthSort.register(art, foot)
+		var body := StaticBody2D.new()
+		body.name = "Solid"
+		var collision := CollisionShape2D.new()
+		var shape := RectangleShape2D.new()
+		shape.size = Vector2(art_size.x * 0.75, art_size.y * 0.22)
+		collision.shape = shape
+		collision.position = Vector2(0.0, -shape.size.y / 2.0 + 4.0)
+		body.add_child(collision)
+		discovery.add_child(body)
 
 
 # Na superfície as rochas grandes ficam mais afastadas de tudo, para nunca
