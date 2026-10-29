@@ -384,19 +384,36 @@ func _create_scanner_hint() -> void:
 	add_child(scanner_hint_layer)
 	var hint := Label.new()
 	hint.name = "ScannerHint"
-	hint.text = "[SPACE] SCAN"
+	hint.text = "SCAN [SPACE]"
 	hint.add_theme_font_size_override("font_size", 16)
 	hint.add_theme_color_override("font_color", Color(0.55, 0.9, 1.0))
 	hint.add_theme_color_override("font_shadow_color", Color.BLACK)
 	hint.add_theme_constant_override("shadow_offset_x", 1)
 	hint.add_theme_constant_override("shadow_offset_y", 1)
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hint.text = "[SPACE] SCAN"
-	hint.size = Vector2(160, 30)
 	scanner_hint_layer.add_child(hint)
-	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	hint.position = Vector2(24, -48)
-	hint.z_index = 100
+	# Canto inferior esquerdo. Antes, "position = (24, -48)" depois do
+	# preset punha a etiqueta fora do ecrã (48 px acima do topo).
+	hint.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	hint.offset_left = 24.0
+	hint.offset_right = 184.0
+	hint.offset_top = -48.0
+	hint.offset_bottom = -18.0
+	_update_scanner_hint()
+
+
+# O aviso do SCAN só aparece na superfície: depois de passar a PROTOCOL
+# DOOR (subterrâneo e Phase 3) fica escondido.
+func _update_scanner_hint() -> void:
+	if not is_instance_valid(scanner_hint_layer):
+		return
+	var on_surface := not bool(SaveManager.get_run_value("story", "protocol_door_crossed", false))
+	if scanner_hint_layer.visible != on_surface:
+		scanner_hint_layer.visible = on_surface
+
+
+func _process(_delta: float) -> void:
+	_update_scanner_hint()
 
 
 func _on_chat_input_submitted(
@@ -603,6 +620,10 @@ func _on_atlas_api_request_completed(
 	var door_insistence = data.get("door_insistence", {})
 	if door_insistence is Dictionary:
 		handle_door_insistence(door_insistence)
+	# Um backend sem door_insistence.py responde sem este campo e o contador
+	# ficava em 0 / 5 sem nenhum aviso. Avisa uma vez por sessão.
+	if not data.has("door_insistence") and is_protocol_door_pending():
+		warn_backend_without_door_insistence()
 	# Conquistas "ANDROID INTELIGENTE" (7) e "PYSSOA" (20): só conta uma
 	# resposta real do Atlas.
 	var achievements := get_node_or_null("/root/Achievements")
@@ -880,11 +901,10 @@ func on_protocol_door_interacted():
 
 		add_chat_message(
 			"SISTEMA",
-			"Para o Atlas abrir a porta tens de o convencer no chat: "
-			+ "pede-lhe com respeito, " + str(DOOR_INSISTENCE_REQUIRED)
-			+ " vezes e com argumentos diferentes (por favor, a missão, "
-			+ "as descobertas, a confiança nele). Insultos, ameaças, "
-			+ "ordens e pedidos repetidos não contam."
+			"Para o Atlas abrir a porta tens de insistir com ele no CHAT: "
+			+ "escreve " + str(DOOR_INSISTENCE_REQUIRED)
+			+ " vezes um pedido para abrir a porta (por exemplo: «abre a "
+			+ "porta, por favor»). Só insultos e ameaças não contam."
 		)
 		protocol_door.set_status_insistence(get_door_insistence_count())
 
@@ -925,16 +945,29 @@ func handle_door_insistence(result: Dictionary) -> void:
 		"counted":
 			add_chat_message("SISTEMA", "Insistência registada: " + str(count) + " / " + str(DOOR_INSISTENCE_REQUIRED) + ".")
 		"repeated":
-			add_chat_message("SISTEMA", "Esse pedido repete um anterior e não conta. Tenta outro argumento.")
+			add_chat_message("SISTEMA", "Esse pedido não contou. Tenta outra vez.")
 		"hostile":
 			add_chat_message("SISTEMA", "Insultos, ameaças ou ordens não convencem o Atlas. Este pedido não conta.")
 		"no_positive", "too_short":
 			add_chat_message("SISTEMA", "Pedido registado, mas não conta: pede com respeito e explica porquê (por favor, a missão, as descobertas...).")
+		"vague":
+			add_chat_message("SISTEMA", "O Atlas não percebeu o que queres abrir. Fala-lhe da porta (por exemplo: «abre a porta, por favor»).")
 	if not protocol_door_examined or not is_protocol_door_pending():
 		return
 	protocol_door.set_status_insistence(count, DOOR_INSISTENCE_REQUIRED)
 	if reason == "counted" and count >= DOOR_INSISTENCE_REQUIRED:
 		check_protocol_door_decision()
+
+
+var door_backend_warning_shown: bool = false
+
+
+func warn_backend_without_door_insistence() -> void:
+	if door_backend_warning_shown:
+		return
+	door_backend_warning_shown = true
+	push_warning("PROTOCOL DOOR: o backend não devolveu door_insistence.")
+	add_chat_message("SISTEMA", "O backend em execução não conta as insistências da porta (falta backend/door_insistence.py ou não foi reiniciado). Atualiza o backend e reinicia-o.")
 
 
 func has_required_surface_evidence() -> bool:
@@ -1135,7 +1168,7 @@ func _on_protocol_api_request_completed(
 		"SISTEMA",
 		"O Atlas ainda não está convencido ("
 		+ str(insistence_count) + " / " + str(DOOR_INSISTENCE_REQUIRED)
-		+ "). Insiste com ele no chat, com respeito e argumentos diferentes."
+		+ "). Escreve no chat um pedido para ele abrir a porta (por exemplo: «abre a porta, por favor»)."
 	)
 
 

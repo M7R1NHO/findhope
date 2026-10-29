@@ -109,7 +109,7 @@ static func surface_paragraph(diary: Dictionary, name: String) -> String:
 	var insistence := int(fact(diary, "protocol_door_insistence", 0))
 	if bool(fact(diary, "protocol_door_opened", false)):
 		if insistence >= 5:
-			parts.append("Diante da PROTOCOL DOOR, " + name + " pediu-me " + times(insistence) + ", sempre com respeito e com razões diferentes, que a abrisse. O protocolo dizia que não. À quinta vez percebi que o protocolo não era a única voz que eu devia ouvir, e abri-a.")
+			parts.append("Diante da PROTOCOL DOOR, " + name + " pediu-me " + times(insistence) + " que a abrisse. O protocolo dizia que não. À quinta vez percebi que o protocolo não era a única voz que eu devia ouvir, e abri-a.")
 		else:
 			parts.append("Diante da PROTOCOL DOOR, escolhi quebrar o protocolo e abri-la.")
 	if parts.is_empty():

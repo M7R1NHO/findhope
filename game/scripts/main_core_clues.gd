@@ -12,6 +12,9 @@ extends RefCounted
 const SAVE_SECTION := "world"
 const PASSWORD_KEY := "main_core_password_word"
 const SOLVED_KEY := "main_core_password_solved"
+# Palavras erradas já tentadas no Núcleo (lista, sem repetidas).
+const TRIED_KEY := "main_core_password_tried"
+const MAX_ATTEMPTS := 3
 
 const WORDS: Array[String] = [
 	"ECO", "SOM", "NAVE", "ESPAÇO", "ANDROID",
@@ -154,3 +157,31 @@ static func is_password_solved() -> bool:
 	if manager == null:
 		return false
 	return bool(manager.get_run_value(SAVE_SECTION, SOLVED_KEY, false))
+
+
+# Palavras erradas já tentadas nesta run, pela ordem em que foram escritas.
+static func get_tried_words() -> Array[String]:
+	var result: Array[String] = []
+	var manager := _save_manager()
+	if manager == null:
+		return result
+	var saved = manager.get_run_value(SAVE_SECTION, TRIED_KEY, [])
+	if saved is Array:
+		for word in saved:
+			if str(word) in WORDS and not str(word) in result:
+				result.append(str(word))
+	return result
+
+
+static func add_tried_word(word: String) -> void:
+	var manager := _save_manager()
+	if manager == null:
+		return
+	var tried := get_tried_words()
+	if not word in tried:
+		tried.append(word)
+	manager.set_run_value(SAVE_SECTION, TRIED_KEY, tried)
+
+
+static func attempts_left() -> int:
+	return maxi(0, MAX_ATTEMPTS - get_tried_words().size())

@@ -56,7 +56,9 @@ def evaluate_protocol_door(run_id=None):
             "missing": [],
         }
 
-    if protocol_stance == "resistant":
+    # Desde as cinco insistências positivas (door_insistence.py), só o
+    # estado "disposto" autoriza; "em conflito" ainda não chega.
+    if protocol_stance != "willing":
         return {
             "allowed": False,
             "reason": "atlas_not_ready",

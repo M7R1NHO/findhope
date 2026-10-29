@@ -23,6 +23,7 @@ from backend.relationship_engine import (
 )
 from backend.narrative_state import NARRATIVE_STAGES, get_narrative_state
 from backend.autonomy_state import get_protocol_stance
+from backend.door_insistence import REQUIRED_INSISTENCES, insistence_count
 from backend.gameplay_context import get_gameplay_context
 from backend.discovery_state import get_discovery_state
 from backend.behavior_state import get_behavior_observations, get_behavior_state
@@ -178,7 +179,16 @@ PROTOCOL_LINES = {
 
 def build_protocol_line(run_id=None):
     stance = get_protocol_stance(run_id)
-    return PROTOCOL_LINES.get(stance, PROTOCOL_LINES["willing"])
+    line = PROTOCOL_LINES.get(stance, PROTOCOL_LINES["willing"])
+    # Insistências positivas para abrir a PROTOCOL DOOR (door_insistence.py):
+    # o Atlas cede aos poucos, sem dizer números ao jogador.
+    count = insistence_count(run_id)
+    if 0 < count < REQUIRED_INSISTENCES:
+        line += (
+            f" O jogador já insistiu {count} de {REQUIRED_INSISTENCES} vezes"
+            " para abrires a porta: hesitas cada vez mais, mas ainda não cedes."
+        )
+    return line
 
 
 def build_game_section():

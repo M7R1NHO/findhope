@@ -306,3 +306,29 @@ def delete_auto_save(profile_key: str) -> dict[str, Any]:
             (profile_id,),
         ).fetchall()
     return {"success": True, "deleted": len(rows)}
+
+
+def delete_all_progress(profile_key: str) -> dict[str, Any]:
+    """APAGAR PROGRESSO: apaga TODOS os saves do perfil (autosave e os 5
+    slots manuais) e a linha do perfil em player_profiles.
+
+    Só é chamada pelo botão APAGAR PROGRESSO do menu principal, depois de o
+    jogador confirmar duas vezes.
+    """
+    key = _validate_profile_key(profile_key)
+    with get_db_connection() as connection:
+        _lock_profile(connection, key)
+        profile_id = _resolve_profile_id(connection, key)
+        if profile_id is None:
+            return {"success": True, "deleted": 0, "profile_deleted": False}
+        rows = connection.execute(
+            """DELETE FROM public.game_saves
+               WHERE profile_id = %s
+               RETURNING slot_type""",
+            (profile_id,),
+        ).fetchall()
+        connection.execute(
+            "DELETE FROM public.player_profiles WHERE id = %s",
+            (profile_id,),
+        )
+    return {"success": True, "deleted": len(rows), "profile_deleted": True}

@@ -58,6 +58,11 @@ signal encounter_option_selected(option, corridor_id)
 
 @export var hide_spot_radius: float = 65.0
 
+# Salas onde a criatura nunca aparece pelo HIDE. No MainCore o jogador pode
+# introduzir a password e ser levado para a Phase 3 a meio de um HIDE ou da
+# perseguição que se lhe segue; sem HIDE ali, isso deixa de poder acontecer.
+const NO_HIDE_ROOMS := ["MainCore"]
+
 
 # =========================================================
 # ESTADO GERAL
@@ -1502,12 +1507,21 @@ func on_room_entered(
 		return
 
 
-	current_room_id = str(
+	var entered_room_id := str(
 		trigger.get_meta(
 			"room_id",
 			""
 		)
 	)
+
+
+	# Um HIDE de outra sala não continua dentro do MainCore: acaba sem
+	# castigo (a criatura volta à conduta), antes de mudar de sala.
+	if entered_room_id in NO_HIDE_ROOMS and hide_event_active:
+		cancel_hide_event()
+
+
+	current_room_id = entered_room_id
 
 
 	reset_room_stalk_timer()
@@ -1600,6 +1614,10 @@ func update_room_stalk_system(
 
 
 	if current_room_id.is_empty():
+		return
+
+
+	if current_room_id in NO_HIDE_ROOMS:
 		return
 
 
@@ -1936,6 +1954,10 @@ func choose_hide_spot_for_room(room_id: String) -> Area2D:
 func start_hide_event():
 
 	if current_room_id.is_empty():
+		return
+
+
+	if current_room_id in NO_HIDE_ROOMS:
 		return
 
 

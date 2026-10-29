@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from backend.save_persistence import (
+    delete_all_progress,
     delete_manual_saves,
     delete_auto_save,
     list_saves,
@@ -69,6 +70,7 @@ from backend.discovery_state import (
 )
 
 from backend.protocol_decision import evaluate_protocol_door
+from backend.door_insistence import register_message as register_door_insistence
 
 
 app = FastAPI(title="Find Hope")
@@ -85,6 +87,9 @@ class ChatMessage(BaseModel):
     current_room: str | None = None
     current_room_map_info: str | None = None
     facility_map_acquired: bool = False
+    # O jogador examinou a PROTOCOL DOOR e ela ainda não foi autorizada:
+    # as mensagens podem contar como insistência (door_insistence.py).
+    protocol_door_pending: bool = False
 
     def location(self):
         return {
@@ -478,6 +483,13 @@ def discard_atlas_run(payload: dict | None = None):
     run_id = _normalise_run_id((payload or {}).get("run_id"))
     if not run_id:
         raise HTTPException(status_code=422, detail="run_id em falta.")
+    existed = _discard_run(run_id)
+    return {"status": "Atlas run discarded", "run_id": run_id, "existed": existed}
+
+
+def _discard_run(run_id, persist=True):
+    """Esquece tudo o que o Atlas guardou de uma run (memórias, conversa,
+    relação, autonomia, insistências na porta...). Devolve se a run existia."""
     with RUN_STATE_LOCK:
         existed = run_id in RUN_STATES
         previous = _export_atlas_state()
@@ -489,10 +501,68 @@ def discard_atlas_run(payload: dict | None = None):
             autonomy_state_module.AUTONOMY_STATES.pop(autonomy_state_module._run_key(run_id), None)
             conversation_context_module.reset_conversation_context(run_id)
             RUN_STATES.pop(run_id, None)
-            _persist_run_states()
+            if persist:
+                _persist_run_states()
         finally:
             _restore_atlas_state(previous)
-    return {"status": "Atlas run discarded", "run_id": run_id, "existed": existed}
+    return existed
+
+
+MAX_ERASE_RUNS = 500
+
+
+@app.post("/progress/erase")
+def erase_progress(payload: dict | None = None):
+    """APAGAR PROGRESSO (menu principal, com dupla confirmação).
+
+    Apaga no backend tudo o que é do jogador:
+      - o estado do Atlas de cada run indicada (conversas, memórias, relação,
+        autonomia, descobertas...), em memória e no .run_states.json;
+      - todos os saves remotos do perfil (autosave + 5 slots) e o perfil em
+        player_profiles, se a base de dados estiver disponível.
+    Responde sempre com o que conseguiu apagar: se a base de dados falhar,
+    "database" vem "unavailable" e o jogo mantém o pedido para repetir (e já
+    trocou de profile_key, por isso os saves antigos nunca voltam a aparecer).
+    """
+    payload = payload or {}
+    raw_runs = payload.get("run_ids", [])
+    if not isinstance(raw_runs, list):
+        raise HTTPException(status_code=422, detail="run_ids tem de ser uma lista.")
+    run_ids = []
+    for value in raw_runs[:MAX_ERASE_RUNS]:
+        try:
+            run_id = _normalise_run_id(value)
+        except HTTPException:
+            continue
+        if run_id and run_id not in run_ids:
+            run_ids.append(run_id)
+    discarded = 0
+    for run_id in run_ids:
+        if _discard_run(run_id, persist=False):
+            discarded += 1
+    with RUN_STATE_LOCK:
+        _persist_run_states()
+
+    database = "skipped"
+    saves_deleted = 0
+    profile_key = str(payload.get("profile_key") or "").strip()
+    if profile_key:
+        try:
+            result = delete_all_progress(profile_key)
+            saves_deleted = int(result.get("deleted", 0))
+            database = "ok"
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            print("Erro ao apagar os saves remotos:", type(exc).__name__)
+            database = "unavailable"
+    return {
+        "status": "ok",
+        "runs_requested": len(run_ids),
+        "runs_discarded": discarded,
+        "remote_saves_deleted": saves_deleted,
+        "database": database,
+    }
 
 
 @app.get("/atlas/state")
@@ -651,17 +721,26 @@ def root():
 @app.post("/chat")
 def chat(data: ChatMessage):
     def ask():
-        return ask_android(
+        # Antes da resposta: se a mensagem contar, o Atlas já responde com o
+        # novo número de insistências no contexto.
+        door = register_door_insistence(
+            data.message,
+            run_id=data.run_id,
+            pending=data.protocol_door_pending,
+        )
+        reply = ask_android(
             data.message,
             run_id=data.run_id,
             location=data.location(),
         )
+        return reply, door
 
-    response = _run_in_isolated_state(data.run_id, ask)
+    response, door = _run_in_isolated_state(data.run_id, ask)
     return {
         "message": data.message,
         "response": response,
         "run_id": data.run_id,
+        "door_insistence": door,
     }
 
 

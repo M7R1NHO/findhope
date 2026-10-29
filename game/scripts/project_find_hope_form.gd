@@ -3,6 +3,8 @@ extends Control
 signal completed(answers: Dictionary)
 
 const UIStyle := preload("res://scripts/ui_style.gd")
+# O nome aparece nos slots, no chat e nos diários: 15 caracteres chegam.
+const NAME_MAX_LENGTH := 15
 
 const QUESTIONS := [
 	{"key": "volunteer_reason", "text": "Qual é a principal razão para se voluntariar?", "options": ["Salvar a Terra", "Proteger alguém", "Explorar o desconhecido", "Cumprir o dever", "Mudar de vida"]},
@@ -74,7 +76,8 @@ func _build_ui() -> void:
 
 	form_root.add_child(_make_label("Nome"))
 	name_input = LineEdit.new()
-	name_input.placeholder_text = "Introduza o seu nome"
+	name_input.placeholder_text = "Introduza o seu nome (máx. %d)" % NAME_MAX_LENGTH
+	name_input.max_length = NAME_MAX_LENGTH
 	name_input.custom_minimum_size.y = 27
 	form_root.add_child(name_input)
 
@@ -153,7 +156,7 @@ func _render_question() -> void:
 func _submit_current() -> void:
 	error_label.text = ""
 	if not answers.has("name"):
-		var candidate_name := name_input.text.strip_edges()
+		var candidate_name := name_input.text.strip_edges().left(NAME_MAX_LENGTH)
 		if candidate_name.is_empty():
 			error_label.text = "Introduza o seu nome para continuar."
 			return

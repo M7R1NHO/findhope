@@ -20,6 +20,7 @@ var data_label: Label = null
 var action_button: Button = null
 var password_input: LineEdit = null
 var password_feedback: Label = null
+var game_over_layer: CanvasLayer = null
 
 const MainCoreClues := preload("res://scripts/main_core_clues.gd")
 const UIStyle := preload("res://scripts/ui_style.gd")
@@ -377,7 +378,7 @@ func create_terminal_ui():
 
 	data_label.custom_minimum_size = Vector2(
 		720,
-		200
+		160
 	)
 
 	data_label.autowrap_mode = (
@@ -390,7 +391,7 @@ func create_terminal_ui():
 
 	data_label.add_theme_font_size_override(
 		"font_size",
-		17
+		15
 	)
 
 	container.add_child(
@@ -484,11 +485,17 @@ func update_terminal_content():
 		return
 
 	status_label.text = "AUTENTICAÇÃO SEMÂNTICA // NÚCLEO PRINCIPAL"
+	# Texto compacto: com a lista das palavras e as três pistas tem de
+	# caber num ecrã de 720 px de altura.
 	data_label.text = (
 		"Introduz a palavra que liga as três pistas. "
-		+ "É uma de dez palavras possíveis.\n\n"
-		+ "PISTAS RECUPERADAS (" + str(MainCoreClues.count_found()) + "/3):\n\n"
-		+ MainCoreClues.describe_found_clues()
+		+ "É uma destas " + str(PASSWORD_WORDS.size()) + " palavras:\n"
+		+ describe_word_list() + "\n"
+		+ "TENTATIVAS RESTANTES: " + str(MainCoreClues.attempts_left())
+		+ " / " + str(MainCoreClues.MAX_ATTEMPTS)
+		+ " (à terceira errada, o Núcleo bloqueia)\n\n"
+		+ "PISTAS RECUPERADAS (" + str(MainCoreClues.count_found()) + "/3):\n"
+		+ MainCoreClues.describe_found_clues().replace("\n\n", "\n")
 	)
 	action_button.text = "VALIDAR PALAVRA-PASSE"
 	action_button.visible = true
@@ -516,9 +523,30 @@ func validate_password():
 	if submitted.is_empty():
 		show_password_feedback("Introduz uma palavra-passe.")
 		return
-	if submitted != normalize_password(get_selected_password()):
-		show_password_feedback("Palavra-passe incorreta. Reinterpreta as três pistas e tenta novamente.")
+	var word := find_listed_word(submitted)
+	if word.is_empty():
+		# Fora da lista (ou com erro de escrita): não gasta tentativa.
+		show_password_feedback("Essa palavra não está na lista. Escolhe uma das " + str(PASSWORD_WORDS.size()) + " palavras.")
 		password_input.select_all()
+		password_input.grab_focus()
+		return
+	if word != get_selected_password():
+		if word in MainCoreClues.get_tried_words():
+			show_password_feedback("Já tentaste " + word + ". Escolhe outra palavra.")
+			password_input.select_all()
+			password_input.grab_focus()
+			return
+		MainCoreClues.add_tried_word(word)
+		var left := MainCoreClues.attempts_left()
+		update_terminal_content()
+		if left <= 0:
+			lock_main_core()
+			return
+		show_password_feedback(
+			"Palavra-passe incorreta. Resta" + ("" if left == 1 else "m") + " "
+			+ str(left) + " tentativa" + ("" if left == 1 else "s") + "."
+		)
+		password_input.text = ""
 		password_input.grab_focus()
 		return
 
@@ -542,6 +570,100 @@ func validate_password():
 		interaction_label.text = "[E] REABRIR NÚCLEO"
 	register_discovery()
 	teleport_to_phase3()
+
+
+# Lista das palavras possíveis; as erradas já tentadas ficam marcadas
+# com "(x)".
+func describe_word_list() -> String:
+	var tried := MainCoreClues.get_tried_words()
+	var parts: Array[String] = []
+	for word in PASSWORD_WORDS:
+		parts.append(word + (" (x)" if word in tried else ""))
+	return "  ·  ".join(parts)
+
+
+# Devolve a palavra da lista que corresponde ao texto escrito (sem acentos,
+# espaços nem maiúsculas a contar), ou "" se não for nenhuma.
+func find_listed_word(submitted: String) -> String:
+	for word in PASSWORD_WORDS:
+		if normalize_password(word) == submitted:
+			return word
+	return ""
+
+
+# Terceira palavra errada: o Núcleo fecha e conta como Game Over. O
+# REINICIAR usa o mesmo caminho do Game Over do RUN/FIGHT
+# (FightManager.restart_game): volta ao último autosave da run.
+func lock_main_core() -> void:
+	processing = true
+	action_button.disabled = true
+	password_input.editable = false
+	status_label.text = "NÚCLEO BLOQUEADO"
+	show_password_feedback("Três palavras-passe erradas. O Núcleo Principal fechou o acesso.")
+	print("MAIN CORE PASSWORD: LOCKED (3 wrong attempts)")
+	await get_tree().create_timer(1.2, true).timeout
+	processing = false
+	terminal_open = false
+	destroy_terminal_ui()
+	show_lock_game_over()
+
+
+func show_lock_game_over() -> void:
+	get_tree().paused = true
+	if game_over_layer != null and is_instance_valid(game_over_layer):
+		game_over_layer.queue_free()
+	game_over_layer = CanvasLayer.new()
+	game_over_layer.name = "MainCoreGameOver"
+	game_over_layer.layer = 600
+	game_over_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(game_over_layer)
+
+	var background := ColorRect.new()
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	background.color = Color.BLACK
+	game_over_layer.add_child(background)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	background.add_child(center)
+
+	var container := VBoxContainer.new()
+	container.custom_minimum_size = Vector2(600, 260)
+	container.add_theme_constant_override("separation", 25)
+	center.add_child(container)
+
+	var title := Label.new()
+	title.text = "GAME OVER"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 42)
+	container.add_child(title)
+
+	var description := Label.new()
+	description.text = (
+		"O Núcleo Principal bloqueou o acesso depois de três palavras-passe erradas. "
+		+ "Vais voltar ao último ponto guardado."
+	)
+	description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	container.add_child(description)
+
+	var button := Button.new()
+	button.name = "RestartButton"
+	button.text = "REINICIAR"
+	button.custom_minimum_size = Vector2(0, 60)
+	button.pressed.connect(restart_after_lock)
+	container.add_child(button)
+
+
+func restart_after_lock() -> void:
+	var fight_manager: Node = null
+	if main != null:
+		fight_manager = main.get_node_or_null("FightManager")
+	if fight_manager != null and fight_manager.has_method("restart_game"):
+		fight_manager.restart_game()
+		return
+	get_tree().paused = false
+	get_tree().reload_current_scene()
 
 
 func show_password_feedback(message: String) -> void:

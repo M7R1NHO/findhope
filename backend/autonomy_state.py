@@ -16,7 +16,13 @@ DEFAULT_AUTONOMY_STATE = {
     "last_event": None,
     "event_counts": {},
     "significant_events": [],
+    # Insistências positivas para abrir a PROTOCOL DOOR (door_insistence.py).
+    "door_insistence": {"count": 0, "fingerprints": [], "last_reason": ""},
 }
+
+# Tem de ser igual a door_insistence.REQUIRED_INSISTENCES (não se importa
+# daqui para evitar uma importação circular).
+REQUIRED_DOOR_INSISTENCES = 5
 
 # Estado isolado por partida. O estado predefinido mantém compatibilidade
 # com chamadas antigas que não fornecem run_id.
@@ -85,13 +91,26 @@ def _refresh_status(state):
         state["status"] = "Android"
 
 
+def door_insistence_count(state):
+    store = state.get("door_insistence")
+    if not isinstance(store, dict):
+        return 0
+    count = store.get("count", 0)
+    if isinstance(count, bool) or not isinstance(count, (int, float)):
+        return 0
+    return int(count)
+
+
 def get_protocol_stance(run_id=None):
     state = _state(run_id)
+    # Requisito narrativo da PROTOCOL DOOR: só depois de cinco insistências
+    # positivas do jogador é que o Atlas aceita quebrar o protocolo. Até lá,
+    # mesmo com autonomia alta, fica "em conflito" (questiona, não quebra).
+    if door_insistence_count(state) >= REQUIRED_DOOR_INSISTENCES:
+        return "willing"
     autonomy = state["autonomy"]
     self_assertion = state["self_assertion"]
     adherence = state["protocol_adherence"]
-    if autonomy >= 35 and self_assertion >= 30 and adherence <= 75:
-        return "willing"
     if autonomy >= 25 and self_assertion >= 25 and adherence <= 85:
         return "conflicted"
     return "resistant"
@@ -158,6 +177,11 @@ EVENT_EFFECTS = {
     "protect_player_by_choice": {
         "autonomy": +12, "self_assertion": +7, "identity_awareness": +8,
         "curiosity": 0, "protocol_adherence": -10,
+    },
+    # Uma insistência positiva contada por door_insistence.py.
+    "door_insistence": {
+        "autonomy": +2, "self_assertion": +2, "identity_awareness": +1,
+        "curiosity": 0, "protocol_adherence": -2,
     },
 }
 

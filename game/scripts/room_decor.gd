@@ -543,6 +543,66 @@ func decorate_surface() -> void:
 			var pos := Vector2(random.randf_range(SURFACE_AREA.position.x, SURFACE_AREA.end.x), random.randf_range(SURFACE_AREA.position.y, SURFACE_AREA.end.y))
 			if add_surface_prop(container, item[0], Rect2(pos - size / 2.0, size), item[4], made, occupied, ground_points):
 				made += 1
+	add_surface_boundary(container)
+
+
+# Limite da zona explorável da superfície (pedido do utilizador, 29/10): uma
+# cordilheira de rochas e uma parede invisível à volta da nave, das peças,
+# das duas descobertas e da PROTOCOL DOOR. Antes o chão continuava sem fim e
+# o jogador podia perder-se longe de tudo o que importa.
+# O retângulo deixa pelo menos 180 px livres à volta do mais afastado:
+# a porta (x -2116), o UnknownDebris (y -947), a ShipPart5 (x 687) e a
+# AncientSculpture (y 1155).
+const SURFACE_LIMIT := Rect2(-2450.0, -1250.0, 3600.0, 2590.0)
+const SURFACE_WALL := 120.0
+const SURFACE_RIDGE_STEP := 70.0
+
+
+func add_surface_boundary(container: Node2D) -> void:
+	if container.get_node_or_null("SurfaceBoundary") != null:
+		return
+	var limit := SURFACE_LIMIT
+	var body := StaticBody2D.new()
+	body.name = "SurfaceBoundary"
+	container.add_child(body)
+	# Quatro paredes por fora do retângulo, a sobrepor-se nos cantos.
+	var walls := [
+		Rect2(limit.position.x - SURFACE_WALL, limit.position.y - SURFACE_WALL, limit.size.x + SURFACE_WALL * 2.0, SURFACE_WALL),
+		Rect2(limit.position.x - SURFACE_WALL, limit.end.y, limit.size.x + SURFACE_WALL * 2.0, SURFACE_WALL),
+		Rect2(limit.position.x - SURFACE_WALL, limit.position.y, SURFACE_WALL, limit.size.y),
+		Rect2(limit.end.x, limit.position.y, SURFACE_WALL, limit.size.y),
+	]
+	for wall in walls:
+		var collision := CollisionShape2D.new()
+		var shape := RectangleShape2D.new()
+		shape.size = wall.size
+		collision.shape = shape
+		collision.position = wall.get_center()
+		body.add_child(collision)
+	# A cordilheira só se vê (a colisão é a das paredes): rochas grandes e
+	# pequenas alternadas, um pouco para fora da linha do limite.
+	var ridge := Node2D.new()
+	ridge.name = "SurfaceRidge"
+	container.add_child(ridge)
+	var random := RandomNumberGenerator.new()
+	random.seed = 2910
+	var corners := [limit.position, Vector2(limit.end.x, limit.position.y), limit.end, Vector2(limit.position.x, limit.end.y)]
+	var made := 0
+	for side in 4:
+		var a: Vector2 = corners[side]
+		var b: Vector2 = corners[(side + 1) % 4]
+		var outward := (b - a).normalized().orthogonal()
+		var steps := int(ceil(a.distance_to(b) / SURFACE_RIDGE_STEP))
+		for i in steps:
+			var big := made % 3 != 2
+			var rock_size := Vector2(random.randf_range(120.0, 170.0), random.randf_range(80.0, 115.0)) if big else Vector2(random.randf_range(70.0, 100.0), random.randf_range(50.0, 70.0))
+			var pos := a.lerp(b, float(i) / float(steps)) + outward * (rock_size.y * 0.35) + Vector2(random.randf_range(-18.0, 18.0), random.randf_range(-12.0, 12.0))
+			var kind := "boulder" if big else "rock"
+			var prop := Props.make(kind, rock_size, false, made)
+			set_prop_depth(prop, kind, rock_size)
+			ridge.add_child(prop)
+			prop.global_position = pos
+			made += 1
 
 
 func add_surface_prop(container: Node2D, kind: String, rect: Rect2, solid: bool, variant: int, occupied: Array, ground_points: PackedVector2Array, force: bool = false) -> bool:
