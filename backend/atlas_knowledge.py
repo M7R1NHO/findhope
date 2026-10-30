@@ -17,9 +17,9 @@ def _new_knowledge():
     }
 
 
-# Estado predefinido, para manter compatibilidade com os módulos existentes.
+
 ATLAS_KNOWLEDGE = _new_knowledge()
-# Estados independentes para partidas diferentes.
+
 _RUN_KNOWLEDGE = {}
 
 
@@ -91,7 +91,7 @@ def add_hypothesis(hypothesis_id, text, source="reasoning", run_id=None):
     hypothesis_id = str(hypothesis_id).strip()
     for hypothesis in state["hypotheses"]:
         if hypothesis.get("id") == hypothesis_id:
-            # Atualiza o conteúdo sem alterar a categoria epistémica.
+
             hypothesis["text"] = str(text).strip()
             hypothesis["source"] = source or "reasoning"
             return hypothesis

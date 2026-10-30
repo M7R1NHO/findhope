@@ -2,7 +2,7 @@ extends CanvasLayer
 
 # Ecrã CONQUISTAS: as 16 conquistas, desbloqueadas a cores e bloqueadas a
 # cinzento, com a raridade, o que é preciso fazer, o progresso das que têm
-# contador (conversas, lutas, minijogos, finais [x/16]) e a data em que cada
+# contador (conversas, lutas, minijogos, finais [X/16]) e a data em que cada
 # uma foi desbloqueada. Fecha com VOLTAR ou ESC.
 
 signal closed

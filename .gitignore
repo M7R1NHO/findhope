@@ -1,8 +1,11 @@
 venv/
 __pycache__/
-*.pyc
 .env
+*.pyc
 .temp
 # Estado das runs com conversas reais: não deve ir para o Git.
 backend/.run_states.json
 SABIN/
+venv*/
+game/*.patch
+# Arquivos de log

@@ -59,7 +59,7 @@ if "--real" in sys.argv and os.path.exists(real_path):
 
 from zz_chat.qwen_tokens import count_messages
 def est(n): return round(n/3.6)
-# última mensagem: as chamadas desta mensagem
+# última mensagem: as chamadas desta mensagem.
 last = [k for k in CALLS][-2:] if len(CALLS) >= 2 else CALLS
 total = 0
 total_tokens = 0

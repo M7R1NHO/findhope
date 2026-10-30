@@ -1,4 +1,4 @@
-
+# Teste de ligação à base de dados PostgreSQL do Supabase
 import os
 import sys
 

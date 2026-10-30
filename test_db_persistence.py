@@ -1,4 +1,4 @@
-
+# Teste de persistência de dados JSONB no PostgreSQL do Supabase
 import os
 from uuid import uuid4
 
